@@ -3,6 +3,7 @@
 [devices.b7e58d48-241c-1a4a-8eea-dc90095d4ec7]
 profile = "beelink"
 system = "x86_64-linux"
+pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkox9tTdQLF+g11Pd+m0udiQW9Edfvz7sl0+L0RPgDK fort-device-b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
 
 [fort]
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
