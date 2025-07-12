@@ -12,4 +12,4 @@ pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJO
 
 [hosts.richardiii]
 device = "b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
-services = [ "neofetch" ]
+services = [ "blocky" ]
