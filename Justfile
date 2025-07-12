@@ -44,6 +44,18 @@ provision $profile $ssh_target:
 
   ssh-keygen -R "${ssh_target#*@}" >/dev/null 2>&1
 
+list-devices:
+  nix run nixpkgs#toml-cli -- get config.toml . | nix run nixpkgs#jq -- -r '.devices | keys'
+
+list-hosts:
+  nix run nixpkgs#toml-cli -- get config.toml . | nix run nixpkgs#jq -- -r '.hosts | keys'
+
+assign $device $host:
+  just _toml_set config.toml "hosts.$host.device" $device
+
+deploy $host $ip:
+  nix run github:serokell/deploy-rs -- -d --hostname $ip --remote-build .#$host
+
 _toml_set FILE PATH VALUE:
   #!/bin/bash
   set -euo pipefail
