@@ -1,6 +1,6 @@
 # Fort-Nix
 
-Homelab configuration using nixos-anywhere and (soon) deploy-rs.
+Homelab configuration using nixos-anywhere and deploy-rs.
 
 ## Dependencies
 * [Nix](https://nixos.org/)
