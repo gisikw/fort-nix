@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, fortConfig, ... }:
 
 let
   port = "60452";
@@ -18,6 +18,12 @@ let
 
     set :bind, "0.0.0.0"
     set :port, ${port}
+
+    set :host_authorization, permitted_host: [
+      "ns.${fortConfig.fort.domain}",
+      "localhost",
+      IPAddr.new("192.168.1.0/24")
+    ]
 
     HMAC_SECRET_PATH = ENV["HMAC_SECRET_PATH"]
     HOSTS_FILE = "/etc/coredns/hosts.conf"

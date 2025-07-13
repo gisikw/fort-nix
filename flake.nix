@@ -23,7 +23,7 @@
           ];
         };
 
-      mkHostConfig = host: { device, services, ... }:
+      mkHostConfig = fortHost: { device, services, ... }:
         let
           deviceDef = fortConfig.devices.${device};
           system = deviceDef.system;
@@ -37,9 +37,12 @@
               ./device-profiles/${profile}/configuration.nix
               ./devices/${device}/hardware-configuration.nix
               {
-                _module.args.fortConfig = fortConfig;
+                _module.args = {
+                  fortConfig = fortConfig;
+                  fortHost = fortHost;
+                };
                 networking = {
-                  hostName = host;
+                  hostName = fortHost;
                   nameservers = [ "ns.${fortConfig.fort.domain}" "1.1.1.1" ];
                 };
               }
