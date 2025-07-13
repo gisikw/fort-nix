@@ -3,6 +3,7 @@
 let
   port = "60452";
   hmacSecretPath = config.age.secrets.hmac_key.path;
+  registryKeyPath = config.age.secrets.registry_key.path;
 
   rubyWithGems = pkgs.ruby.withPackages (ps: with ps; [
     sinatra
@@ -33,7 +34,7 @@ let
       )
       halt 403, "Bad HMAC" unless Rack::Utils.secure_compare(computed_hmac, signature)
 
-      decrypted = IO.popen(["age", "-d", "-i", "/etc/ssh/ssh_host_ed25519_key"], "r+") do |io|
+      decrypted = IO.popen(["age", "-d", "-i", "${registryKeyPath}"], "r+") do |io|
         io.write(body)
         io.close_write
         io.read
@@ -57,6 +58,12 @@ in
 
   age.secrets.hmac_key = {
     file = ../secrets/hmac_key.age;
+    owner = "root";
+    group = "root";
+  };
+
+  age.secrets.registry_key = {
+    file = ../secrets/registry_key.age;
     owner = "root";
     group = "root";
   };
