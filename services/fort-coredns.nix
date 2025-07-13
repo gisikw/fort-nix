@@ -4,15 +4,39 @@ let
   corednsConfigFile = "/etc/coredns/Corefile";
   fortHostsPath = "/etc/coredns/hosts.conf";
   blockListPath = "/etc/coredns/blocklist.conf";
+  combinedHostsPath = "/etc/coredns/combined.conf";
 in
 {
   networking.firewall.allowedTCPPorts = [ 53 ];
   networking.firewall.allowedUDPPorts = [ 53 ];
+  systemd.services.NetworkManager-wait-online.enable = true;
+
+  systemd.services.fort-coredns-records = {
+    description = "Update coredns fallthrough records";
+    serviceConfig.Type = "oneshot";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+
+    path = [ pkgs.iproute2 pkgs.curl pkgs.gawk pkgs.coreutils ];
+
+    script = ''
+      set -e
+      self=$(ip -4 route get 1.1.1.1 | awk '{print $7}')
+      tmp=$(mktemp)
+      cat ${fortHostsPath} | sed '/ns.${fortDomain}$/d' > $tmp
+      {
+        echo "$self ns.${fortDomain}"
+        cat $tmp
+      } > ${fortHostsPath}
+      curl -s https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts > ${blockListPath}
+      cat ${fortHostsPath} ${blockListPath} > ${combinedHostsPath}
+    '';
+  };
 
   systemd.services.coredns = {
     description = "CoreDNS with dynamic hosts support";
     requires = [ "fort-coredns-records.service" ];
-    after = [ "network.target" "fort-coredns-records.service" ];
+    after = [ "fort-coredns-records.service" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
@@ -27,30 +51,33 @@ in
 
   environment.etc."coredns/Corefile".text = ''
     .:53 {
-      hosts ${fortHostsPath} ${blockListPath} {
+      hosts ${combinedHostsPath} {
         fallthrough
-      }
+      } 
       forward . tls://1.1.1.1
       log
     }
   '';
 
-  systemd.services.fort-coredns-records = {
-    description = "Update coredns fallthrough records";
-    serviceConfig.Type = "oneshot";
+  # Automatically re-merge file entries on change
+  systemd.services.merge-coredns-hosts = {
+    description = "Merge fort and blocklist hosts for CoreDNS";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "merge-coredns-hosts" ''
+        cat ${fortHostsPath} ${blockListPath} > ${combinedHostsPath}
+      '';
+    };
+  };
 
-    path = [ pkgs.iproute2 pkgs.curl pkgs.gawk pkgs.coreutils ];
-
-    script = ''
-      set -e
-      self=$(ip -4 route get 1.1.1.1 | awk '{print $7}')
-      tmp=$(mktemp)
-      sed '/ns.${fortDomain}$/d' ${fortHostsPath} > $tmp
-      {
-        echo "$self ns.${fortDomain}"
-        cat $tmp
-      } > ${fortHostsPath}
-      curl -s https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts > ${blockListPath}
-    '';
+  systemd.paths."merge-coredns-hosts" = {
+    wantedBy = [ "multi-user.target" ];
+    pathConfig = {
+      PathChanged = [
+        fortHostsPath
+        blockListPath
+      ];
+      Unit = "merge-coredns-hosts.service";
+    };
   };
 }
