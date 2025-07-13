@@ -7,9 +7,10 @@ pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkox9tTdQLF+g11Pd+m0udiQW9Edfvz7s
 
 [fort]
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
+domain = "gisi.network"
 
 [hosts]
 
 [hosts.richardiii]
 device = "b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
-services = [ "blocky" ]
+services = [ "fort-coredns" ]

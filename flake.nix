@@ -39,8 +39,14 @@
               ./device-profiles/${profile}/configuration.nix
               ./devices/${device}/hardware-configuration.nix
               {
-                _module.args.fortPubkey = configDefs.fort.pubkey;
-                networking.hostName = host;
+                _module.args = {
+                  fortPubkey = configDefs.fort.pubkey;
+                  fortDomain = configDefs.fort.domain;
+                };
+                networking = {
+                  hostName = host;
+                  nameservers = [ "ns.${configDefs.fort.domain}" "1.1.1.1" ];
+                };
               }
             ]) ++ (map (name: ./services/${name}.nix) services);
           };
