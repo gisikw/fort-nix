@@ -9,7 +9,7 @@
     { nixpkgs, disko, agenix, deploy-rs, ... }:
     let
       configFile = ./config.toml;
-      configDefs = builtins.fromTOML (builtins.readFile configFile);
+      fortConfig = builtins.fromTOML (builtins.readFile configFile);
 
       mkDeviceConfig = uuid: { system, profile, ... }:
         nixpkgs.lib.nixosSystem {
@@ -19,15 +19,13 @@
             agenix.nixosModules.age
             ./device-profiles/${profile}/configuration.nix
             ./devices/${uuid}/hardware-configuration.nix
-            {
-              _module.args.fortPubkey = configDefs.fort.pubkey;
-            }
+            { _module.args.fortConfig = fortConfig; }
           ];
         };
 
       mkHostConfig = host: { device, services, ... }:
         let
-          deviceDef = configDefs.devices.${device};
+          deviceDef = fortConfig.devices.${device};
           system = deviceDef.system;
           profile = deviceDef.profile;
         in
@@ -39,21 +37,18 @@
               ./device-profiles/${profile}/configuration.nix
               ./devices/${device}/hardware-configuration.nix
               {
-                _module.args = {
-                  fortPubkey = configDefs.fort.pubkey;
-                  fortDomain = configDefs.fort.domain;
-                };
+                _module.args.fortConfig = fortConfig;
                 networking = {
                   hostName = host;
-                  nameservers = [ "ns.${configDefs.fort.domain}" "1.1.1.1" ];
+                  nameservers = [ "ns.${fortConfig.fort.domain}" "1.1.1.1" ];
                 };
               }
             ]) ++ (map (name: ./services/${name}.nix) services);
           };
 
       nixosConfigurations =
-        (nixpkgs.lib.mapAttrs mkDeviceConfig configDefs.devices) //
-        (nixpkgs.lib.mapAttrs mkHostConfig configDefs.hosts);
+        (nixpkgs.lib.mapAttrs mkDeviceConfig fortConfig.devices) //
+        (nixpkgs.lib.mapAttrs mkHostConfig fortConfig.hosts);
 
       deploy.nodes = nixpkgs.lib.mapAttrs (host: def: {
         hostname = "<dynamic>";
@@ -63,7 +58,7 @@
           user = "root";
           path = deploy-rs.lib.x86_64-linux.activate.nixos nixosConfigurations.${host};
         };
-      }) configDefs.hosts;
+      }) fortConfig.hosts;
     in
     {
       inherit nixosConfigurations;
