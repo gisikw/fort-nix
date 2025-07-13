@@ -5,4 +5,5 @@ let
 in
 {
   "./secrets/wifi.env.age".publicKeys = [ configDefs.fort.pubkey ] ++ devicePubkeys;
+  "./secrets/hmac_key.age".publicKeys = [ configDefs.fort.pubkey ] ++ devicePubkeys;
 }

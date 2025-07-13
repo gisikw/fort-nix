@@ -13,4 +13,4 @@ domain = "gisi.network"
 
 [hosts.richardiii]
 device = "b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
-services = [ "fort-coredns" ]
+services = [ "fort-coredns", "fort-registry" ]
