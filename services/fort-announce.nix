@@ -1,4 +1,4 @@
-{ config, pkgs, lib, fortConfig, fortHost, ... }:
+{ config, pkgs, lib, fortConfig, fortHost, fortDevice, ... }:
 let
   hmacSecretPath = config.age.secrets.hmac_key.path;
 in
@@ -12,10 +12,12 @@ in
       set -e
       self=$(ip -4 route get 1.1.1.1 | awk '{print $7}')
 
-      HOSTS="$self ${fortHost}.hosts.${fortConfig.fort.domain}"
+      HOSTS="$self ${fortHost}.hosts.${fortConfig.fort.domain}
+      $self ${fortDevice}.devices.${fortConfig.fort.domain}"
       TIMESTAMP=$(date +%s)
       payload=$(mktemp)
-      echo "$HOSTS" | age -r "${fortConfig.fort.registry_pubkey}" > "$payload"
+      echo "$HOSTS" > "$payload"
+      age -r "${fortConfig.fort.registry_pubkey}" -o "$payload.enc" "$payload"
 
       hmac_input=$(mktemp)
       cat "$payload" > "$hmac_input"
@@ -31,7 +33,7 @@ in
           -H "Content-Type: application/octet-stream" \
           -H "X-Timestamp: $TIMESTAMP" \
           -H "X-Signature: $HMAC" \
-          --data-binary @"$payload"; then
+          --data-binary @"$payload.enc"; then
           echo "✅ DNS announce succeeded"
           break
         fi

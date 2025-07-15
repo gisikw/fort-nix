@@ -40,6 +40,7 @@
                 _module.args = {
                   fortConfig = fortConfig;
                   fortHost = fortHost;
+                  fortDevice = fortConfig.hosts.${fortHost}.device;
                 };
                 networking = {
                   hostName = fortHost;
