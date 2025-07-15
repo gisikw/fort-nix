@@ -58,6 +58,9 @@ assign $device $host:
 deploy host addr=(host + ".hosts." + domain):
   nix run github:serokell/deploy-rs -- -d --hostname {{addr}} --remote-build .#{{host}}
 
+ssh host:
+  ssh -i ~/.ssh/fort root@{{host}}.hosts.{{domain}}
+
 _toml_set FILE PATH VALUE:
   #!/bin/bash
   set -euo pipefail

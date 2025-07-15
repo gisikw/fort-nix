@@ -36,6 +36,7 @@
               agenix.nixosModules.age
               ./device-profiles/${profile}/configuration.nix
               ./devices/${device}/hardware-configuration.nix
+              ./modules/fort/announce.nix
               {
                 _module.args = {
                   fortConfig = fortConfig;

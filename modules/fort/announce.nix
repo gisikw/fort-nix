@@ -19,12 +19,9 @@ in
       echo "$HOSTS" > "$payload"
       age -r "${fortConfig.fort.registry_pubkey}" -o "$payload.enc" "$payload"
 
-      hmac_input=$(mktemp)
-      cat "$payload" > "$hmac_input"
-      printf "%s" "$TIMESTAMP" >> "$hmac_input"
-
+      printf "%s" "$TIMESTAMP" >> "$payload"
       HMAC_KEY=$(tr -d '\n' < "${hmacSecretPath}")
-      HMAC=$(openssl dgst -sha256 -hmac "$HMAC_KEY" -binary "$hmac_input" | openssl base64)
+      HMAC=$(openssl dgst -sha256 -hmac "$HMAC_KEY" -binary "$payload" | openssl base64)
 
       max_attempts=10
       attempt=1
@@ -63,7 +60,7 @@ in
   };
 
   age.secrets.hmac_key = {
-    file = ../secrets/hmac_key.age;
+    file = ../../secrets/hmac_key.age;
     owner = "root";
     group = "root";
   };
