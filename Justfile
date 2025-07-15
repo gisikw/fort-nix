@@ -1,3 +1,5 @@
+domain := `nix run nixpkgs#toml-cli -- get config.toml -r fort.domain`
+
 init:
   [ -f ~/.ssh/fort ] || ssh-keygen -t ed25519 -f ~/.ssh/fort -C "fort"
   just _toml_set config.toml "fort.pubkey" "$(< ~/.ssh/fort.pub)"
@@ -53,8 +55,8 @@ list-hosts:
 assign $device $host:
   just _toml_set config.toml "hosts.$host.device" $device
 
-deploy $host $ip:
-  nix run github:serokell/deploy-rs -- -d --hostname $ip --remote-build .#$host
+deploy host addr=(host + ".hosts." + domain):
+  nix run github:serokell/deploy-rs -- -d --hostname {{addr}} --remote-build .#{{host}}
 
 _toml_set FILE PATH VALUE:
   #!/bin/bash
