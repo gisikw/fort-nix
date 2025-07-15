@@ -23,11 +23,19 @@
           ];
         };
 
-      mkHostConfig = fortHost: { device, services ? [], ... }:
+      mkHostConfig = fortHost: { 
+        device, 
+        roles ? [], 
+        drivers ? [], 
+        features ? [],
+        services ? [], 
+        ... 
+      }:
         let
           deviceDef = fortConfig.devices.${device};
           system = deviceDef.system;
           profile = deviceDef.profile;
+          hostRoles = roles ++ [ "fort-host" ];
         in
           nixpkgs.lib.nixosSystem {
             inherit system;
@@ -36,7 +44,6 @@
               agenix.nixosModules.age
               ./device-profiles/${profile}/configuration.nix
               ./devices/${device}/hardware-configuration.nix
-              ./modules/fort/announce.nix
               {
                 _module.args = {
                   fortConfig = fortConfig;
@@ -48,7 +55,10 @@
                   nameservers = [ "ns.${fortConfig.fort.domain}" "1.1.1.1" ];
                 };
               }
-            ]) ++ (map (name: ./services/${name}.nix) services);
+            ]) ++ (map (name: ./roles/${name}.nix) hostRoles)
+               ++ (map (name: ./modules/drivers/${name}.nix) drivers)
+               ++ (map (name: ./modules/features/${name}.nix) features)
+               ++ (map (name: ./modules/services/${name}.nix) services);
           };
 
       nixosConfigurations =

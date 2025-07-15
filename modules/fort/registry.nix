@@ -63,13 +63,13 @@ in
   networking.firewall.allowedTCPPorts = [ 60452 ];
 
   age.secrets.hmac_key = {
-    file = ../secrets/hmac_key.age;
+    file = ../../secrets/hmac_key.age;
     owner = "root";
     group = "root";
   };
 
   age.secrets.registry_key = {
-    file = ../secrets/registry_key.age;
+    file = ../../secrets/registry_key.age;
     owner = "root";
     group = "root";
   };
