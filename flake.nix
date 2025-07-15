@@ -23,7 +23,7 @@
           ];
         };
 
-      mkHostConfig = fortHost: { device, services, ... }:
+      mkHostConfig = fortHost: { device, services ? [], ... }:
         let
           deviceDef = fortConfig.devices.${device};
           system = deviceDef.system;

@@ -5,6 +5,11 @@ profile = "beelink"
 system = "x86_64-linux"
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkox9tTdQLF+g11Pd+m0udiQW9Edfvz7sl0+L0RPgDK fort-device-b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
 
+[devices.8e9779b1-a912-744c-930a-08b4d2e87425]
+profile = "beelink"
+system = "x86_64-linux"
+pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILXYyg91IkjZp9DnaHJHt9giTsmJXPw0YE8xIqtoMsco fort-device-8e9779b1-a912-744c-930a-08b4d2e87425"
+
 [fort]
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
 registry_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM1afmFa8Ox6Rrij6RgZytyBugPY1Hrw/F8xgEVMVnHk fort-dns-registry"
@@ -15,3 +20,7 @@ domain = "gisi.network"
 [hosts.richardiii]
 device = "b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
 services = [ "fort-coredns", "fort-registry", "fort-announce" ]
+
+[hosts.ursula]
+device = "8e9779b1-a912-744c-930a-08b4d2e87425"
+services = [ "fort-announce" ]
