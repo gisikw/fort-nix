@@ -1,4 +1,4 @@
-domain := `nix run nixpkgs#toml-cli -- get config.toml -r fort.domain`
+domain := `nix run nixpkgs#toml-cli -- get config.toml -r settings.domain`
 
 init:
   [ -f ~/.ssh/fort ] || ssh-keygen -t ed25519 -f ~/.ssh/fort -C "fort"

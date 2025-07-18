@@ -1,4 +1,4 @@
-{ config, pkgs, lib, fortConfig, fortHost, fortDevice, ... }:
+{ config, pkgs, lib, fort, ... }:
 
 let
   html = pkgs.writeText "index.html" ''
@@ -79,7 +79,7 @@ let
     mem=$(${pkgs.procps}/bin/free -h | ${pkgs.gawk}/bin/awk '/Mem:/ { print $3 "/" $2 }')
     disk=$(${pkgs.coreutils}/bin/df -h / | ${pkgs.gawk}/bin/awk 'END { print $3 "/" $2 }')
 
-    echo "{ \"host\": \"${fortHost}\", \"uuid\": \"${fortDevice}\", \"loadavg\": \"$load\", \"uptime\": \"$uptime\", \"mem\": \"$mem\", \"disk\": \"$disk\" }" > /var/www/webstatus/status.json
+    echo "{ \"host\": \"${fort.host}\", \"uuid\": \"${fort.device}\", \"loadavg\": \"$load\", \"uptime\": \"$uptime\", \"mem\": \"$mem\", \"disk\": \"$disk\" }" > /var/www/webstatus/status.json
   '';
 in {
   networking.firewall.allowedTCPPorts = [ 48484 ];
@@ -114,12 +114,8 @@ in {
     };
   };
 
-  systemd.tmpfiles.rules = [
-    "d /var/www/webstatus 0755 nobody nogroup -"
-    "f /var/www/webstatus/index.html 0644 nobody nogroup -"
-  ];
-
   system.activationScripts.installWebstatusHtml = ''
+    mkdir -p /var/www/webstatus
     cp ${html} /var/www/webstatus/index.html
     chown nobody:nogroup /var/www/webstatus/index.html
     chmod 0644 /var/www/webstatus/index.html

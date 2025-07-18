@@ -1,4 +1,4 @@
-{ config, pkgs, lib, fortConfig, ... }:
+{ config, pkgs, lib, fort, ... }:
 
 let
   port = "60452";
@@ -20,7 +20,7 @@ let
     set :port, ${port}
 
     set :host_authorization, permitted_host: [
-      "ns.${fortConfig.fort.domain}",
+      "ns.${fort.settings.domain}",
       "localhost",
       IPAddr.new("192.168.1.0/24")
     ]

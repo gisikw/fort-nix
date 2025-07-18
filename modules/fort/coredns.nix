@@ -1,4 +1,4 @@
-{ config, pkgs, lib, fortConfig, ... }:
+{ config, pkgs, lib, fort, ... }:
 
 let
   corednsConfigFile = "/etc/coredns/Corefile";
@@ -23,9 +23,9 @@ in
       set -e
       self=$(ip -4 route get 1.1.1.1 | awk '{print $7}')
       tmp=$(mktemp)
-      cat ${fortHostsPath} | sed '/ns.${fortConfig.fort.domain}$/d' > $tmp
+      cat ${fortHostsPath} | sed '/ns.${fort.settings.domain}$/d' > $tmp
       {
-        echo "$self ns.${fortConfig.fort.domain}"
+        echo "$self ns.${fort.settings.domain}"
         cat $tmp
       } > ${fortHostsPath}
       curl -s https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts > ${blockListPath}

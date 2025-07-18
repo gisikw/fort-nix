@@ -1,6 +1,6 @@
 {
   modulesPath,
-  fortConfig,
+  fort,
   lib,
   pkgs,
   config,
@@ -25,7 +25,7 @@
     pkgs.gitMinimal
   ];
 
-  users.users.root.openssh.authorizedKeys.keys = [ fortConfig.fort.pubkey ];
+  users.users.root.openssh.authorizedKeys.keys = [ fort.settings.pubkey ];
 
   age.secrets.nm-secrets = {
     file = ../../secrets/wifi.env.age;

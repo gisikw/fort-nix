@@ -19,46 +19,48 @@
             agenix.nixosModules.age
             ./device-profiles/${profile}/configuration.nix
             ./devices/${uuid}/hardware-configuration.nix
-            { _module.args.fortConfig = fortConfig; }
+            { _module.args.fort = fortConfig; }
           ];
         };
 
-      mkHostConfig = fortHost: { 
-        device, 
-        roles ? [], 
-        drivers ? [], 
-        features ? [],
-        services ? [], 
-        ... 
-      }:
+      mkHostConfig = host: hostCfg:
         let
-          deviceDef = fortConfig.devices.${device};
-          system = deviceDef.system;
-          profile = deviceDef.profile;
-          hostRoles = roles ++ [ "fort-host" ];
+          device = hostCfg.device;
+          deviceCfg = fortConfig.devices.${device};
+          system = deviceCfg.system;
+          current = hostCfg // {
+            roles = (hostCfg.roles or []) ++ [ "fort-host" ];
+            drivers = hostCfg.drivers or [];
+            features = hostCfg.features or [];
+            services = hostCfg.services or [];
+            device = device;
+            host = host;
+          };
         in
           nixpkgs.lib.nixosSystem {
             inherit system;
             modules = ([
               disko.nixosModules.disko
               agenix.nixosModules.age
-              ./device-profiles/${profile}/configuration.nix
+              ./device-profiles/${deviceCfg.profile}/configuration.nix
               ./devices/${device}/hardware-configuration.nix
               {
-                _module.args = {
-                  fortConfig = fortConfig;
-                  fortHost = fortHost;
-                  fortDevice = fortConfig.hosts.${fortHost}.device;
+                _module.args.fort = {
+                  config = fortConfig;
+                  settings = fortConfig.settings;
+                  current = current;
+                  host = host;
+                  device = device;
                 };
                 networking = {
-                  hostName = fortHost;
-                  nameservers = [ "ns.${fortConfig.fort.domain}" "1.1.1.1" ];
+                  hostName = host;
+                  nameservers = [ "ns.${fortConfig.settings.domain}" "1.1.1.1" ];
                 };
               }
-            ]) ++ (map (name: ./roles/${name}.nix) hostRoles)
-               ++ (map (name: ./modules/drivers/${name}.nix) drivers)
-               ++ (map (name: ./modules/features/${name}.nix) features)
-               ++ (map (name: ./modules/services/${name}.nix) services);
+            ]) ++ (map (name: ./roles/${name}.nix) current.roles)
+               ++ (map (name: ./modules/drivers/${name}.nix) current.drivers)
+               ++ (map (name: ./modules/features/${name}.nix) current.features)
+               ++ (map (name: ./modules/services/${name}.nix) current.services);
           };
 
       nixosConfigurations =

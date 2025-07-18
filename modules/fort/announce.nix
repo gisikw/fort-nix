@@ -1,4 +1,4 @@
-{ config, pkgs, lib, fortConfig, fortHost, fortDevice, ... }:
+{ config, pkgs, lib, fort, ... }:
 let
   hmacSecretPath = config.age.secrets.hmac_key.path;
 in
@@ -12,12 +12,12 @@ in
       set -e
       self=$(ip -4 route get 1.1.1.1 | awk '{print $7}')
 
-      HOSTS="$self ${fortHost}.hosts.${fortConfig.fort.domain}
-      $self ${fortDevice}.devices.${fortConfig.fort.domain}"
+      HOSTS="$self ${fort.host}.hosts.${fort.settings.domain}
+      $self ${fort.device}.devices.${fort.settings.domain}"
       TIMESTAMP=$(date +%s)
       payload=$(mktemp)
       echo "$HOSTS" > "$payload"
-      age -r "${fortConfig.fort.registry_pubkey}" -o "$payload.enc" "$payload"
+      age -r "${fort.settings.registry_pubkey}" -o "$payload.enc" "$payload"
 
       printf "%s" "$TIMESTAMP" >> "$payload"
       HMAC_KEY=$(tr -d '\n' < "${hmacSecretPath}")
@@ -26,7 +26,7 @@ in
       max_attempts=10
       attempt=1
       while true; do
-        if curl -sSf -XPOST http://ns.${fortConfig.fort.domain}:60452 \
+        if curl -sSf -XPOST http://ns.${fort.settings.domain}:60452 \
           -H "Content-Type: application/octet-stream" \
           -H "X-Timestamp: $TIMESTAMP" \
           -H "X-Signature: $HMAC" \
