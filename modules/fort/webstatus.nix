@@ -7,6 +7,7 @@ let
     <head>
       <meta charset="UTF-8" />
       <title>Device Status</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIGZpbGw9IiNmZmYiLz4KICA8cmVjdCB4PSIxIiB5PSIxOSIgd2lkdGg9IjMwIiBoZWlnaHQ9IjEyIiBmaWxsPSIjY2NjIi8+CiAgPHJlY3QgeD0iNiIgeT0iMTIiIHdpZHRoPSI0IiBoZWlnaHQ9IjciIGZpbGw9IiM2NjYiLz4KICA8cmVjdCB4PSIxMiIgeT0iOCIgd2lkdGg9IjgiIGhlaWdodD0iMTEiIGZpbGw9IiM2NjYiLz4KICA8cmVjdCB4PSIyNCIgeT0iMTIiIHdpZHRoPSI0IiBoZWlnaHQ9IjciIGZpbGw9IiM2NjYiLz4KICA8cmVjdCB4PSIxMiIgeT0iMiIgd2lkdGg9IjMiIGhlaWdodD0iNiIgZmlsbD0iIzQ0NCIvPgogIDxyZWN0IHg9IjE3IiB5PSIyIiB3aWR0aD0iMyIgaGVpZ2h0PSI2IiBmaWxsPSIjNDQ0Ii8+Cjwvc3ZnPg==">
       <style>
         * { box-sizing: border-box; }
@@ -82,42 +83,47 @@ let
     echo "{ \"host\": \"${fort.host}\", \"uuid\": \"${fort.device}\", \"loadavg\": \"$load\", \"uptime\": \"$uptime\", \"mem\": \"$mem\", \"disk\": \"$disk\" }" > /var/www/webstatus/status.json
   '';
 in {
-  networking.firewall.allowedTCPPorts = [ 48484 ];
-
-  systemd.services.webstatus-generate = {
-    description = "Generate webstatus.json";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${statusScript}";
+  config = {
+    fort.routes.webstatus = {
+      subdomain = "${fort.device}.devices";
+      port = 48484;
     };
-  };
 
-  systemd.timers.webstatus-generate = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "5s";
-      OnUnitActiveSec = "1s";
-      Unit = "webstatus-generate.service";
+    systemd.services.webstatus-generate = {
+      description = "Generate webstatus.json";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${statusScript}";
+      };
     };
-  };
 
-  systemd.services.webstatus-server = {
-    description = "Serve basic webstatus dashboard";
-    after = [ "network.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      WorkingDirectory = "/var/www/webstatus";
-      ExecStart = "${pkgs.python3}/bin/python3 -m http.server 48484 --bind 0.0.0.0";
-      Restart = "always";
-      User = "nobody";
-      Group = "nogroup";
+    systemd.timers.webstatus-generate = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "5s";
+        OnUnitActiveSec = "1s";
+        Unit = "webstatus-generate.service";
+      };
     };
-  };
 
-  system.activationScripts.installWebstatusHtml = ''
-    mkdir -p /var/www/webstatus
-    cp ${html} /var/www/webstatus/index.html
-    chown nobody:nogroup /var/www/webstatus/index.html
-    chmod 0644 /var/www/webstatus/index.html
-  '';
+    systemd.services.webstatus-server = {
+      description = "Serve basic webstatus dashboard";
+      after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        WorkingDirectory = "/var/www/webstatus";
+        ExecStart = "${pkgs.python3}/bin/python3 -m http.server 48484 --bind 0.0.0.0";
+        Restart = "always";
+        User = "nobody";
+        Group = "nogroup";
+      };
+    };
+
+    system.activationScripts.installWebstatusHtml = ''
+      mkdir -p /var/www/webstatus
+      cp ${html} /var/www/webstatus/index.html
+      chown nobody:nogroup /var/www/webstatus/index.html
+      chmod 0644 /var/www/webstatus/index.html
+    '';
+  };
 }

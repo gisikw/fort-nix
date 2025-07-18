@@ -51,6 +51,7 @@
                   current = current;
                   host = host;
                   device = device;
+                  routes = {};
                 };
                 networking = {
                   hostName = host;
