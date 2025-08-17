@@ -22,6 +22,9 @@
     networking.firewall.allowedTCPPorts = [ 80 443 ];
     services.nginx = {
       enable = true;
+      commonHttpConfig = ''
+        server_names_hash_bucket_size 128;
+      '';
       virtualHosts = lib.mapAttrs (name: route: {
         serverName = "${route.subdomain}.${fort.settings.domain}";
         locations."/" = {
