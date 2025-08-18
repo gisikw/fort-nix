@@ -5,7 +5,7 @@ let
   devicePubkeys = builtins.catAttrs "pubkey" (builtins.attrValues fortConfig.devices);
 
   registryHosts = 
-    builtins.filter (host: builtins.elem "fort-registry" host.services) 
+    builtins.filter (host: builtins.elem "fort-nameserver" (host.roles or []))
                     (builtins.attrValues fortConfig.hosts);
 
   registryDevicePubkeys = 
@@ -13,7 +13,7 @@ let
                  registryHosts;
 in
 {
-  "./secrets/wifi.env.age".publicKeys = [ fortConfig.fort.pubkey ] ++ devicePubkeys;
-  "./secrets/hmac_key.age".publicKeys = [ fortConfig.fort.pubkey ] ++ devicePubkeys;
-  "./secrets/registry_key.age".publicKeys = [ fortConfig.fort.pubkey ] ++ registryDevicePubkeys;
+  "./secrets/wifi.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
+  "./secrets/hmac_key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
+  "./secrets/registry_key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ registryDevicePubkeys;
 }
