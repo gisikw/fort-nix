@@ -29,6 +29,12 @@
         serverName = "${route.subdomain}.${fort.settings.domain}";
         locations."/" = {
           proxyPass = "http://127.0.0.1:${toString route.port}";
+          extraConfig = ''
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+          '';
         };
       }) config.fort.routes;
     };

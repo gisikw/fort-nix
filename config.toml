@@ -15,6 +15,11 @@ profile = "evo-x2"
 system = "x86_64-linux"
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILSyr6yZ0QKeebgAg497+EO5f9VLcvBJbEHxaDzLzUxM fort-device-17f17980-5d30-11f0-9a98-fe3a96b43f00"
 
+[devices.linode-82391624]
+profile = "linode"
+system = "x86_64-linux"
+pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1BwH6doO+iBEGiozS6MSbZtAG5jBggsUWqPqoAtmZh fort-device-linode-82391624"
+
 [settings]
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
 registry_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM1afmFa8Ox6Rrij6RgZytyBugPY1Hrw/F8xgEVMVnHk fort-dns-registry"
@@ -24,6 +29,7 @@ domain = "gisi.network"
 
 [hosts.lordhenry]
 device = "17f17980-5d30-11f0-9a98-fe3a96b43f00"
+services = [ "ollama" ]
 
 [hosts.richardiii]
 device = "b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
@@ -33,3 +39,6 @@ roles = [ "fort-nameserver" ]
 device = "8e9779b1-a912-744c-930a-08b4d2e87425"
 drivers = [ "media-raid" ]
 services = [ "jellyfin" ]
+
+[hosts.bayaz]
+device = "linode-82391624"

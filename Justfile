@@ -8,15 +8,25 @@ provision $profile $ssh_target:
   #!/bin/bash
   set -euo pipefail
 
-  uuid=$(
-    ssh -i ~/.ssh/fort \
-    -o StrictHostKeyChecking=no \
-    $ssh_target '
+  if [ "$profile" = "linode" ]; then
+    uuid_cmd='
+      export TOKEN=$(curl -sX PUT -H "Metadata-Token-Expiry-Seconds: 3600" http://169.254.169.254/v1/token) &&
+      curl -sH "Metadata-Token: $TOKEN" http://169.254.169.254/v1/instance | grep ^id: | sed "s/id: /linode-/"
+    '
+  else
+    uuid_cmd='
       command -v sudo >/dev/null &&
       sudo cat /sys/class/dmi/id/product_uuid ||
       cat /sys/class/dmi/id/product_uuid
     '
+  fi
+
+  uuid=$(
+    ssh -i ~/.ssh/fort \
+    -o StrictHostKeyChecking=no \
+    $ssh_target $uuid_cmd
   )
+
   mkdir -p ./devices/$uuid
 
   temp=$(mktemp -d)

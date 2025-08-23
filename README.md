@@ -55,6 +55,10 @@ As part of provisioning, a new `uuid` is generated and added to `config.toml`
 under the `[devices]` section. If you're provisioning new hardware, copy an
 existing `device-profile` as a starting point and adjust it for your needs.
 
+> [!TIP]
+> You won't be able to deploy nix-os to a VPS with less than 1.5GB of RAM.
+> Consider upscaling for the initial install, then bringing it back down.
+
 ## Deployment
 
 After assigning a device UUID to a logical host name via `just assign`, future deployments use `deploy-rs`. These updates:
