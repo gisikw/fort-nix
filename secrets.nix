@@ -5,7 +5,7 @@ let
   devicePubkeys = builtins.catAttrs "pubkey" (builtins.attrValues fortConfig.devices);
 
   registryHosts = 
-    builtins.filter (host: builtins.elem "fort-nameserver" (host.roles or []))
+    builtins.filter (host: builtins.elem "fort-gatehouse" (host.roles or []))
                     (builtins.attrValues fortConfig.hosts);
 
   registryDevicePubkeys = 
