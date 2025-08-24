@@ -52,6 +52,9 @@
                   host = host;
                   device = device;
                   routes = {};
+                  lib.mkRubyScript = import ./modules/fort/lib/mkRubyScript.nix {
+                    pkgs = import nixpkgs { inherit system; };
+                  };
                 };
                 networking = {
                   hostName = host;
