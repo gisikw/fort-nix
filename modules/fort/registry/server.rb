@@ -1,6 +1,11 @@
 require "sinatra"
 require "openssl"
 require "base64"
+require "redis"
+
+HMAC_SECRET_PATH = ENV["HMAC_SECRET_PATH"]
+REGISTRY_KEY_PATH = ENV["REGISTRY_KEY_PATH"]
+HOSTS_FILE = "/etc/coredns/hosts.conf"
 
 set :bind, "0.0.0.0"
 set :port, @port
@@ -11,9 +16,7 @@ set :host_authorization, permitted_host: [
   IPAddr.new("192.168.1.0/24")
 ]
 
-HMAC_SECRET_PATH = ENV["HMAC_SECRET_PATH"]
-REGISTRY_KEY_PATH = ENV["REGISTRY_KEY_PATH"]
-HOSTS_FILE = "/etc/coredns/hosts.conf"
+set :redis, Redis.new(path: @registry_sock)
 
 post "/" do
   timestamp = request.env["HTTP_X_TIMESTAMP"]
@@ -27,6 +30,11 @@ post "/" do
   )
   # TODO: Restore after more debugging
   # halt 403, "Bad HMAC" unless Rack::Utils.secure_compare(computed_hmac, signature)
+  if Rack::Utils.secure_compare(computed_hmac, signature)
+    puts "HMAC signature valid"
+  else
+    puts "HMAC signature invalid"
+  end
 
   decrypted = IO.popen(["age", "-d", "-i", REGISTRY_KEY_PATH], "r+") do |io|
     io.write(body)
@@ -34,13 +42,11 @@ post "/" do
     io.read
   end
 
-  hosts = Hash[File.read(HOSTS_FILE).lines.map { |e| e.strip.split.reverse }]
-  hosts.merge!(Hash[decrypted.lines.map { |e| e.strip.split.reverse }])
-
-  File.open(HOSTS_FILE, "w") do |f|
-    hosts.each do |host, ip|
-      f.puts("#{ip}\t#{host}")
-    end
+  decrypted.lines.map { |e| e.strip.split.reverse }.each do |domain, ip|
+    internal = true
+    value = { domain:, ip:, internal: }.to_json
+    settings.redis.set(domain, value)
+    settings.redis.publish("updates", value)
   end
 
   status 200

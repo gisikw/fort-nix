@@ -25,10 +25,11 @@ in
 
     serviceConfig = {
       ExecStart = fort.lib.mkRubyScript ./server.rb
-        [ "sinatra" "rackup" "puma" ]
+        [ "sinatra" "rackup" "puma" "redis" ]
         {
           inherit port;
           domain = fort.settings.domain;
+          registry_sock = config.services.redis.servers."fort-registry".unixSocket;
         };
       Environment = [
         "REGISTRY_KEY_PATH=${config.age.secrets.registry_key.path}"
