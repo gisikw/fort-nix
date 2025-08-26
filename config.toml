@@ -42,3 +42,4 @@ services = [ "jellyfin" ]
 
 [hosts.bayaz]
 device = "linode-82391624"
+roles = [ "fort-barbican" ]

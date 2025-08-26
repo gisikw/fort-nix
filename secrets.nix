@@ -4,16 +4,26 @@ let
 
   devicePubkeys = builtins.catAttrs "pubkey" (builtins.attrValues fortConfig.devices);
 
-  registryHosts = 
+  gatehouseHosts =
     builtins.filter (host: builtins.elem "fort-gatehouse" (host.roles or []))
                     (builtins.attrValues fortConfig.hosts);
 
-  registryDevicePubkeys = 
+  gatehouseDevicePubkeys =
     builtins.map (host: fortConfig.devices.${host.device}.pubkey)
-                 registryHosts;
+                 gatehouseHosts;
+
+  barbicanHosts =
+    builtins.filter (host: builtins.elem "fort-barbican" (host.roles or []))
+                    (builtins.attrValues fortConfig.hosts);
+
+  barbicanDevicePubkeys =
+    builtins.map (host: fortConfig.devices.${host.device}.pubkey)
+                 barbicanHosts;
 in
 {
   "./secrets/wifi.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
   "./secrets/hmac_key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
-  "./secrets/registry_key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ registryDevicePubkeys;
+  "./secrets/registry_key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ gatehouseDevicePubkeys;
+  "./secrets/fort_gatehouse_wg.age".publicKeys = [ fortConfig.settings.pubkey ] ++ gatehouseDevicePubkeys;
+  "./secrets/fort_barbican_wg.age".publicKeys = [ fortConfig.settings.pubkey ] ++ barbicanDevicePubkeys;
 }
