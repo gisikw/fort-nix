@@ -1,4 +1,4 @@
-domain := `nix run nixpkgs#toml-cli -- get config.toml -r settings.domain`
+domain := `nix run .#toml-cli -- get config.toml -r settings.domain`
 
 init:
   [ -f ~/.ssh/fort ] || ssh-keygen -t ed25519 -f ~/.ssh/fort -C "fort"
@@ -57,16 +57,16 @@ provision $profile $ssh_target:
   ssh-keygen -R "${ssh_target#*@}" >/dev/null 2>&1
 
 list-devices:
-  nix run nixpkgs#toml-cli -- get config.toml . | nix run nixpkgs#jq -- -r '.devices | keys'
+  nix run .#toml-cli -- get config.toml . | nix run .#jq -- -r '.devices | keys'
 
 list-hosts:
-  nix run nixpkgs#toml-cli -- get config.toml . | nix run nixpkgs#jq -- -r '.hosts | keys'
+  nix run .#toml-cli -- get config.toml . | nix run .#jq -- -r '.hosts | keys'
 
 assign $device $host:
   just _toml_set config.toml "hosts.$host.device" $device
 
 deploy host addr=(host + ".hosts." + domain):
-  nix run github:serokell/deploy-rs -- -d --hostname {{addr}} --remote-build .#{{host}}
+  nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build .#{{host}}
 
 ssh host:
   ssh -i ~/.ssh/fort root@{{host}}.hosts.{{domain}}
@@ -76,5 +76,5 @@ _toml_set FILE PATH VALUE:
   set -euo pipefail
   touch "{{FILE}}"
   tmp=$(mktemp)
-  nix run nixpkgs#toml-cli -- set "{{FILE}}" "{{PATH}}" "{{VALUE}}" > $tmp
+  nix run .#toml-cli -- set "{{FILE}}" "{{PATH}}" "{{VALUE}}" > $tmp
   mv $tmp "{{FILE}}"

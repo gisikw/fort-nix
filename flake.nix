@@ -28,8 +28,10 @@
           device = hostCfg.device;
           deviceCfg = fortConfig.devices.${device};
           system = deviceCfg.system;
+          baseRoles = hostCfg.roles or [];
+          hasBarbican = builtins.elem "fort-barbican" baseRoles;
           current = hostCfg // {
-            roles = (hostCfg.roles or []) ++ [ "fort-host" ];
+            roles = baseRoles ++ (if hasBarbican then [] else [ "fort-host" ]);
             drivers = hostCfg.drivers or [];
             features = hostCfg.features or [];
             services = hostCfg.services or [];
@@ -84,5 +86,15 @@
     {
       inherit nixosConfigurations;
       inherit deploy;
+      packages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ] (system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+          nixpkgs.lib.listToAttrs (map (name: nixpkgs.lib.nameValuePair name (pkgs.${name})) [
+            "deploy-rs"
+            "toml-cli"
+            "jq"
+          ])
+      );
     };
 }
