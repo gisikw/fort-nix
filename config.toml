@@ -24,6 +24,7 @@ pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1BwH6doO+iBEGiozS6MSbZtAG5jBggsU
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
 registry_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM1afmFa8Ox6Rrij6RgZytyBugPY1Hrw/F8xgEVMVnHk fort-dns-registry"
 domain = "gisi.network"
+dns_provider = "porkbun"
 
 [hosts]
 

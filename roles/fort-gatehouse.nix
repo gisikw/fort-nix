@@ -1,10 +1,15 @@
 { config, fort, ... }:
 
 {
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
   imports = [
     ../modules/fort/registry-coredns-subscriber
     ../modules/fort/coredns.nix
     ../modules/fort/registry
+    ../modules/fort/announce.nix
+    ../modules/fort/webstatus.nix
+    ../modules/fort/reverse-proxy.nix
   ];
 
   networking.firewall.interfaces.wg0.allowedTCPPorts = [ 6379 ];
@@ -42,6 +47,24 @@
           persistentKeepalive = 25;
         }];
       };
+    };
+  };
+
+  age.secrets.dns-provider-env = {
+    file = ../secrets/dns_provider.env.age;
+    owner = "root";
+    group = "root";
+  };
+
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = "admin@${fort.settings.domain}";
+
+    certs.${fort.settings.domain} = {
+      domain = fort.settings.domain;
+      extraDomainNames = [ "*.${fort.settings.domain}" ];
+      dnsProvider = fort.settings.dns_provider;
+      environmentFile = config.age.secrets.dns-provider-env.path;
     };
   };
 }

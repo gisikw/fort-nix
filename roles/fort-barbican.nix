@@ -1,6 +1,8 @@
-{ config, pkgs, ... }:
+{ config, pkgs, fort, ... }:
 
 {
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
   age.secrets.fort-barbican-wg.file = ../secrets/fort_barbican_wg.age;
 
   environment.systemPackages = [ pkgs.redis ];

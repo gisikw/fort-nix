@@ -30,8 +30,9 @@
           system = deviceCfg.system;
           baseRoles = hostCfg.roles or [];
           hasBarbican = builtins.elem "fort-barbican" baseRoles;
+          hasGatehouse = builtins.elem "fort-gatehouse" baseRoles;
           current = hostCfg // {
-            roles = baseRoles ++ (if hasBarbican then [] else [ "fort-host" ]);
+            roles = baseRoles ++ (if hasBarbican || hasGatehouse then [] else [ "fort-host" ]);
             drivers = hostCfg.drivers or [];
             features = hostCfg.features or [];
             services = hostCfg.services or [];
@@ -60,7 +61,12 @@
                 };
                 networking = {
                   hostName = host;
-                  nameservers = [ "ns.${fortConfig.settings.domain}" "1.1.1.1" ];
+                  enableIPv6 = false;
+                  nameservers =
+                    if hasBarbican || hasGatehouse then
+                      [ "8.8.8.8" "1.1.1.1" ]
+                    else
+                      [ "ns.${fortConfig.settings.domain}" "1.1.1.1" ];
                 };
               }
             ]) ++ (map (name: ./roles/${name}.nix) current.roles)
@@ -90,11 +96,18 @@
         let
           pkgs = import nixpkgs { inherit system; };
         in
-          nixpkgs.lib.listToAttrs (map (name: nixpkgs.lib.nameValuePair name (pkgs.${name})) [
-            "deploy-rs"
-            "toml-cli"
-            "jq"
-          ])
+          let
+            nixpkgsPackages = [ "jq" "deploy-rs" "toml-cli" ];
+            flakePackages = {
+              agenix = agenix.packages.${system}.default;
+            };
+          in
+          nixpkgs.lib.listToAttrs (
+            map (name:
+              nixpkgs.lib.nameValuePair name
+                (flakePackages.${name} or pkgs.${name})
+            ) (nixpkgsPackages ++ builtins.attrNames flakePackages)
+          )
       );
     };
 }

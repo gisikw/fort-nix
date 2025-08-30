@@ -45,7 +45,7 @@ provision $profile $ssh_target:
   just _toml_set config.toml "devices.$uuid.system" "x86_64-linux"
   just _toml_set config.toml "devices.$uuid.pubkey" "$(cat $temp/etc/ssh/ssh_host_ed25519_key.pub)"
 
-  nix run github:ryantm/agenix -- -i ~/.ssh/fort -r
+  nix run .#agenix -- -i ~/.ssh/fort -r
 
   nix run github:nix-community/nixos-anywhere -- \
     --generate-hardware-config nixos-generate-config ./devices/$uuid/hardware-configuration.nix \
@@ -70,6 +70,9 @@ deploy host addr=(host + ".hosts." + domain):
 
 ssh host:
   ssh -i ~/.ssh/fort root@{{host}}.hosts.{{domain}}
+
+agenix path:
+  nix run .#agenix -- -i ~/.ssh/fort -e {{path}}
 
 _toml_set FILE PATH VALUE:
   #!/bin/bash
