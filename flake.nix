@@ -4,9 +4,10 @@
   inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
   inputs.agenix.url = "github:ryantm/agenix";
   inputs.deploy-rs.url = "github:serokell/deploy-rs";
+  inputs.nixos-anywhere.url = "github:nix-community/nixos-anywhere";
 
   outputs =
-    { nixpkgs, disko, agenix, deploy-rs, ... }:
+    { nixpkgs, disko, agenix, deploy-rs, nixos-anywhere, ... }:
     let
       configFile = ./config.toml;
       fortConfig = builtins.fromTOML (builtins.readFile configFile);
@@ -100,6 +101,7 @@
             nixpkgsPackages = [ "jq" "deploy-rs" "toml-cli" ];
             flakePackages = {
               agenix = agenix.packages.${system}.default;
+              nixos-anywhere = nixos-anywhere.packages.${system}.default;
             };
           in
           nixpkgs.lib.listToAttrs (

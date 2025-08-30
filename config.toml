@@ -20,6 +20,11 @@ profile = "linode"
 system = "x86_64-linux"
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK1BwH6doO+iBEGiozS6MSbZtAG5jBggsUWqPqoAtmZh fort-device-linode-82391624"
 
+[devices.03000200-0400-0500-0006-000700080009]
+profile = "beelink"
+system = "x86_64-linux"
+pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINfDPBzUrhlnSuGUIt9afwcpcayEJWqpQtat7P4zwWO3 fort-device-03000200-0400-0500-0006-000700080009"
+
 [settings]
 pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
 registry_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM1afmFa8Ox6Rrij6RgZytyBugPY1Hrw/F8xgEVMVnHk fort-dns-registry"
@@ -44,3 +49,6 @@ services = [ "jellyfin" ]
 [hosts.bayaz]
 device = "linode-82391624"
 roles = [ "fort-barbican" ]
+
+[hosts.almualim]
+device = "03000200-0400-0500-0006-000700080009"

@@ -47,7 +47,7 @@ provision $profile $ssh_target:
 
   nix run .#agenix -- -i ~/.ssh/fort -r
 
-  nix run github:nix-community/nixos-anywhere -- \
+  nix run .#nixos-anywhere -- \
     --generate-hardware-config nixos-generate-config ./devices/$uuid/hardware-configuration.nix \
     --extra-files "$temp" \
     --flake .#$uuid \
