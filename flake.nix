@@ -80,15 +80,22 @@
         (nixpkgs.lib.mapAttrs mkDeviceConfig fortConfig.devices) //
         (nixpkgs.lib.mapAttrs mkHostConfig fortConfig.hosts);
 
-      deploy.nodes = nixpkgs.lib.mapAttrs (host: def: {
-        hostname = "<dynamic>";
-        sshUser = "root";
-        sshOpts = [ "-i" "~/.ssh/fort" ];
-        profiles.system = {
-          user = "root";
-          path = deploy-rs.lib.x86_64-linux.activate.nixos nixosConfigurations.${host};
-        };
-      }) fortConfig.hosts;
+      deploy.nodes = nixpkgs.lib.mapAttrs (host: def:
+        let
+          roles = def.roles or [];
+          isCitadel = builtins.elem "fort-citadel" roles;
+          sshUser = if isCitadel then "fort" else "root";
+          sshKey  = if isCitadel then "~/.ssh/fort-access" else "~/.ssh/fort";
+        in {
+          hostname = "<dynamic>";
+          inherit sshUser;
+          sshOpts = [ "-i" sshKey ];
+          profiles.system = {
+            user = "root";
+            path = deploy-rs.lib.x86_64-linux.activate.nixos nixosConfigurations.${host};
+          };
+        }
+      ) fortConfig.hosts;
     in
     {
       inherit nixosConfigurations;

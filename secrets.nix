@@ -19,6 +19,14 @@ let
   barbicanDevicePubkeys =
     builtins.map (host: fortConfig.devices.${host.device}.pubkey)
                  barbicanHosts;
+
+  citadelHosts =
+    builtins.filter (host: builtins.elem "fort-citadel" (host.roles or []))
+                    (builtins.attrValues fortConfig.hosts);
+
+  citadelDevicePubkeys =
+    builtins.map (host: fortConfig.devices.${host.device}.pubkey)
+                 citadelHosts;
 in
 {
   "./secrets/wifi.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
@@ -26,5 +34,5 @@ in
   "./secrets/registry_key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ gatehouseDevicePubkeys;
   "./secrets/fort_gatehouse_wg.age".publicKeys = [ fortConfig.settings.pubkey ] ++ gatehouseDevicePubkeys;
   "./secrets/fort_barbican_wg.age".publicKeys = [ fortConfig.settings.pubkey ] ++ barbicanDevicePubkeys;
-  "./secrets/dns_provider.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ gatehouseDevicePubkeys;
+  "./secrets/dns_provider.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ citadelDevicePubkeys;
 }
