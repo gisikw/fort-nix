@@ -1,18 +1,29 @@
 { config, fort, ... }:
 
 {
+
   services.openssh.settings = {
     PermitRootLogin = "no";
     PasswordAuthentication = false;
   };
 
+  users.groups.fort = {};
   users.extraUsers.fort = {
     isNormalUser = true;
-    home = "/home/fort";
+    group = "fort";
     extraGroups = [ "wheel" ];
+    home = "/home/fort";
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfSazjaPhDc9+aBUtYNo9F+w9kNil7K8XzjHxCjsR5 fort-access"
     ];
+  };
+
+  age.secrets.fort-key = {
+    file = ../secrets/fort.key.age;
+    path = "/home/fort/.ssh/fort";
+    mode = "0600";
+    owner = "fort";
+    group = "fort";
   };
 
   security.sudo.enable = true;
