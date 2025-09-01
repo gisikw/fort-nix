@@ -114,8 +114,15 @@ in
           chown -R root:nginx /etc/ssl/${fort.settings.domain};
           chmod 640 /etc/ssl/${fort.settings.domain}/*.pem;
           chmod 750 /etc/ssl/${fort.settings.domain}
+
           if systemctl is-active --quiet nginx; then
+            echo "Reloading nginx"
             systemctl reload nginx
+          elif systemctl is-enabled --quiet nginx; then
+            echo "Starting nginx"
+            systemctl start nginx
+          else
+            echo "nginx not enabled; skipping"
           fi
         '
       done

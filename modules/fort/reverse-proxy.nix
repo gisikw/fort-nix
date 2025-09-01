@@ -46,5 +46,14 @@
         };
       }) config.fort.routes;
     };
+
+    systemd.services.nginx = {
+      serviceConfig = {
+        ConditionPathExists = [
+          "/etc/ssl/${fort.settings.domain}/fullchain.pem"
+          "/etc/ssl/${fort.settings.domain}/key.pem"
+        ];
+      };
+    };
   };
 }
