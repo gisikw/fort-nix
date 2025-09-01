@@ -1,13 +1,27 @@
-{ config, pkgs, fort, ... }:
+{ config, lib, pkgs, fort, ... }:
 
 {
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   environment.systemPackages = with pkgs; [ just git ];
 
-  services.openssh.settings = {
-    PermitRootLogin = "no";
-    PasswordAuthentication = false;
+  services.openssh = {
+    settings = {
+      PermitRootLogin = "no";
+      PasswordAuthentication = false;
+    };
+    knownHosts =
+      lib.mapAttrs'
+        (host: hostCfg:
+          let
+            device = fort.config.devices.${hostCfg.device};
+          in {
+            name = "${host}.hosts.${fort.settings.domain}";
+            value = {
+              publicKey = device.pubkey;
+            };
+          })
+        fort.config.hosts;
   };
 
   users.groups.fort = {};
