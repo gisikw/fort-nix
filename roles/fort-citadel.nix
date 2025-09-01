@@ -1,6 +1,9 @@
-{ config, fort, ... }:
+{ config, pkgs, fort, ... }:
 
 {
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+  environment.systemPackages = with pkgs; [ just git ];
 
   services.openssh.settings = {
     PermitRootLogin = "no";
@@ -13,9 +16,7 @@
     group = "fort";
     extraGroups = [ "wheel" ];
     home = "/home/fort";
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfSazjaPhDc9+aBUtYNo9F+w9kNil7K8XzjHxCjsR5 fort-access"
-    ];
+    openssh.authorizedKeys.keys = fort.settings.royal_pubkeys;
   };
 
   age.secrets.fort-key = {

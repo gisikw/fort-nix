@@ -30,6 +30,9 @@ pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJO
 registry_pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM1afmFa8Ox6Rrij6RgZytyBugPY1Hrw/F8xgEVMVnHk fort-dns-registry"
 domain = "gisi.network"
 dns_provider = "porkbun"
+royal_pubkeys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHOfSazjaPhDc9+aBUtYNo9F+w9kNil7K8XzjHxCjsR5 fort-access"
+]
 
 [hosts]
 

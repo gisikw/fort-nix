@@ -69,7 +69,13 @@ deploy host addr=(host + ".hosts." + domain):
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build .#{{host}}
 
 ssh host:
-  ssh -i ~/.ssh/fort root@{{host}}.hosts.{{domain}}
+  #!/bin/bash
+  if nix run .#toml-cli -- get config.toml . \
+    | nix run .#jq -- -e '.hosts.{{host}}.roles // [] | any(index("fort-citadel"))' > /dev/null; then
+    ssh -i ~/.ssh/fort-access fort@{{host}}.hosts.{{domain}}
+  else
+    ssh -i ~/.ssh/fort root@{{host}}.hosts.{{domain}}
+  fi
 
 agenix path:
   nix run .#agenix -- -i ~/.ssh/fort -e {{path}}
