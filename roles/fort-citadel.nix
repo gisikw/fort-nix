@@ -70,7 +70,11 @@ in
 
     certs.${fort.settings.domain} = {
       domain = fort.settings.domain;
-      extraDomainNames = [ "*.${fort.settings.domain}" ];
+      extraDomainNames = [
+        "*.${fort.settings.domain}"
+        "*.hosts.${fort.settings.domain}"
+        "*.devices.${fort.settings.domain}"
+      ];
       dnsProvider = fort.settings.dns_provider;
       environmentFile = config.age.secrets.dns-provider-env.path;
     };
@@ -81,7 +85,10 @@ in
     after = [ "acme-${fort.settings.domain}.service" ];
     wants = [ "acme-${fort.settings.domain}.service" ];
     wantedBy = [ "multi-user.target" ];
-    serviceConfig.Type = "oneshot";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStartPost = "${pkgs.systemd}/bin/systemctl reload nginx";
+    };
 
     script = ''
       set -euo pipefail
@@ -89,14 +96,28 @@ in
       certdir="/var/lib/acme/${fort.settings.domain}"
       targetdir="/etc/ssl/${fort.settings.domain}"
 
+      ${pkgs.rsync}/bin/rsync -avz --checksum "$certdir/" "$targetdir/"
+      chown -R root:nginx /etc/ssl/${fort.settings.domain}
+      chmod 640 /etc/ssl/${fort.settings.domain}/*.pem
+      chmod 750 /etc/ssl/${fort.settings.domain}
+
       for host in ${eligibleHosts}; do
         fqdn="$host.hosts.${fort.settings.domain}"
         echo "Syncing cert to $fqdn"
 
-        ${pkgs.rsync}/bin/rsync -avz \
-          -e "${pkgs.openssh}/bin/ssh -i /home/fort/.ssh/fort -o StrictHostKeyChecking=no" \
+        ${pkgs.rsync}/bin/rsync -avz --checksum \
+          -e "${pkgs.openssh}/bin/ssh -i /home/fort/.ssh/fort" \
           "$certdir/" \
           "root@$fqdn:$targetdir/"
+
+        ${pkgs.openssh}/bin/ssh -i /home/fort/.ssh/fort root@$fqdn '
+          chown -R root:nginx /etc/ssl/${fort.settings.domain};
+          chmod 640 /etc/ssl/${fort.settings.domain}/*.pem;
+          chmod 750 /etc/ssl/${fort.settings.domain}
+          if systemctl is-active --quiet nginx; then
+            systemctl reload nginx
+          fi
+        '
       done
     '';
   };

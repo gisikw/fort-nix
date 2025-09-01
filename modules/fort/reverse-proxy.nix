@@ -27,6 +27,14 @@
       '';
       virtualHosts = lib.mapAttrs (name: route: {
         serverName = "${route.subdomain}.${fort.settings.domain}";
+
+        enableACME = false;
+        forceSSL = true;
+        useACMEHost = null;
+
+        sslCertificate = "/etc/ssl/${fort.settings.domain}/fullchain.pem";
+        sslCertificateKey = "/etc/ssl/${fort.settings.domain}/key.pem";
+
         locations."/" = {
           proxyPass = "http://127.0.0.1:${toString route.port}";
           extraConfig = ''
