@@ -5,7 +5,7 @@ init:
   just _toml_set config.toml "fort.pubkey" "$(< ~/.ssh/fort.pub)"
 
 provision $profile $ssh_target:
-  #!/bin/bash
+  #!/usr/bin/env bash
   set -euo pipefail
 
   if [ "$profile" = "linode" ]; then
@@ -69,7 +69,7 @@ deploy host addr=(host + ".hosts." + domain):
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build .#{{host}}
 
 ssh host:
-  #!/bin/bash
+  #!/usr/bin/env bash
   if nix run .#toml-cli -- get config.toml . \
     | nix run .#jq -- -e '.hosts.{{host}}.roles // [] | any(index("fort-citadel"))' > /dev/null; then
     ssh -i ~/.ssh/fort-access fort@{{host}}.hosts.{{domain}}
@@ -81,7 +81,7 @@ agenix path:
   nix run .#agenix -- -i ~/.ssh/fort -e {{path}}
 
 _toml_set FILE PATH VALUE:
-  #!/bin/bash
+  #!/usr/bin/env bash
   set -euo pipefail
   touch "{{FILE}}"
   tmp=$(mktemp)
