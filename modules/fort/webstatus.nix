@@ -85,7 +85,7 @@ let
 in {
   config = {
     fort.routes.webstatus = {
-      subdomain = "${fort.device}.devices";
+      subdomain = [ "${fort.device}.devices" "${fort.host}.hosts" ];
       port = 48484;
     };
 
