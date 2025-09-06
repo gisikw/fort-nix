@@ -33,7 +33,7 @@
           hasBarbican = builtins.elem "fort-barbican" baseRoles;
           hasGatehouse = builtins.elem "fort-gatehouse" baseRoles;
           current = hostCfg // {
-            roles = baseRoles ++ (if hasBarbican || hasGatehouse then [] else [ "fort-host" ]);
+            roles = baseRoles ++ [ "fort-base" ] ++ (if hasBarbican || hasGatehouse then [] else [ "fort-host" ]);
             drivers = hostCfg.drivers or [];
             features = hostCfg.features or [];
             services = hostCfg.services or [];

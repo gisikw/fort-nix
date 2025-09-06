@@ -1,8 +1,6 @@
 { config, fort, pkgs, lib, ... }:
 
 {
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
   imports = [
     ../modules/fort/registry-coredns-subscriber
     ../modules/fort/coredns.nix
@@ -44,8 +42,6 @@
       };
     };
   };
-
-  environment.systemPackages = [ pkgs.neovim ];
 
   systemd.tmpfiles.rules = [
     "f /var/lib/haproxy/dynamic.cfg 0640 haproxy haproxy -"
