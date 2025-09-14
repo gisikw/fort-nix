@@ -36,4 +36,5 @@ in
   "./secrets/fort_barbican_wg.age".publicKeys = [ fortConfig.settings.pubkey ] ++ barbicanDevicePubkeys;
   "./secrets/dns_provider.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ citadelDevicePubkeys;
   "./secrets/fort.key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ citadelDevicePubkeys;
+  "./secrets/egress-vpn-conf.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
 }
