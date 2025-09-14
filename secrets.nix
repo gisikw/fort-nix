@@ -37,4 +37,5 @@ in
   "./secrets/dns_provider.env.age".publicKeys = [ fortConfig.settings.pubkey ] ++ citadelDevicePubkeys;
   "./secrets/fort.key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ citadelDevicePubkeys;
   "./secrets/egress-vpn-conf.age".publicKeys = [ fortConfig.settings.pubkey ] ++ devicePubkeys;
+  "./secrets/zitadel-master-key.age".publicKeys = [ fortConfig.settings.pubkey ] ++ barbicanDevicePubkeys;
 }

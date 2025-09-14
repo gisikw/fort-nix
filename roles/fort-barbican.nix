@@ -1,53 +1,88 @@
 { config, pkgs, fort, ... }:
 
+# Shout out to https://lukadeka.com/blog/setting-up-netbird-with-zitadel-on-nixos/
+
 {
-  age.secrets.fort-barbican-wg.file = ../secrets/fort_barbican_wg.age;
-
-  environment.systemPackages = [ pkgs.redis ];
-
-  networking.firewall.allowedUDPPorts = [ 51820 ];
-
-  networking.wireguard = {
+  services.postgresql = {
     enable = true;
-    interfaces = {
-      wg0 = {
-        ips = [ "10.100.0.1/24" ];
+    authentication = pkgs.lib.mkOverride 10 ''
+      local all      all     trust
+    '';
+  };
 
-        listenPort = 51820;
-        privateKeyFile = config.age.secrets.fort-barbican-wg.path;
-        peers = [{
-          name = "fort-gatehouse";
-          publicKey = "u4r/24By0l498kVeCaJeAIyGHDi6wobUVEUuJ866KC4=";
-          allowedIPs = [ "10.100.0.2/32" ];
-        }];
+  age.secrets.zitadel-master-key = {
+    file = ../secrets/zitadel-master-key.age;
+    owner = "zitadel";
+    group = "zitadel";
+  };
+
+  systemd.services.zitadel.serviceConfig.Environment = [
+    "ZITADEL_MACHINE_IDENTIFICATION_HOSTNAME_ENABLED=true"
+    "ZITADEL_LOG_LEVEL=debug"
+  ];
+  services.zitadel = {
+    enable = true;
+
+    masterKeyFile = config.age.secrets.zitadel-master-key.path;
+
+    tlsMode = "external";
+    settings = {
+      Port = 39995;
+      ExternalPort = 443;
+      ExternalDomain = "auth.${fort.settings.domain}";
+      Database = {
+        Clean = true;
+        postgres = {
+          Host = "/var/run/postgresql";
+          Port = 5432;
+          Database = "zitadel";
+          MaxOpenConns = 15;
+          MaxIdleConns = 10;
+          MaxConnLifetime = "1h";
+          MaxConnIdleTime = "5m";
+          User.Username = "zitadel";
+          Admin.Username = "postgres";
+        };
+      };
+    };
+    steps = {
+      FirstInstance = {
+        InstanceName = "Zitadel";
+        Org.Human = {
+          UserName = "admin";
+          FirstName = "Admin";
+          LastName = "Account";
+          DisplayName = "Admin";
+          Password = "ChangeMe123!";
+          PasswordChangeRequired = true;
+          Email = {
+            Address = "admin@${fort.settings.domain}";
+            Verified = true;
+          };
+        };
       };
     };
   };
 
   networking.firewall.allowedTCPPorts = [ 80 443 ];
-  services.haproxy = {
-    enable = true;
-    config = ''
-      defaults
-        mode tcp
-        timeout connect 10s
-        timeout client  30s
-        timeout server  30s
 
-      frontend https-in
-        bind *:443
-        tcp-request inspect-delay 5s
-        tcp-request content accept if { req_ssl_hello_type 1 }
-        default_backend gatehouse
-
-      backend gatehouse
-        mode tcp
-        server gatehouse 10.100.0.2:443
-
-      frontend http-in
-        bind *:80
-        mode http
-        redirect scheme https code 301
+  services.nginx.enable = true;
+  services.nginx.virtualHosts."auth.${fort.settings.domain}" = {
+    forceSSL = true;
+    enableACME = true;
+    locations."/" = {
+      proxyPass = "http://127.0.0.1:39995";
+      proxyWebsockets = true;
+      extraConfig = ''
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
       '';
+    };
+  };
+
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = "admin@${fort.settings.domain}";
   };
 }
