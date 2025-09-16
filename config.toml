@@ -38,7 +38,7 @@ royal_pubkeys = [
 
 [hosts.lordhenry]
 device = "17f17980-5d30-11f0-9a98-fe3a96b43f00"
-services = [ "ollama" ]
+services = [ "ollama", "sillytavern" ]
 
 [hosts.richardiii]
 device = "b7e58d48-241c-1a4a-8eea-dc90095d4ec7"
