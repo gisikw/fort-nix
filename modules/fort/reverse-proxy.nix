@@ -1,4 +1,4 @@
-{ lib, fort, config, ... }:
+{ lib, fort, config, pkgs, ... }:
 
 {
   options.fort.routes = lib.mkOption {
@@ -18,7 +18,38 @@
     description = "Declared reverse proxy routes for this host.";
   };
 
-  config = {
+  config =
+    let
+      domain = fort.settings.domain;
+      tailscaleServePort = 41137;
+      toList = value: if builtins.isList value then value else [ value ];
+      routes = lib.mapAttrsToList (name: route:
+        let
+          subdomains = toList route.subdomain;
+        in
+        {
+          inherit name;
+          port = route.port;
+          subdomains = subdomains;
+          hostnames = map (s: "${s}.${domain}") subdomains;
+        }
+      ) config.fort.routes;
+      servicesManifest = {
+        host = fort.host;
+        domain = domain;
+        tailnetHost = "${fort.host}.tail.${domain}";
+        tailscaleServe = {
+          port = tailscaleServePort;
+          scheme = "http";
+          path = "/";
+        };
+        routes = routes;
+      };
+      servicesJson = builtins.toJSON servicesManifest;
+      servicesJsonStorePath = pkgs.writeText "fort-services.json" servicesJson;
+      tailscaleBin = lib.getExe config.services.tailscale.package;
+    in
+  {
     networking.firewall.allowedTCPPorts = [ 80 443 ];
     services.nginx = {
       enable = true;
@@ -70,5 +101,42 @@
       "/etc/ssl/${fort.settings.domain}/fullchain.pem"
       "/etc/ssl/${fort.settings.domain}/key.pem"
     ];
+
+    systemd.tmpfiles.rules = lib.mkAfter [
+      "d /var/lib/fort 0755 root root -"
+    ];
+
+    systemd.services.fort-write-services-json = {
+      description = "Generate fort services manifest";
+      wantedBy = [ "multi-user.target" ];
+      partOf = [ "nginx.service" ];
+      restartTriggers = [ servicesJsonStorePath ];
+      serviceConfig = {
+        Type = "oneshot";
+      };
+      path = [ pkgs.coreutils ];
+      script = ''
+        install -Dm0644 ${servicesJsonStorePath} /var/lib/fort/services.json
+      '';
+    };
+
+    systemd.services.fort-tailscale-serve = lib.mkIf config.services.tailscale.enable {
+      description = "Expose fort services manifest over tailscale serve";
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "tailscaled.service"
+        "fort-write-services-json.service"
+      ] ++ lib.optional (config.systemd.services ? tailscaled-autoconnect) "tailscaled-autoconnect.service";
+      requires = [ "tailscaled.service" "fort-write-services-json.service" ];
+      path = [ config.services.tailscale.package pkgs.coreutils ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = ''
+        set -euo pipefail
+        ${tailscaleBin} serve --http=${toString tailscaleServePort} /var/lib/fort
+      '';
+    };
   };
 }
