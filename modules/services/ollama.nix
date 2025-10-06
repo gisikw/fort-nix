@@ -5,7 +5,7 @@
     enable = true;
     acceleration = "rocm";
     environmentVariables = {
-      HCC_AMDGPU_TARGET = "gfx1102"; # Nearest supported match
+      HCC_AMDGPU_TARGET = "gfx1151";
     };
     rocmOverrideGfx = "11.0.2";
     openFirewall = true;

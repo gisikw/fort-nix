@@ -142,7 +142,7 @@ let
       enablePrefix = false;
     };
     ollama = {
-      keepAlive = -1;
+      keepAlive = "15m";
       batchSize = -1;
     };
     claude = {
