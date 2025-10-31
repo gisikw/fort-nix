@@ -5,6 +5,7 @@
 - `common/` defines shared device and host modules; extend these before editing generated flakes.
 - Declarative layers live under `device-profiles/`, `devices/<uuid>/`, and `hosts/<name>/manifest.nix`; keep host-specific options inside manifests, reusable logic in `apps/`, `aspects/`, and `roles/`.
 - Secrets and age-encrypted material stay in `secrets.nix`; never commit plaintext keys.
+- Containerized apps should pull from the on-cluster registry exposed by `apps/zot` (`containers.${domain}`); avoid upstream DockerHub/GHCR URLs so images stay cached.
 
 ## Build, Test, and Development Commands
 - `just provision <profile> <ip>` fingerprints hardware, scaffolds `devices/<uuid>` and bootstraps the target.
