@@ -1,0 +1,4 @@
+{
+  apps = [ "headscale" ];
+  aspects = [ "mesh" ];
+}
