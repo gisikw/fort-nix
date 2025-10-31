@@ -4,7 +4,10 @@ rec {
 
   roles = [ ];
 
-  apps = [ "jellyfin" ];
+  apps = [
+    "jellyfin"
+    "audiobookshelf"
+  ];
 
   aspects = [
     "mesh"
