@@ -52,9 +52,6 @@ in
         done | jq -s 'add'
       )
 
-      echo "Entries collected"
-      echo "$entries"
-
       echo $entries \
         | jq 'map({ name: ((.domain // .name) + ".${domain}"), type: "A", value: .mesh_ip })' \
         | ssh $SSH_OPTS "root@${beaconHost}.fort.${domain}" "tee /var/lib/headscale/extra-records.json >/dev/null"
