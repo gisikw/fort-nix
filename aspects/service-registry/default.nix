@@ -2,6 +2,12 @@
 { pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+  serviceDomain =
+    svc:
+    let
+      sub = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+    in
+    "${sub}.${domain}";
   hostFiles = builtins.readDir ../../hosts;
   hosts = builtins.mapAttrs (name: _: import (../../hosts/${name}/manifest.nix)) hostFiles;
   beacons = builtins.filter (h: builtins.elem "beacon" h.roles) (builtins.attrValues hosts);
@@ -53,11 +59,32 @@ in
       )
 
       echo $entries \
-        | jq 'map({ name: ((.domain // .name) + ".${domain}"), type: "A", value: .mesh_ip })' \
+        | jq '
+            map(
+              if has("subdomain") and (.subdomain != null) then
+                . + { fqdn: (.subdomain + ".${domain}") }
+              else
+                . + { fqdn: (.name + ".${domain}") }
+              end
+            )
+          ' \
+        | jq 'map({ name: .fqdn, type: "A", value: .mesh_ip })' \
         | ssh $SSH_OPTS "root@${beaconHost}.fort.${domain}" "tee /var/lib/headscale/extra-records.json >/dev/null"
 
       echo $entries \
-        | jq -r '.[] | select(.openToLAN) | "\(.lan_ip) \(.domain // .name).${domain}"' \
+        | jq -r \
+          --arg dom "${domain}" \
+          '
+            .[]
+            | select(.openToLAN)
+            | "\(.lan_ip) \(
+                if has("subdomain") and (.subdomain != null) then
+                  (.subdomain + "." + $dom)
+                else
+                  (.name + "." + $dom)
+                end
+              )"
+          ' \
         | tee /var/lib/coredns/custom.conf >/dev/null
     '';
     serviceConfig = {
