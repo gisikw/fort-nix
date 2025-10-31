@@ -7,6 +7,7 @@ rec {
   apps = [
     "jellyfin"
     "audiobookshelf"
+    "calibre-web"
   ];
 
   aspects = [
