@@ -153,6 +153,27 @@ assign device host:
 
 deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
+  expected_uuid=$(nix eval --raw --impure --expr "(import ./hosts/{{host}}/manifest.nix).device")
+  device_profile=$(nix eval --raw --impure --expr "(import ./devices/${expected_uuid}/manifest.nix).profile" 2>/dev/null || echo "")
+
+  echo "[Fort] Verifying {{host}} deployment target ({{addr}}) matches device ${expected_uuid}"
+
+  if [[ "$device_profile" == "linode" ]]; then
+    actual_uuid=$(just _fingerprint-linode {{addr}} | tail -n1 | tr -d '\r\n')
+  else
+    actual_uuid=$(just _fingerprint-hardware {{addr}} | tail -n1 | tr -d '\r\n')
+  fi
+
+  if [[ -z "$actual_uuid" ]]; then
+    echo "[Fort] ERROR: Unable to fingerprint deployment target {{addr}}" >&2
+    exit 1
+  fi
+
+  if [[ "$actual_uuid" != "$expected_uuid" ]]; then
+    echo "[Fort] ERROR: Target {{addr}} reports device UUID ${actual_uuid}, expected ${expected_uuid}" >&2
+    exit 1
+  fi
+
   trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
   KEYED_FOR_DEVICES=1 nix run .#agenix -- -i ~/.ssh/fort -r
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build ./hosts/{{host}}#{{host}}
