@@ -4,7 +4,7 @@ rec {
 
   roles = [ "beacon" ];
 
-  apps = [ ];
+  apps = [ "pocket-id" ];
 
   aspects = [ "observable" ];
 
