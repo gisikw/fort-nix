@@ -4,7 +4,7 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [ "vikunja" ];
 
   aspects = [
     "mesh"
