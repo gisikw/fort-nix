@@ -66,13 +66,51 @@ in
         '
       )
 
+      # VPN DNS
       echo $services \
         | jq 'map({ name: .fqdn, type: "A", value: .vpn_ip })' \
-        | ssh $SSH_OPTS "root@${beaconHost}.fort.${domain}" "tee /var/lib/headscale/extra-records.json >/dev/null"
+        | ssh $SSH_OPTS \
+            "root@${beaconHost}.fort.${domain}" \
+            "tee /var/lib/headscale/extra-records.json >/dev/null"
 
+      # Local DNS
       echo $services \
         | jq -r '.[] | select(.visibility != "vpn") | "\(.lan_ip) \(.fqdn)"' \
         | tee /var/lib/coredns/custom.conf >/dev/null
+
+      # Public Proxy
+      echo $services \
+        | jq -r '"
+          # Managed by fort-service-registry
+
+          map $http_upgrade $connection_upgrade {
+            default upgrade;
+            "" close;
+          }
+
+          " + (map("server {
+            listen 80;
+            listen 443 ssl http2;
+            server_name " + .fqdn + ";
+
+            ssl_certificate     /var/lib/fort/ssl/${domain}/fullchain.pem;
+            ssl_certificate_key /var/lib/fort/ssl/${domain}/key.pem;
+
+            location / {
+              proxy_pass http://" + .vpn_ip + ":" + (.port | tostring) + ";
+              proxy_set_header Host               $host;
+              proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto  $scheme;
+              proxy_set_header X-Real-IP          $remote_addr;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade    $http_upgrade;
+              proxy_set_header Connection $connection_upgrade;
+            }
+          }
+          ") | join("\n"))' \
+          | ssh $SSH_OPTS \
+              "root@${beaconHost}.fort.${domain}" \
+              "tee /var/lib/fort/nginx/public-services.conf >/dev/null; systemctl reload nginx"
     '';
     serviceConfig = {
       Type = "oneshot";
