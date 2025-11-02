@@ -1,4 +1,7 @@
 {
   apps = [ "headscale" ];
-  aspects = [ "mesh" ];
+  aspects = [
+    "mesh"
+    "public-ingress"
+  ];
 }
