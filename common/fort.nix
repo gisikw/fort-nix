@@ -41,21 +41,14 @@ in
                   example = 8096;
                 };
 
-                openToLAN = lib.mkOption {
-                  type = bool;
-                  default = false;
+                visibility = lib.mkOption {
+                  type = lib.types.enum [ "vpn" "local" "public" ];
+                  default = "vpn";
                   description = ''
-                    Whether this service should be discoverable on the local
-                    network and CoreDNS for non-mesh devices.
-                  '';
-                };
-
-                openToWAN = lib.mkOption {
-                  type = bool;
-                  default = false;
-                  description = ''
-                    Whether this service should be exposed via the VPS reverse proxy
-                    and made available publicly.
+                    The visibility level for this service.
+                    Defaults to `vpn`, with nginx rejecting non-VPN traffic to the subdomain.
+                    `local` removes the source restriction and adds local CoreDNS record.
+                    `public` instantiates a reverse-proxy for the service on the beacon box.
                   '';
                 };
               };
@@ -66,14 +59,13 @@ in
             {
               name = "jellyfin";
               port = 8096;
-              openToLAN = true;
+              visibility = "local";
             }
             {
               name = "immich";
               port = 2283;
-              openToLAN = true;
-              openToWAN = true;
               subdomain = "photos";
+              visibility = "public";
             }
           ];
         };
@@ -90,8 +82,8 @@ in
         recommendedProxySettings = true;
 
         commonHttpConfig = ''
-          # Whitelist FortMesh addresses
-          geo $is_mesh {
+          # Whitelist VPN addresses
+          geo $is_vpn {
             default 0;
             100.64.0.0/10 1;
           }
@@ -110,8 +102,8 @@ in
                 sslCertificate = "/var/lib/fort/ssl/${domain}/fullchain.pem";
                 sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
                 locations."/" = {
-                  extraConfig = lib.optionalString (!svc.openToLAN) ''
-                    if ($is_mesh = 0) {
+                  extraConfig = lib.optionalString (svc.visibility == "vpn") ''
+                    if ($is_vpn = 0) {
                       return 444;
                     }
                   '';

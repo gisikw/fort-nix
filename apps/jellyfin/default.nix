@@ -8,7 +8,7 @@
     {
       name = "jellyfin";
       port = 8096;
-      openToLAN = true;
+      visibility = "local";
     }
   ];
 }

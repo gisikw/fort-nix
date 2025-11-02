@@ -17,8 +17,7 @@ in
       name = "pocket-id";
       subdomain = "id";
       port = 1411;
-      openToLAN = true;
-      openToWAN = true;
+      visibility = "public";
     }
   ];
 }

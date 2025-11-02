@@ -76,7 +76,7 @@ in
           --arg dom "${domain}" \
           '
             .[]
-            | select(.openToLAN)
+            | select(.visibility != "vpn")
             | "\(.lan_ip) \(
                 if has("subdomain") and (.subdomain != null) then
                   (.subdomain + "." + $dom)
