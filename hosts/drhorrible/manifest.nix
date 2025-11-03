@@ -4,7 +4,7 @@ rec {
 
   roles = [ "forge" ];
 
-  apps = [ ];
+  apps = [ "homepage" ];
 
   aspects = [
     "mesh"

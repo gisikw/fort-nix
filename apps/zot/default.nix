@@ -50,7 +50,12 @@ in
           }
           {
             urls = [ "https://ghcr.io/v2" ];
-            content.prefix = "ghcr.io";
+            content = [
+              {
+                prefix = "**";
+                destination = "/ghcr.io";
+              }
+            ];
             onDemand = true;
           }
         ];
