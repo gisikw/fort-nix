@@ -22,3 +22,7 @@
 ## Secrets & Access Tips
 - Use `just age <path>` to regenerate age-encrypted files; never edit ciphertext directly.
 - Keep SSH access synchronized with `~/.ssh/fort`; verify keys before provisioning to avoid stalled jobs.
+
+# ExecPlans
+ 
+When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
