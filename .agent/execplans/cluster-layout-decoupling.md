@@ -13,6 +13,7 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 - [x] (2025-11-03 22:45Z) Stage 4 implemented: `common/host.nix` and `common/device.nix` consume cluster context, expose cluster metadata in `config.fort`, and thread the cluster handle into app/aspect modules for future use.
 - [x] (2025-11-03 23:05Z) Stage 5 implemented: `secrets.nix` sources device keys from the active cluster directory and respects the new SSH metadata while preserving legacy fallbacks.
 - [x] (2025-11-03 23:25Z) Stage 6 implemented: Just recipes pull cluster settings via `manifest.nix`, honour per-cluster SSH keys, and scaffold/read host and device flakes from cluster-aware paths with migration fallbacks.
+- [x] (2025-11-03 23:45Z) Stage 7 implemented: existing host and device flakes relocated under `clusters/bedlam/`, with relative imports updated to reference shared modules from the new depth.
 
 ## Surprises & Discoveries
 
@@ -49,7 +50,7 @@ Stage 5 — Update secrets handling. Refactor `secrets.nix` to use the helper fo
 
 Stage 6 — Make the Just recipes cluster-aware. Replace the global `ssh` variable and any hard-coded paths with values derived from the helper via `nix eval --raw --expr '(import ./manifest.nix).fort.cluster.<attr>'`. Ensure `_scaffold-device-flake`, `_bootstrap-device`, `assign`, and `deploy` resolve paths such as `clusters/${clusterName}/devices` and `clusters/${clusterName}/hosts`. Allow an operator to override the cluster for a single command by exporting `CLUSTER` before running `just`. Document the new behavior within the recipes’ comments.
 
-Stage 7 — Relocate configuration into `clusters/bedlam/` incrementally. First, move `hosts/` into `clusters/bedlam/hosts/` using `git mv` and update each host flake to reference the shared modules via the correct relative paths (likely `../../../../common/host.nix` and `path:../../../../`). Run `just test` to verify nothing regresses. Next, move `devices/` into `clusters/bedlam/devices/`, adjusting each device flake accordingly and retesting. Leave compatibility logic in place until both moves succeed.
+Stage 7 — Relocate configuration into `clusters/bedlam/` incrementally. First, move `hosts/` into `clusters/bedlam/hosts/` using `git mv` and update each host flake to reference the shared modules via the correct relative paths (likely `../../../../common/host.nix` and `path:../../../../`). Update any modules (apps/aspects) that previously imported `../../hosts` to read from the threaded `cluster.hostsDir`. Run `just test` to verify nothing regresses. Next, move `devices/` into `clusters/bedlam/devices/`, adjusting each device flake accordingly and retesting. Leave compatibility logic in place until both moves succeed.
 
 Stage 8 — Update provisioning scaffolds. Modify `_scaffold-device-flake`, `_bootstrap-device`, `assign`, and supporting helpers to create new host and device directories under `clusters/${clusterName}` and to add files to git at the new locations. Ensure generated flakes emit the correct relative import paths so newly provisioned nodes immediately follow the cluster-aware layout.
 

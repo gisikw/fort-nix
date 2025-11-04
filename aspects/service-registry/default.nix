@@ -1,4 +1,4 @@
-{ hostManifest, rootManifest, ... }:
+{ hostManifest, rootManifest, cluster, ... }:
 { pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -8,8 +8,8 @@ let
       sub = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
     in
     "${sub}.${domain}";
-  hostFiles = builtins.readDir ../../hosts;
-  hosts = builtins.mapAttrs (name: _: import (../../hosts/${name}/manifest.nix)) hostFiles;
+  hostFiles = builtins.readDir cluster.hostsDir;
+  hosts = builtins.mapAttrs (name: _: import (cluster.hostsDir + "/" + name + "/manifest.nix")) hostFiles;
   beacons = builtins.filter (h: builtins.elem "beacon" h.roles) (builtins.attrValues hosts);
   beaconHost = (builtins.head beacons).hostName;
 in

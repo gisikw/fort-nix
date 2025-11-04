@@ -1,4 +1,4 @@
-{ hostManifest, rootManifest, ... }:
+{ hostManifest, rootManifest, cluster, ... }:
 {
   config,
   pkgs,
@@ -7,8 +7,8 @@
 }:
 let
   domain = rootManifest.fortConfig.settings.domain;
-  hostDirs = builtins.attrNames (builtins.readDir ../../hosts);
-  hostManifests = map (name: import (../../hosts/${name}/manifest.nix)) hostDirs;
+  hostDirs = builtins.attrNames (builtins.readDir cluster.hostsDir);
+  hostManifests = map (name: import (cluster.hostsDir + "/" + name + "/manifest.nix")) hostDirs;
   observableHosts = builtins.filter (m: builtins.elem "observable" m.aspects) hostManifests;
   observableTargets = map (m: "${m.hostName}.fort.${domain}:9100") observableHosts;
 in
