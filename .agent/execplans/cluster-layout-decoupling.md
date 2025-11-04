@@ -10,6 +10,7 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 - [x] (2025-11-03 19:45Z) Stage 1 implemented: `just test` runs flake checks for the root and cluster-scoped hosts/devices; validation blocked in sandbox due to missing Nix daemon socket, needs confirmation on a full Nix host.
 - [x] (2025-11-03 21:55Z) Stage 2 implemented: cluster context helper added, `.cluster.example` introduced, and root manifest delegates through the helper while falling back to legacy layout when cluster manifests are absent.
 - [x] (2025-11-03 22:20Z) Stage 3 implemented: `clusters/bedlam/manifest.nix` created with expanded key metadata and compatibility shims; root fallback manifest mirrors the new structure.
+- [x] (2025-11-03 22:45Z) Stage 4 implemented: `common/host.nix` and `common/device.nix` consume cluster context, expose cluster metadata in `config.fort`, and thread the cluster handle into app/aspect modules for future use.
 
 ## Surprises & Discoveries
 

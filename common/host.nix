@@ -10,8 +10,10 @@ args@{
 }:
 let
   rootManifest = import ../manifest.nix;
+  cluster = rootManifest.fort.cluster;
+
   hostManifest = import (hostDir + "/manifest.nix");
-  deviceManifest = import ../devices/${hostManifest.device}/manifest.nix;
+  deviceManifest = import (cluster.devicesDir + "/${hostManifest.device}/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
 
   flatMap = f: xs: builtins.concatLists (map f xs);
@@ -28,6 +30,7 @@ let
           hostManifest
           deviceManifest
           deviceProfileManifest
+          cluster
           ;
       }
 
@@ -38,6 +41,7 @@ let
           hostManifest
           deviceManifest
           deviceProfileManifest
+          cluster
           ;
       }
 
@@ -49,6 +53,7 @@ let
             hostManifest
             deviceManifest
             deviceProfileManifest
+            cluster
             ;
         }
         // (builtins.removeAttrs mod [ "name" ])
@@ -87,7 +92,16 @@ in
       deviceProfileManifest.module
       disko.nixosModules.disko
       agenix.nixosModules.age
-      ../devices/${hostManifest.device}/hardware-configuration.nix
+      (cluster.devicesDir + "/${hostManifest.device}/hardware-configuration.nix")
+      {
+        config.fort = {
+          clusterName = cluster.clusterName;
+          clusterDir = cluster.clusterDir;
+          clusterHostsDir = cluster.hostsDir;
+          clusterDevicesDir = cluster.devicesDir;
+          clusterSettings = cluster.manifest.fortConfig.settings;
+        };
+      }
       (import ./fort.nix ({
         inherit
           rootManifest

@@ -8,6 +8,7 @@ args@{
 }:
 let
   rootManifest = import ../manifest.nix;
+  cluster = rootManifest.fort.cluster;
   deviceManifest = import (deviceDir + "/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
 in
@@ -37,6 +38,15 @@ in
       deviceProfileManifest.module
       disko.nixosModules.disko
       (deviceDir + "/hardware-configuration.nix")
+      {
+        config.fort = {
+          clusterName = cluster.clusterName;
+          clusterDir = cluster.clusterDir;
+          clusterHostsDir = cluster.hostsDir;
+          clusterDevicesDir = cluster.devicesDir;
+          clusterSettings = cluster.manifest.fortConfig.settings;
+        };
+      }
     ];
   };
 }
