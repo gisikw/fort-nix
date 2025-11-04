@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - `flake.nix` pins upstream inputs and exposes CLI packages (`agenix`, `nixos-anywhere`, `nixfmt`, `deploy-rs`); keep new inputs minimal.
 - `common/` defines shared device and host modules; extend these before editing generated flakes.
-- Declarative layers live under `device-profiles/`, `devices/<uuid>/`, and `hosts/<name>/manifest.nix`; keep host-specific options inside manifests, reusable logic in `apps/`, `aspects/`, and `roles/`.
+- Declarative layers live under `device-profiles/`, `clusters/<cluster>/devices/<uuid>/`, and `clusters/<cluster>/hosts/<name>/manifest.nix`; keep host-specific options inside manifests, reusable logic in `apps/`, `aspects/`, and `roles/`.
 - Secrets and age-encrypted material stay in `secrets.nix`; never commit plaintext keys.
 - Expose HTTP services through `fortCluster.exposedServices` so TLS, DNS, and nginx are managed centrally; augment the generated vhost from app modules only when custom locations or headers are required.
 - Containerized apps should pull from the on-cluster registry exposed by `apps/zot` (`containers.${domain}`); avoid upstream DockerHub/GHCR URLs so images stay cached.

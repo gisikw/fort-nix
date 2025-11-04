@@ -2,7 +2,7 @@ rec {
   name = "bedlam";
 
   fortConfig = {
-    settings = rec {
+    settings = {
       domain = "gisi.network";
       dnsProvider = "porkbun";
 
@@ -14,9 +14,6 @@ rec {
       authorizedDeployKeys = [
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ6yMYrTeaT8CU7pjOVYQ1vP/dJTDan8KmBWSFngWbQ1 fort-deployer"
       ];
-
-      pubkey = sshKey.publicKey;
-      deployPubkey = builtins.head authorizedDeployKeys;
     };
   };
 

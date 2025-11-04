@@ -1,16 +1,13 @@
 let
-  rootManifest = import ./manifest.nix;
-  cluster = rootManifest.fort.cluster;
-  settings = rootManifest.fortConfig.settings;
+  cluster = import ./common/cluster-context.nix { };
+  settings = cluster.manifest.fortConfig.settings;
 
-  sshKeyPub = if settings ? sshKey then settings.sshKey.publicKey else settings.pubkey;
-  deployKeys =
-    if settings ? authorizedDeployKeys then settings.authorizedDeployKeys else [ settings.deployPubkey ];
+  sshKeyPub = settings.sshKey.publicKey;
+  deployKeys = settings.authorizedDeployKeys;
   primaryKeys = [ sshKeyPub ] ++ deployKeys;
 
   deviceDir = cluster.devicesDir;
-  deviceEntries =
-    if builtins.pathExists deviceDir then builtins.readDir deviceDir else { };
+  deviceEntries = builtins.readDir deviceDir;
   deviceUuids = builtins.filter (name: deviceEntries.${name} == "directory") (builtins.attrNames deviceEntries);
   deviceKeys = map (uuid: (import "${deviceDir}/${uuid}/manifest.nix").pubkey) deviceUuids;
 

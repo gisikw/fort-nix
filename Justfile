@@ -1,6 +1,6 @@
-deploy_key := `bash -lc 'path=$(nix eval --raw --impure --expr "let settings = (import ./manifest.nix).fortConfig.settings; in if settings ? sshKey then settings.sshKey.privateKeyPath else \"~/.ssh/fort\"" ); if [[ "$path" == ~* ]]; then path="${path/#\~/$HOME}"; fi; printf %s "$path"'`
-domain := `nix eval --raw --impure --expr '(import ./manifest.nix).fortConfig.settings.domain'`
-cluster := `nix eval --raw --impure --expr '(import ./manifest.nix).fort.cluster.clusterName'`
+deploy_key := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.sshKey.privateKeyPath'`
+domain := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.domain'`
+cluster := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).clusterName'`
 
 provision profile target:
   #!/usr/bin/env bash
@@ -17,13 +17,13 @@ provision profile target:
 
 _fingerprint-hardware target:
   echo "[Fort] Fingerprinting physical hardware"
-  ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{target}} 'cat /sys/class/dmi/id/product_uuid'
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{target}} 'cat /sys/class/dmi/id/product_uuid'
 
 _fingerprint-linode target:
   echo "[Fort] Fingerprinting Linode VM"
-  ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{target}} \
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{target}} \
     'export TOKEN=$(curl -sX PUT -H "Metadata-Token-Expiry-Seconds: 3600" http://169.254.169.254/v1/token); \
-    curl -sH "Metadata-Token: $TOKEN" http://169.254.169.254/v1/instance | grep ^id: | sed "s/id: /linode-/"'
+     curl -sH "Metadata-Token: $TOKEN" http://169.254.169.254/v1/instance | grep ^id: | sed "s/id: /linode-/"'
 
 _generate-device-keys uuid:
   #!/usr/bin/env bash
@@ -89,7 +89,7 @@ _bootstrap-device target uuid keydir:
     --generate-hardware-config nixos-generate-config "${device_dir}/hardware-configuration.nix" \
     --extra-files "{{keydir}}" \
     --flake "${device_dir}#{{uuid}}" \
-    -i "{{deploy_key}}" \
+    -i {{deploy_key}} \
     --target-host root@{{target}}
 
 
@@ -199,17 +199,17 @@ deploy host addr=(host + ".fort." + domain):
   fi
 
   trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
-  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i "{{deploy_key}}" -r
+  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build "${host_dir}#{{host}}"
 
 fmt:
   nix run .#nixfmt -- .
 
 ssh host:
-  ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{host}}
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{host}}
 
 age path:
-  nix run .#agenix -- -i "{{deploy_key}}" -e {{path}}
+  nix run .#agenix -- -i {{deploy_key}} -e {{path}}
 
 test:
   #!/usr/bin/env bash

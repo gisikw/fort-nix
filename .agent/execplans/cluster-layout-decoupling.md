@@ -15,6 +15,8 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 - [x] (2025-11-03 23:25Z) Stage 6 implemented: Just recipes pull cluster settings via `manifest.nix`, honour per-cluster SSH keys, and scaffold/read host and device flakes from cluster-aware paths with migration fallbacks.
 - [x] (2025-11-03 23:45Z) Stage 7 implemented: existing host and device flakes relocated under `clusters/bedlam/`, with relative imports updated to reference shared modules from the new depth.
 - [x] (2025-11-04 00:05Z) Stage 8 implemented: provisioning and assignment recipes now create new host/device flakes under the active cluster by default while keeping legacy fallbacks for transitional use.
+- [x] (2025-11-04 00:25Z) Stage 9 implemented: removed legacy fallbacks/root manifest, updated modules to load cluster context directly, and pruned compatibility SSH keys in favour of the structured `sshKey`/`authorizedDeployKeys` fields.
+- [x] (2025-11-04 00:40Z) Stage 10 implemented: documentation refreshed to describe cluster selection, new directory layout, and the `just test` workflow.
 
 ## Surprises & Discoveries
 
@@ -31,7 +33,13 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 
 ## Outcomes & Retrospective
 
-Pending; will summarize lessons and follow-ups after cluster decoupling work lands.
+The repository now supports multiple clusters side-by-side. Hosts and devices live under
+`clusters/<cluster>/`, shared modules resolve paths via the cluster context helper, and
+tooling reads per-cluster deploy keys automatically. `just test` exercises every host and
+device in the selected cluster, and documentation explains how to select a cluster using
+`.cluster` or the `CLUSTER` environment variable. Remaining work includes optional polish
+such as adding sanity checks around `.cluster` contents, but core functionality and
+tooling are cluster-aware and deployable.
 
 ## Context and Orientation
 

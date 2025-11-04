@@ -4,22 +4,26 @@ A declarative nix-based homelab configuration using nixos-anywhere and deploy-rs
 
 ## Layered Host Configuration
 
-The cluster is comprised of a series of hosts, who all have their own
-`flake.nix` and `flake.lock` files for fast evaluation and ease of upgrade.
-However, these files are intentionally sparse and not designed to be edited.
-Base functionality for how device provisioning and host deployment work are
-managed in `./common/device.nix` and `./common/host.nix` respectively, with
-actual configuration of these devices principally confined to `manifest.nix`
-files as described below:
+Fort now supports multiple clusters simultaneously. Set the active cluster by
+exporting `CLUSTER=<name>` before running any `just` commands, or place the
+desired name in `.cluster` (copy `.cluster.example` to get started). All host
+and device flakes live under `./clusters/<cluster>/`, and the helper module
+`common/cluster-context.nix` is the single entry point for locating manifests,
+hosts, and devices on disk.
+
+Each host still has its own `flake.nix` and `flake.lock` files for quick
+evaluation, but those files remain intentionally sparse. Shared host/device
+logic lives in `./common/host.nix` and `./common/device.nix`, while app,
+aspect, and role definitions remain under `./apps`, `./aspects`, and `./roles`.
 
 The configuration for a host is composed of several layers:
 
 - A **device profile**: Base-level image configuration (e.g., disk layout, bootloader)
     - Defined in `./device-profiles/<profile>`
 - A **device entry**: Unique machine binding by UUID
-    - Auto-generated in `./devices/<uuid>`
+    - Auto-generated in `./clusters/<cluster>/devices/<uuid>`
 - A **host**: Logical identity, tied to a device UUID
-    - Scaffolded under `./hosts/<name>`, with primary configuration via `manifest.nix`
+    - Scaffolded under `./clusters/<cluster>/hosts/<name>`, with primary configuration via `manifest.nix`
     - Composed of:
         - **Aspects**: characteristics of the given host (e.g. `wifi-access`,
         `observable`, `mesh`)
@@ -75,7 +79,7 @@ just provision <device-type> <ip>
 ```
 
 This will attempt to pull a unique fingerprint for the device and write a flake
-under `./devices/<uuid>` given that id. It will leverage nixos-anywhere to
+under `./clusters/<cluster>/devices/<uuid>` given that id. It will leverage nixos-anywhere to
 convert your machine into a NixOS box that you can assign as a host and deploy
 to.
 
@@ -88,7 +92,7 @@ just assign <device> <hostname>
 # e.g. just assign f848d467-b339-4b5d-a8a0-de1ea07ba304 marmaduke
 ```
 
-This writes out the flake and additional files to `./hosts/<hostname>`, where
+This writes out the flake and additional files to `./clusters/<cluster>/hosts/<hostname>`, where
 you can subsequently tweak the `manifest.nix` file. It's recommended that you
 deploy the initial template _first_, so that subsequent deploys can be done
 over VPN.
@@ -107,3 +111,10 @@ just deploy <hostname> <ip>
 When the `ip` value is omitting, it's assumed that you're targeting
 `<hostname>.fort.<base domain>`. You'll likely want to put your development box
 on the mesh network ASAP to ensure those resolve for you.
+
+### Validating Changes
+
+Run `just test` regularly to execute `nix flake check` against the root flake
+and every host/device in the selected cluster. This command respects both
+`CLUSTER` and `.cluster`, so be sure the correct cluster is selected before
+running it.

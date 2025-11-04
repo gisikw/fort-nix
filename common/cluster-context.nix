@@ -22,21 +22,15 @@ let
   clusterDir = rootDir + "/clusters/" + clusterName;
   clusterManifestPath = clusterDir + "/manifest.nix";
 
-  hostsDirCandidate = clusterDir + "/hosts";
-  devicesDirCandidate = clusterDir + "/devices";
+  ensurePath =
+    path: description:
+    if builtins.pathExists path then path else
+      builtins.throw ("Expected " + description + " at " + path + " for cluster '" + clusterName + "'");
+
+  manifest = import (ensurePath clusterManifestPath "cluster manifest");
+  hostsDir = ensurePath (clusterDir + "/hosts") "cluster hosts directory";
+  devicesDir = ensurePath (clusterDir + "/devices") "cluster devices directory";
 in
 {
-  inherit
-    clusterName
-    clusterDir
-    clusterManifestPath
-    rootDir;
-
-  hasClusterManifest = builtins.pathExists clusterManifestPath;
-
-  hostsDir =
-    if builtins.pathExists hostsDirCandidate then hostsDirCandidate else rootDir + "/hosts";
-
-  devicesDir =
-    if builtins.pathExists devicesDirCandidate then devicesDirCandidate else rootDir + "/devices";
+  inherit clusterName clusterDir clusterManifestPath manifest hostsDir devicesDir;
 }

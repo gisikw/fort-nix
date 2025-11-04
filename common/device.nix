@@ -7,8 +7,8 @@ args@{
   ...
 }:
 let
-  rootManifest = import ../manifest.nix;
-  cluster = rootManifest.fort.cluster;
+  cluster = import ../common/cluster-context.nix { };
+  rootManifest = cluster.manifest;
   deviceManifest = import (deviceDir + "/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
 in

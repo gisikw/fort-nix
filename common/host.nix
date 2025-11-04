@@ -9,8 +9,8 @@ args@{
   ...
 }:
 let
-  rootManifest = import ../manifest.nix;
-  cluster = rootManifest.fort.cluster;
+  cluster = import ../common/cluster-context.nix { };
+  rootManifest = cluster.manifest;
 
   hostManifest = import (hostDir + "/manifest.nix");
   deviceManifest = import (cluster.devicesDir + "/${hostManifest.device}/manifest.nix");
@@ -84,7 +84,7 @@ in
         };
         age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
-        users.users.root.openssh.authorizedKeys.keys = [ rootManifest.fortConfig.settings.deployPubkey ];
+        users.users.root.openssh.authorizedKeys.keys = rootManifest.fortConfig.settings.authorizedDeployKeys;
       }
       impermanence.nixosModules.impermanence
       rootManifest.module
@@ -121,7 +121,7 @@ in
       sshUser = "root";
       sshOpts = [
         "-i"
-        "~/.ssh/fort"
+        rootManifest.fortConfig.settings.sshKey.privateKeyPath
       ];
       path =
         deploy-rs.lib.${deviceProfileManifest.system}.activate.nixos

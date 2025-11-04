@@ -20,7 +20,7 @@
 
       users.mutableUsers = false;
       users.users.root.initialPassword = "hunter2";
-      users.users.root.openssh.authorizedKeys.keys = [ config.fort.settings.pubkey ];
+      users.users.root.openssh.authorizedKeys.keys = [ config.fort.settings.sshKey.publicKey ];
 
       fileSystems."/persist/system".neededForBoot = true;
       fileSystems."/" = {
