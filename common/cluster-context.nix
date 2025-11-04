@@ -1,38 +1,42 @@
 { }:
 let
-  rootDir = ./..;
-  envCluster = builtins.getEnv "CLUSTER";
+  rootDir = builtins.toString ../.;
 
-  clusterFilePath = ../.cluster;
+  trim = value:
+    let
+      match = builtins.match "^[[:space:]]*([^[:space:]]+)[[:space:]]*$" value;
+    in
+    if match == null then "" else builtins.elemAt match 0;
+
+  envCluster = trim (builtins.getEnv "CLUSTER");
+
+  clusterFilePath = rootDir + "/.cluster";
   fileCluster =
-    if builtins.pathExists clusterFilePath then
-      builtins.readFile clusterFilePath
-    else
-      "";
+    if builtins.pathExists clusterFilePath then trim (builtins.readFile clusterFilePath) else "";
 
   clusterName =
     if envCluster != "" then envCluster
     else if fileCluster != "" then fileCluster
     else "bedlam";
 
-  clusterDir = ../clusters/${clusterName};
+  clusterDir = rootDir + "/clusters/" + clusterName;
   clusterManifestPath = clusterDir + "/manifest.nix";
-  hasClusterDir = builtins.pathExists clusterDir;
-  hasClusterManifest = builtins.pathExists clusterManifestPath;
 
-  hostsDir =
-    if hasClusterDir then clusterDir + "/hosts" else "../hosts";
-  devicesDir =
-    if hasClusterDir then clusterDir + "/devices" else "../devices";
+  hostsDirCandidate = clusterDir + "/hosts";
+  devicesDirCandidate = clusterDir + "/devices";
 in
 {
   inherit
     clusterName
     clusterDir
     clusterManifestPath
-    hostsDir
-    devicesDir
-    hasClusterDir
-    hasClusterManifest
     rootDir;
+
+  hasClusterManifest = builtins.pathExists clusterManifestPath;
+
+  hostsDir =
+    if builtins.pathExists hostsDirCandidate then hostsDirCandidate else rootDir + "/hosts";
+
+  devicesDir =
+    if builtins.pathExists devicesDirCandidate then devicesDirCandidate else rootDir + "/devices";
 }

@@ -6,11 +6,10 @@ This ExecPlan must be maintained in accordance with .agent/PLANS.md. It is self-
 
 The Fort infrastructure repository currently assumes a single cluster, with device manifests, host manifests, and deployment secrets all rooted at the top level. After this change an operator will be able to maintain multiple clusters side-by-side, switch between them using a `CLUSTER` environment variable or a `.cluster` file, and run provisioning and deploy commands without rewriting paths. Deployments will continue working throughout the migration because we will introduce cluster-aware shims before relocating any configuration.
 
-## Progress
-
 - [x] (2025-11-03 19:10Z) ExecPlan authored; stakeholder feedback incorporated.
 - [x] (2025-11-03 19:45Z) Stage 1 implemented: `just test` runs flake checks for the root and cluster-scoped hosts/devices; validation blocked in sandbox due to missing Nix daemon socket, needs confirmation on a full Nix host.
 - [x] (2025-11-03 21:55Z) Stage 2 implemented: cluster context helper added, `.cluster.example` introduced, and root manifest delegates through the helper while falling back to legacy layout when cluster manifests are absent.
+- [x] (2025-11-03 22:20Z) Stage 3 implemented: `clusters/bedlam/manifest.nix` created with expanded key metadata and compatibility shims; root fallback manifest mirrors the new structure.
 
 ## Surprises & Discoveries
 
@@ -23,6 +22,7 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 - Decision: Start the migration by adding a `just test` target that runs `nix flake check` against the root flake and every host and device within the selected cluster to catch regressions during directory moves. Rationale: test coverage is currently manual; adding automation first gives immediate safety rails for each incremental step while respecting future multi-cluster layouts. Date/Author: 2025-11-03 / Codex.
 - Decision: Keep `CLUSTER` and `.cluster` values as cluster *names* (not arbitrary directories) so flake-relative imports remain stable and reproducible. Rationale: nix flakes require deterministic relative paths; mapping names to `./clusters/<name>` preserves simplicity while still allowing the default cluster to be overridden. Date/Author: 2025-11-03 / Codex.
 - Decision: Allow cluster selection to fall back to the legacy `hosts/` and `devices/` directories until they are relocated under `clusters/<name>/`. Rationale: preserves deployability during the migration window and lets contributors test with `CLUSTER=<name>` before the directory exists. Date/Author: 2025-11-03 / Codex.
+- Decision: Keep `settings.pubkey` and `settings.deployPubkey` in the cluster manifest alongside the new `sshKey` and `authorizedDeployKeys` fields. Rationale: existing modules and device scaffolding read the legacy attributes; dual-publishing avoids breakage while we refactor downstream consumers. Date/Author: 2025-11-03 / Codex.
 
 ## Outcomes & Retrospective
 
@@ -30,7 +30,7 @@ Pending; will summarize lessons and follow-ups after cluster decoupling work lan
 
 ## Context and Orientation
 
-The repository root (`/Users/gisikw/Projects/fort`) contains shared Nix modules under `common/`, reusable service definitions in `apps/`, `aspects/`, and `roles/`, and environment-specific manifests in `manifest.nix`, `devices/`, and `hosts/`. Each device subflake at `devices/<uuid>/flake.nix` imports `../../common/device.nix`, while each host subflake at `hosts/<name>/flake.nix` imports `../../common/host.nix`. The shared modules assume a single environment by importing `../manifest.nix` and walking into `../devices` and `../hosts`. Secrets are managed via `secrets.nix`, which enumerates device public keys by reading `./devices`. Operational tooling in `Justfile` shells out to `nix eval (import ./manifest.nix)` to discover the deployment domain and uses the hard-coded SSH key path `~/.ssh/fort` when provisioning or deploying. The repository does not yet define a testing command, so deploy safety relies on manual `nix flake check` runs. Our target state introduces `clusters/<clusterName>/` directories that house `manifest.nix`, `devices/`, and `hosts/` for each cluster (with `<clusterName>` coming from `CLUSTER` or `.cluster`), while keeping shared code (apps, aspects, roles, common modules, device profiles) at the root.
+The repository root (`/Users/gisikw/Projects/fort`) contains shared Nix modules under `common/`, reusable service definitions in `apps/`, `aspects/`, and `roles/`, and environment-specific manifests in `manifest.nix`, `devices/`, and `hosts/`. Each device subflake at `devices/<uuid>/flake.nix` imports `../../common/device.nix`, while each host subflake at `hosts/<name>/flake.nix` imports `../../common/host.nix`. The shared modules assume a single environment by importing `../manifest.nix` and walking into `../devices` and `../hosts`. Secrets are managed via `secrets.nix`, which enumerates device public keys by reading `./devices`. Operational tooling in `Justfile` shells out to `nix eval (import ./manifest.nix)` to discover the deployment domain and uses the hard-coded SSH key path `~/.ssh/fort` when provisioning or deploying. The repository does not yet define a testing command, so deploy safety relies on manual `nix flake check` runs. Our target state introduces `clusters/<clusterName>/` directories that house `manifest.nix`, `devices/`, and `hosts/` for each cluster (with `<clusterName>` coming from `CLUSTER` or `.cluster`), while keeping shared code (apps, aspects, roles, common modules, device profiles) at the root. The first such manifest now lives at `clusters/bedlam/manifest.nix`, mirroring the root settings while adding structured `sshKey` and `authorizedDeployKeys` metadata for downstream tooling.
 
 ## Plan of Work
 
@@ -50,7 +50,7 @@ Stage 7 — Relocate configuration into `clusters/bedlam/` incrementally. First,
 
 Stage 8 — Update provisioning scaffolds. Modify `_scaffold-device-flake`, `_bootstrap-device`, `assign`, and supporting helpers to create new host and device directories under `clusters/${clusterName}` and to add files to git at the new locations. Ensure generated flakes emit the correct relative import paths so newly provisioned nodes immediately follow the cluster-aware layout.
 
-Stage 9 — Retire fallback paths. After confirming `just test` passes and deploy tooling functions with the moved directories, remove any legacy fallbacks in the helper and shared modules that reference root-level `hosts/` or `devices/`. Replace the root-level `devices/` and `hosts/` entries with README stubs pointing developers toward `clusters/<clusterName>/` if needed. Delete the root `manifest.nix` entirely once all consumers read from `clusters/<clusterName>/manifest.nix`.
+Stage 9 — Retire fallback paths. After confirming `just test` passes and deploy tooling functions with the moved directories, remove any legacy fallbacks in the helper and shared modules that reference root-level `hosts/` or `devices/`. Replace the root-level `devices/` and `hosts/` entries with README stubs pointing developers toward `clusters/<clusterName>/` if needed. Drop the compatibility attributes (`settings.pubkey`, `settings.deployPubkey`) in favor of `sshKey` and `authorizedDeployKeys`, and delete the root `manifest.nix` entirely once all consumers read from `clusters/<clusterName>/manifest.nix`.
 
 Stage 10 — Update documentation. Revise `README.md`, `AGENTS.md`, and any onboarding materials to explain the cluster selection flow, the location of cluster manifests, and how to use `.cluster`. Add notes on maintaining per-cluster SSH keys and on running `just test` before each deploy.
 
