@@ -12,6 +12,7 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 - [x] (2025-11-03 22:20Z) Stage 3 implemented: `clusters/bedlam/manifest.nix` created with expanded key metadata and compatibility shims; root fallback manifest mirrors the new structure.
 - [x] (2025-11-03 22:45Z) Stage 4 implemented: `common/host.nix` and `common/device.nix` consume cluster context, expose cluster metadata in `config.fort`, and thread the cluster handle into app/aspect modules for future use.
 - [x] (2025-11-03 23:05Z) Stage 5 implemented: `secrets.nix` sources device keys from the active cluster directory and respects the new SSH metadata while preserving legacy fallbacks.
+- [x] (2025-11-03 23:25Z) Stage 6 implemented: Just recipes pull cluster settings via `manifest.nix`, honour per-cluster SSH keys, and scaffold/read host and device flakes from cluster-aware paths with migration fallbacks.
 
 ## Surprises & Discoveries
 

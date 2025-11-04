@@ -1,6 +1,6 @@
-ssh := "ssh -i ~/.ssh/fort -o StrictHostKeyChecking=no"
-domain := `nix eval --raw --expr '(import ./manifest.nix).fortConfig.settings.domain' --impure`
-cluster := `echo "${CLUSTER-$([[ -f .cluster ]] && cat .cluster || echo '')}"`
+deploy_key := `bash -lc 'path=$(nix eval --raw --impure --expr "let settings = (import ./manifest.nix).fortConfig.settings; in if settings ? sshKey then settings.sshKey.privateKeyPath else \"~/.ssh/fort\"" ); if [[ "$path" == ~* ]]; then path="${path/#\~/$HOME}"; fi; printf %s "$path"'`
+domain := `nix eval --raw --impure --expr '(import ./manifest.nix).fortConfig.settings.domain'`
+cluster := `nix eval --raw --impure --expr '(import ./manifest.nix).fort.cluster.clusterName'`
 
 provision profile target:
   #!/usr/bin/env bash
@@ -17,11 +17,11 @@ provision profile target:
 
 _fingerprint-hardware target:
   echo "[Fort] Fingerprinting physical hardware"
-  {{ssh}} root@{{target}} 'cat /sys/class/dmi/id/product_uuid'
+  ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{target}} 'cat /sys/class/dmi/id/product_uuid'
 
 _fingerprint-linode target:
   echo "[Fort] Fingerprinting Linode VM"
-  {{ssh}} root@{{target}} \
+  ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{target}} \
     'export TOKEN=$(curl -sX PUT -H "Metadata-Token-Expiry-Seconds: 3600" http://169.254.169.254/v1/token); \
      curl -sH "Metadata-Token: $TOKEN" http://169.254.169.254/v1/instance | grep ^id: | sed "s/id: /linode-/"'
 
@@ -38,9 +38,12 @@ _generate-device-keys uuid:
 _scaffold-device-flake profile uuid keydir:
   #!/usr/bin/env bash
   echo "[Fort] Scaffolding device flake"
-  mkdir -p "./devices/{{uuid}}"
+  devices_root="./clusters/{{cluster}}/devices"
+  [[ -d "${devices_root}" ]] || devices_root="./devices"
 
-  cat > "./devices/{{uuid}}/manifest.nix" <<-EOF
+  mkdir -p "${devices_root}/{{uuid}}"
+
+  cat > "${devices_root}/{{uuid}}/manifest.nix" <<-EOF
   {
     uuid = "{{uuid}}";
     profile = "{{profile}}";
@@ -49,7 +52,7 @@ _scaffold-device-flake profile uuid keydir:
   }
   EOF
 
-  cat > "./devices/{{uuid}}/flake.nix" <<-'EOF'
+  cat > "${devices_root}/{{uuid}}/flake.nix" <<-'EOF'
   {
     inputs = {
       root.url = "path:../../";
@@ -72,29 +75,38 @@ _scaffold-device-flake profile uuid keydir:
       };
   }
   EOF
-  git add ./devices/{{uuid}}
+  git add "${devices_root}/{{uuid}}"
 
 _bootstrap-device target uuid keydir:
   echo "[Fort] Bootstrapping device"
+  devices_root="./clusters/{{cluster}}/devices"
+  [[ -d "${devices_root}" ]] || devices_root="./devices"
+
+  device_dir="${devices_root}/{{uuid}}"
   nix run .#nixos-anywhere -- \
-    --generate-hardware-config nixos-generate-config ./devices/{{uuid}}/hardware-configuration.nix \
+    --generate-hardware-config nixos-generate-config "${device_dir}/hardware-configuration.nix" \
     --extra-files "{{keydir}}" \
-    --flake ./devices/{{uuid}}#{{uuid}} \
-    -i ~/.ssh/fort \
+    --flake "${device_dir}#{{uuid}}" \
+    -i "{{deploy_key}}" \
     --target-host root@{{target}}
 
 _cleanup-device-provisioning uuid target keydir:
   echo "[Fort] Running cleanup"
   rm -rf "{{keydir}}"
   ssh-keygen -R {{target}} >/dev/null 2>&1
-  git add ./devices/{{uuid}}
+  devices_root="./clusters/{{cluster}}/devices"
+  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  git add "${devices_root}/{{uuid}}"
 
 assign device host:
   #!/usr/bin/env bash
   echo "[Fort] Creating host {{host}} config assigned to {{device}}"
-  mkdir -p "./hosts/{{host}}"
+  hosts_root="./clusters/{{cluster}}/hosts"
+  [[ -d "${hosts_root}" ]] || hosts_root="./hosts"
 
-  cat > "./hosts/{{host}}/flake.nix" <<-EOF
+  mkdir -p "${hosts_root}/{{host}}"
+
+  cat > "${hosts_root}/{{host}}/flake.nix" <<-EOF
   {
     inputs = {
       root.url = "path:../..";
@@ -129,7 +141,7 @@ assign device host:
   }
   EOF
 
-  cat > "./hosts/{{host}}/manifest.nix" <<-EOF
+  cat > "${hosts_root}/{{host}}/manifest.nix" <<-EOF
   rec {
     hostName = "{{host}}";
     device = "{{device}}";
@@ -148,14 +160,23 @@ assign device host:
   }
   EOF
 
-  git add ./hosts/{{host}}
-  (cd ./hosts/{{host}} && nix flake lock)
-  git add ./hosts/{{host}}
+  git add "${hosts_root}/{{host}}"
+  (cd "${hosts_root}/{{host}}" && nix flake lock)
+  git add "${hosts_root}/{{host}}"
 
 deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
-  expected_uuid=$(nix eval --raw --impure --expr "(import ./hosts/{{host}}/manifest.nix).device")
-  device_profile=$(nix eval --raw --impure --expr "(import ./devices/${expected_uuid}/manifest.nix).profile" 2>/dev/null || echo "")
+  hosts_root="./clusters/{{cluster}}/hosts"
+  [[ -d "${hosts_root}" ]] || hosts_root="./hosts"
+  devices_root="./clusters/{{cluster}}/devices"
+  [[ -d "${devices_root}" ]] || devices_root="./devices"
+
+  host_dir="${hosts_root}/{{host}}"
+  host_manifest_rel="${host_dir#./}/manifest.nix"
+  expected_uuid=$(nix eval --raw --impure --expr "(import ./${host_manifest_rel}).device")
+
+  device_manifest_rel="${devices_root#./}/${expected_uuid}/manifest.nix"
+  device_profile=$(nix eval --raw --impure --expr "(import ./${device_manifest_rel}).profile" 2>/dev/null || echo "")
 
   echo "[Fort] Verifying {{host}} deployment target ({{addr}}) matches device ${expected_uuid}"
 
@@ -176,17 +197,17 @@ deploy host addr=(host + ".fort." + domain):
   fi
 
   trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
-  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i ~/.ssh/fort -r
-  nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build ./hosts/{{host}}#{{host}}
+  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i "{{deploy_key}}" -r
+  nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build "${host_dir}#{{host}}"
 
 fmt:
   nix run .#nixfmt -- .
 
 ssh host:
-  ssh -i ~/.ssh/fort root@{{host}}
+  ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{host}}
 
 age path:
-  nix run .#agenix -- -i ~/.ssh/fort -e {{path}}
+  nix run .#agenix -- -i "{{deploy_key}}" -e {{path}}
 
 test:
   #!/usr/bin/env bash
@@ -198,17 +219,18 @@ test:
     NIX_CONFIG=$'warn-dirty = false\n' nix flake check "${target}"
   }
 
-  cluster_dir="."
-  if [[ -n "{{cluster}}" ]]; then
-    cluster_dir="clusters/{{cluster}}"
-  fi
-
   run_flake_check "."
 
-  for host in "${cluster_dir}/hosts"/*; do
-    run_flake_check "./${host}"
+  hosts_root="./clusters/{{cluster}}/hosts"
+  [[ -d "${hosts_root}" ]] || hosts_root="./hosts"
+  for host in "${hosts_root}"/*; do
+    [[ -d "${host}" ]] || continue
+    run_flake_check "${host}"
   done
 
-  for device in "${cluster_dir}/devices"/*; do
-    run_flake_check "./${device}"
+  devices_root="./clusters/{{cluster}}/devices"
+  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  for device in "${devices_root}"/*; do
+    [[ -d "${device}" ]] || continue
+    run_flake_check "${device}"
   done
