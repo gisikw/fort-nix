@@ -14,6 +14,7 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 - [x] (2025-11-03 23:05Z) Stage 5 implemented: `secrets.nix` sources device keys from the active cluster directory and respects the new SSH metadata while preserving legacy fallbacks.
 - [x] (2025-11-03 23:25Z) Stage 6 implemented: Just recipes pull cluster settings via `manifest.nix`, honour per-cluster SSH keys, and scaffold/read host and device flakes from cluster-aware paths with migration fallbacks.
 - [x] (2025-11-03 23:45Z) Stage 7 implemented: existing host and device flakes relocated under `clusters/bedlam/`, with relative imports updated to reference shared modules from the new depth.
+- [x] (2025-11-04 00:05Z) Stage 8 implemented: provisioning and assignment recipes now create new host/device flakes under the active cluster by default while keeping legacy fallbacks for transitional use.
 
 ## Surprises & Discoveries
 

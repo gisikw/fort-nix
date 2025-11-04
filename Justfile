@@ -23,7 +23,7 @@ _fingerprint-linode target:
   echo "[Fort] Fingerprinting Linode VM"
   ssh -i "{{deploy_key}}" -o StrictHostKeyChecking=no root@{{target}} \
     'export TOKEN=$(curl -sX PUT -H "Metadata-Token-Expiry-Seconds: 3600" http://169.254.169.254/v1/token); \
-     curl -sH "Metadata-Token: $TOKEN" http://169.254.169.254/v1/instance | grep ^id: | sed "s/id: /linode-/"'
+    curl -sH "Metadata-Token: $TOKEN" http://169.254.169.254/v1/instance | grep ^id: | sed "s/id: /linode-/"'
 
 _generate-device-keys uuid:
   #!/usr/bin/env bash
@@ -35,11 +35,12 @@ _generate-device-keys uuid:
     -f "$temp/persist/system/etc/ssh/ssh_host_ed25519_key"
   echo $temp
 
+
 _scaffold-device-flake profile uuid keydir:
   #!/usr/bin/env bash
   echo "[Fort] Scaffolding device flake"
-  devices_root="./clusters/{{cluster}}/devices"
-  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; mkdir -p "${devices_root}"; fi
 
   mkdir -p "${devices_root}/{{uuid}}"
 
@@ -77,10 +78,11 @@ _scaffold-device-flake profile uuid keydir:
   EOF
   git add "${devices_root}/{{uuid}}"
 
+
 _bootstrap-device target uuid keydir:
   echo "[Fort] Bootstrapping device"
-  devices_root="./clusters/{{cluster}}/devices"
-  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; fi
 
   device_dir="${devices_root}/{{uuid}}"
   nix run .#nixos-anywhere -- \
@@ -90,19 +92,20 @@ _bootstrap-device target uuid keydir:
     -i "{{deploy_key}}" \
     --target-host root@{{target}}
 
+
 _cleanup-device-provisioning uuid target keydir:
   echo "[Fort] Running cleanup"
   rm -rf "{{keydir}}"
   ssh-keygen -R {{target}} >/dev/null 2>&1
-  devices_root="./clusters/{{cluster}}/devices"
-  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; fi
   git add "${devices_root}/{{uuid}}"
 
 assign device host:
   #!/usr/bin/env bash
   echo "[Fort] Creating host {{host}} config assigned to {{device}}"
-  hosts_root="./clusters/{{cluster}}/hosts"
-  [[ -d "${hosts_root}" ]] || hosts_root="./hosts"
+  hosts_root="./hosts"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; mkdir -p "${hosts_root}"; fi
 
   mkdir -p "${hosts_root}/{{host}}"
 
@@ -166,10 +169,9 @@ assign device host:
 
 deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
-  hosts_root="./clusters/{{cluster}}/hosts"
-  [[ -d "${hosts_root}" ]] || hosts_root="./hosts"
-  devices_root="./clusters/{{cluster}}/devices"
-  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  hosts_root="./hosts"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; devices_root="./clusters/{{cluster}}/devices"; fi
 
   host_dir="${hosts_root}/{{host}}"
   host_manifest_rel="${host_dir#./}/manifest.nix"
@@ -221,15 +223,15 @@ test:
 
   run_flake_check "."
 
-  hosts_root="./clusters/{{cluster}}/hosts"
-  [[ -d "${hosts_root}" ]] || hosts_root="./hosts"
+  hosts_root="./hosts"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
   for host in "${hosts_root}"/*; do
     [[ -d "${host}" ]] || continue
     run_flake_check "${host}"
   done
 
-  devices_root="./clusters/{{cluster}}/devices"
-  [[ -d "${devices_root}" ]] || devices_root="./devices"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; fi
   for device in "${devices_root}"/*; do
     [[ -d "${device}" ]] || continue
     run_flake_check "${device}"
