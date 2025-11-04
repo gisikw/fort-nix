@@ -1,5 +1,6 @@
 ssh := "ssh -i ~/.ssh/fort -o StrictHostKeyChecking=no"
 domain := `nix eval --raw --expr '(import ./manifest.nix).fortConfig.settings.domain' --impure`
+cluster := `echo "${CLUSTER-$([[ -f .cluster ]] && cat .cluster || echo '')}"`
 
 provision profile target:
   #!/usr/bin/env bash
@@ -186,3 +187,28 @@ ssh host:
 
 age path:
   nix run .#agenix -- -i ~/.ssh/fort -e {{path}}
+
+test:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  run_flake_check() {
+    local target="$1"
+    echo "[Fort] nix flake check ${target}"
+    NIX_CONFIG=$'warn-dirty = false\n' nix flake check "${target}"
+  }
+
+  cluster_dir="."
+  if [[ -n "{{cluster}}" ]]; then
+    cluster_dir="clusters/{{cluster}}"
+  fi
+
+  run_flake_check "."
+
+  for host in "${cluster_dir}/hosts"/*; do
+    run_flake_check "./${host}"
+  done
+
+  for device in "${cluster_dir}/devices"/*; do
+    run_flake_check "./${device}"
+  done

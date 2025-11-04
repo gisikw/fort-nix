@@ -7,6 +7,7 @@
 - Secrets and age-encrypted material stay in `secrets.nix`; never commit plaintext keys.
 - Expose HTTP services through `fortCluster.exposedServices` so TLS, DNS, and nginx are managed centrally; augment the generated vhost from app modules only when custom locations or headers are required.
 - Containerized apps should pull from the on-cluster registry exposed by `apps/zot` (`containers.${domain}`); avoid upstream DockerHub/GHCR URLs so images stay cached.
+- Prefer minimal, intentional shell scripting. Avoid layering defensive shells (e.g., enabling `nullglob`, adding existence checks for files we create in the same recipe) unless the recipe must handle partially configured repositories. Document any deliberate deviations inline.
 
 ## Build, Test, and Development Commands
 - `just provision <profile> <ip>` fingerprints hardware, scaffolds `devices/<uuid>` and bootstraps the target.

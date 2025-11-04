@@ -8,11 +8,14 @@ The Fort infrastructure repository currently assumes a single cluster, with devi
 
 ## Progress
 
-- [ ] (2025-11-03 19:10Z) ExecPlan authored; awaiting stakeholder review before implementation begins.
+- [x] (2025-11-03 19:10Z) ExecPlan authored; stakeholder feedback incorporated.
+- [x] (2025-11-03 19:45Z) Stage 1 implemented: `just test` runs flake checks for the root and cluster-scoped hosts/devices; validation blocked in sandbox due to missing Nix daemon socket, needs confirmation on a full Nix host.
 
 ## Surprises & Discoveries
 
 - Observation: CLI automation hard-codes the deploy SSH key path `~/.ssh/fort`, which will break once clusters carry different keys. Evidence: `Justfile` defines `ssh := "ssh -i ~/.ssh/fort -o StrictHostKeyChecking=no"`.
+- Observation: The Codex sandbox lacks `/nix/var/nix/daemon-socket/socket`, so `nix flake check` exits with “Operation not permitted.” Evidence: running `just test` returns `error: cannot connect to socket at '/nix/var/nix/daemon-socket/socket': Operation not permitted`.
+- Observation: `nix flake check` warns about dirty Git trees and the extra `deploy` output; the test recipe now disables the dirty-tree warning while leaving the deploy warning visible so logs stay readable when piped through helpers like `tee`.
 
 ## Decision Log
 
