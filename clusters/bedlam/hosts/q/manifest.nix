@@ -19,5 +19,10 @@ rec {
     { config, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
+      config.fileSystems."/ingest" = {
+        device = "/dev/disk/by-label/ingest";
+        fsType = "ext4";
+        options = [ "nofail" "x-systemd.device-timeout=5s" ];
+      };
     };
 }
