@@ -41,6 +41,12 @@ in
                   example = 8096;
                 };
 
+                inEgressNamespace = lib.mkOption {
+                  type = lib.types.bool;
+                  default = false;
+                  description = "Whether this service runs inside the egress-vpn namespace";
+                };
+
                 visibility = lib.mkOption {
                   type = lib.types.enum [ "vpn" "local" "public" ];
                   default = "vpn";
@@ -107,7 +113,7 @@ in
                       return 444;
                     }
                   '';
-                  proxyPass = "http://127.0.0.1:${toString svc.port}";
+                  proxyPass = "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
                   proxyWebsockets = true;
                 };
               };

@@ -24,6 +24,11 @@
 - Use `just age <path>` to regenerate age-encrypted files; never edit ciphertext directly.
 - Keep SSH access synchronized with `~/.ssh/fort`; verify keys before provisioning to avoid stalled jobs.
 
+## Development Patterns
+- Favor low-entropy solutions.
+- Contain complexity where it belongs.
+- No wandering abstractions.
+
 # ExecPlans
  
 When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.

@@ -18,7 +18,7 @@ rec {
   };
 
   module =
-    { config, lib, ... }:
+    { config, lib, pkgs, ... }:
     {
       options.fort = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
@@ -26,5 +26,7 @@ rec {
       };
 
       config.fort = fortConfig;
+
+      config.environment.systemPackages = [ pkgs.neovim ];
     };
 }

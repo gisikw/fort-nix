@@ -4,11 +4,15 @@ rec {
 
   roles = [ ];
 
-  apps = [ "vikunja" ];
+  apps = [
+    "qbittorrent"
+    "vikunja"
+  ];
 
   aspects = [
     "mesh"
     "observable"
+    "egress-vpn"
   ];
 
   module =
