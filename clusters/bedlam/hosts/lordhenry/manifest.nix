@@ -6,6 +6,7 @@ rec {
 
   apps = [
     "ollama"
+    "open-webui"
     "sillytavern"
   ];
 
