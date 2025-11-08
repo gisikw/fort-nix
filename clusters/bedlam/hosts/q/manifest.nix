@@ -5,6 +5,11 @@ rec {
   roles = [ ];
 
   apps = [
+    "prowlarr"
+    "radarr"
+    "lidarr"
+    "sonarr"
+    "readarr"
     "qbittorrent"
     "vikunja"
   ];
