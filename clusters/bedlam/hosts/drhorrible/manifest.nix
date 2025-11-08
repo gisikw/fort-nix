@@ -9,6 +9,7 @@ rec {
   aspects = [
     "mesh"
     "observable"
+    "ldap"
   ];
 
   module =

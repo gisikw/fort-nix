@@ -21,4 +21,6 @@ in
   "./aspects/deployer/deployer-key.age".publicKeys = activeKeys;
   "./apps/fort-observability/grafana-admin-pass.age".publicKeys = activeKeys;
   "./aspects/egress-vpn/egress-vpn-conf.age".publicKeys = activeKeys;
+  "./aspects/ldap/ldap-admin-pass.age".publicKeys = activeKeys;
+  "./aspects/ldap/ldap-users.age".publicKeys = activeKeys;
 }
