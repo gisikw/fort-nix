@@ -4,7 +4,10 @@ rec {
 
   roles = [ "forge" ];
 
-  apps = [ "homepage" ];
+  apps = [
+    "homepage"
+    "pocket-id"
+  ];
 
   aspects = [
     "mesh"

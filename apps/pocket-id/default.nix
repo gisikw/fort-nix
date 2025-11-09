@@ -9,6 +9,7 @@ in
     settings = {
       TRUST_PROXY = true;
       APP_URL = "https://id.${domain}";
+      PORT = 1411;
     };
   };
 
