@@ -33,6 +33,7 @@ in
     settings = {
       ldap_base_dn = strings.concatMapStringsSep "," (s: "dc=${s}") (strings.splitString "." domain);
       ldap_user_pass_file = config.age.secrets.ldap-admin-pass.path;
+      force_ldap_user_pass_reset = "always";
     };
   };
 
@@ -40,12 +41,22 @@ in
     after = [ "lldap.service" ];
     wants = [ "lldap.service" ];
     wantedBy = [ "multi-user.target" ];
-    serviceConfig.Type = "oneshot";
-    serviceConfig.User = "lldap";
-    path = [ pkgs.lldap-cli ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "lldap";
+      Restart = "on-failure";
+      RestartSec = "5s";
+    };
+    path = with pkgs; [ lldap-cli netcat ];
     script = ''
       set -euo pipefail
       IFS=$'\n\t'
+
+      for i in {1..10}; do
+        nc -z localhost 17170 && break
+        echo "Waiting for LLDAP to be ready..."
+        sleep 1
+      done
 
       users="${config.age.secrets.ldap-users.path}"
 
