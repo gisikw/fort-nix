@@ -23,4 +23,5 @@ in
   "./aspects/egress-vpn/egress-vpn-conf.age".publicKeys = activeKeys;
   "./aspects/ldap/ldap-admin-pass.age".publicKeys = activeKeys;
   "./aspects/ldap/ldap-users.age".publicKeys = activeKeys;
+  "./aspects/ldap/ldap-groups.age".publicKeys = activeKeys;
 }
