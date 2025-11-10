@@ -36,8 +36,6 @@ in
       LDAP_BASE = ldap_base_dn;
       LDAP_SKIP_CERT_VERIFY = true;
 
-      LDAP_ATTRIBUTE_ADMIN_GROUP = "admin";
-
       LDAP_ATTRIBUTE_USER_UNIQUE_IDENTIFIER = "uid";
       LDAP_ATTRIBUTE_USER_USERNAME = "uid";
       LDAP_ATTRIBUTE_USER_EMAIL = "mail";
@@ -46,7 +44,8 @@ in
       LDAP_ATTRIBUTE_USER_PROFILE_PICTURE = "avatar";
 
       LDAP_ATTRIBUTE_GROUP_UNIQUE_IDENTIFIER = "cn";
-      LDAP_ATTRIBUTE_GROUP_NAME = "display_name";
+      LDAP_ATTRIBUTE_GROUP_NAME = "cn";
+      LDAP_ATTRIBUTE_ADMIN_GROUP = "admin";
     };
   };
 
