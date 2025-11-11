@@ -47,6 +47,12 @@ in
         admin_user = "admin";
         admin_password = "$__file{${config.age.secrets.grafana-admin-pass.path}}";
       };
+      "auth.proxy" = {
+        enabled = true;
+        header_name = "X-Auth-User";
+        auto-sign_up = true;
+        whitelist = "127.0.0.1, unix:";
+      };
     };
 
     provision = {
@@ -80,8 +86,15 @@ in
   };
 
   networking.firewall.allowedTCPPorts = [
-    3000
     9090
     9100
+  ];
+
+  fortCluster.exposedServices = [
+    {
+      name = "monitor";
+      port = 3000;
+      sso.mode = "headers";
+    }
   ];
 }

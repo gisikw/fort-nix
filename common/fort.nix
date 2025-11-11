@@ -57,6 +57,35 @@ in
                     `public` instantiates a reverse-proxy for the service on the beacon box.
                   '';
                 };
+
+                sso = lib.mkOption {
+                  type = lib.types.submodule {
+                    options = {
+                      mode = lib.mkOption {
+                        type = lib.types.enum [ "none" "headers" "basicauth" "gatekeeper" ];
+                        default = "none";
+                        description = ''
+                          SSO handling mode for this service:
+                          - `none`: no authentication, plain reverse proxy.
+                          - `headers`: inject X-Auth-* headers from oauth2-proxy.
+                          - `basicauth`: translate auth into BasicAuth credentials for backend.
+                          - `gatekeeper`: enforce login but do not inject identity.
+                        '';
+                      };
+
+                      groups = lib.mkOption {
+                        type = lib.types.listOf lib.types.str;
+                        default = [ ];
+                        description = ''
+                          Optional list of allowed LDAP/SSO groups. Only these users may access.
+                          Passed through to oauth2-proxy as `--allowed-group`.
+                        '';
+                      };
+                    };
+                  };
+
+                  default = { };
+                };
               };
             });
           default = [ ];
@@ -83,6 +112,69 @@ in
 
   config = lib.mkMerge [
     (lib.mkIf (lib.length config.fortCluster.exposedServices >= 1) {
+
+      systemd.services = lib.mkMerge (map (svc:
+        let
+          authProxySock = "/run/fort-auth/${svc.name}.sock";
+          envFile = "/var/lib/fort-auth/${svc.name}/oauth2-proxy.env";
+        in lib.optionalAttrs (svc.sso.mode != "none") {
+          "oauth2-proxy-${svc.name}" = {
+            wantedBy = [ "multi-user.target" ];
+
+            serviceConfig = {
+              ExecStartPre = pkgs.writeShellScript "ensure-secrets" ''
+                set -euo pipefail
+                mkdir -p /var/lib/fort-auth/${svc.name}
+
+                if [ ! -s /var/lib/fort-auth/${svc.name}/cookie-secret ]; then
+                  echo "Generating default cookie secret for ${svc.name}"
+                  head -c32 /dev/urandom > /var/lib/fort-auth/${svc.name}/cookie-secret
+                fi
+
+                if [ ! -s /var/lib/fort-auth/${svc.name}/client-secret ]; then
+                  echo "temporary-client-secret" > /var/lib/fort-auth/${svc.name}/client-secret
+                fi
+
+                if [ ! -s /var/lib/fort-auth/${svc.name}/client-id ]; then
+                  echo "${svc.name}-dummy-client" > /var/lib/fort-auth/${svc.name}/client-id
+                fi
+
+                cat > ${envFile} <<-EOF
+                  OAUTH2_PROXY_CLIENT_ID=$(cat /var/lib/fort-auth/${svc.name}/client-id)
+                EOF
+              '';
+
+              ExecStart = ''
+                ${pkgs.oauth2-proxy}/bin/oauth2-proxy \
+                  --provider=oidc \
+                  --oidc-issuer-url=http://127.0.0.1:1411 \
+                  --insecure-oidc-skip-issuer-verification=true \
+                  --upstream=http://127.0.0.1:${toString svc.port} \
+                  --http-address=unix://${authProxySock} \
+                  --client-secret-file=/var/lib/fort-auth/${svc.name}/client-secret \
+                  --cookie-secret-file=/var/lib/fort-auth/${svc.name}/cookie-secret \
+                  --email-domain=* \
+                  --skip-provider-button=true \
+                  ${lib.concatStringsSep " " (map (g: "--allowed-group=" + g) svc.sso.groups)}
+              '';
+
+              RestartTriggers = [
+                "/var/lib/fort-auth/${svc.name}/client-id"
+                "/var/lib/fort-auth/${svc.name}/client-secret"
+              ];
+
+              EnvironmentFile = "-${envFile}";
+              Group = "nginx";
+              UMask = "0007";
+              RuntimeDirectory = "fort-auth/${svc.name}";
+              RuntimeDirectoryMode = "0700";
+              StateDirectory = "fort-auth/${svc.name}";
+              StateDirectoryMode = "0700";
+            };
+          };
+        }
+      ) config.fortCluster.exposedServices);
+
       services.nginx = {
         enable = true;
         recommendedProxySettings = true;
@@ -113,7 +205,10 @@ in
                       return 444;
                     }
                   '';
-                  proxyPass = "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
+                  proxyPass = if svc.sso.mode != "none" then
+                    "http://unix:/run/fort-auth/${svc.name}.sock"
+                  else
+                    "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
                   proxyWebsockets = true;
                 };
               };
