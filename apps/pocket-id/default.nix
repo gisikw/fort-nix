@@ -49,6 +49,46 @@ in
     };
   };
 
+  systemd.services.pocket-id-service-key = {
+    after = [ "pocket-id.service" ];
+    wants = [ "pocket-id.service" ];
+    wantedBy = [ "multi-user.target" ];
+    startAt = "*:0/30";
+
+    serviceConfig = {
+      Type = "oneshot";
+      User = "pocket-id";
+      StateDirectory = "pocket-id";
+      StateDirectoryMode = "0700";
+    };
+
+    path = with pkgs; [ curl jq pocket-id coreutils ];
+    script = ''
+      cd /var/lib/pocket-id
+      otp=$(pocket-id one-time-access-token service-account 2>&1 | grep "http" | cut -d/ -f5)
+
+      cookiejar=$(mktemp)
+      curl -sX POST -c $cookiejar \
+        "https://id.${domain}/api/one-time-access-token/$otp" \
+        -H "Origin: https://id.${domain}" \
+        -H "Referer: https://id.${domain}/lc/$otp" \
+        -H "User-Agent: Mozilla/5.0"
+
+      EXPIRES_AT=$(date -u -d "+1 day" +"%Y-%m-%dT%H:%M:%SZ")
+      fresh_token=$(curl -sb $cookiejar \
+        -XPOST https://id.${domain}/api/api-keys \
+        -d '{"name":"registry-key","description":"service-account","expiresAt":"'$EXPIRES_AT'"}' |\
+        jq -r '.apiKey.id')
+
+      curl -sb $cookiejar \
+        https://id.${domain}/api/api-keys | \
+        jq -r '.data[] | select((.description == "service-account") and .id != "'$fresh_token'") | .id' |\
+        xargs -I{} -n1 curl -sb $cookiejar -XDELETE https://id.${domain}/api/api-keys/{}
+
+      echo $fresh_token > /var/lib/pocket-id/service-key
+      rm -f $cookiejar
+    '';
+  };
 
   fortCluster.exposedServices = [
     {
