@@ -1,0 +1,104 @@
+require 'json'
+
+DOMAIN=ENV["DOMAIN"]
+FORGE_HOST=ENV["FORGE_HOST"]
+BEACON_HOST=ENV["BEACON_HOST"]
+
+SSH_DEPLOY_KEY="/root/.ssh/deployer_ed25519"
+
+def ssh(host, cmd, input = nil)
+  IO.popen([
+    "ssh",
+    "-i", SSH_DEPLOY_KEY,
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "ConnectTimeout=10",
+    "root@#{host}.fort.#{DOMAIN}",
+    cmd
+  ], "r+") do |io|
+    io.write(input) if input
+    io.close_write
+    io.readlines
+  end
+end
+
+status = JSON.parse(`tailscale status --json`)
+user_id = status["User"].find { |_,v| v["LoginName"] == "fort" }[1]["ID"]
+hosts = status["Peer"].select { |_,p| p["UserID"] == user_id }.values.map { |p| p["HostName" ] } | [FORGE_HOST]
+host_lan_ip = `ip -4 route get 1.1.1.1`.match(/src\s+(\S+)/)[1]
+
+services = hosts.reduce([]) do |services, host|
+  lines = ssh host, "
+    (ip -4 -o addr show fortmesh0 2>/dev/null || echo 'NOFORT') | head -n1
+    (ip -4 route get #{host_lan_ip} 2>/dev/null || echo 'NOROUTE') | head -n1
+    cat /var/lib/fort/services.json 2>/dev/null || echo '[]'
+  "
+
+  vpn_ip = lines[0].split(/\s+/)[3].split("/")[0] rescue 'NOFORT'
+  lan_ip = lines[1].match(/src\s+(\S+)/)[1] rescue 'NOROUTE'
+
+  services | JSON.parse(lines[2]).each do |service|
+    service["hostname"] = "#{host}.fort.#{DOMAIN}"
+    service["vpn_ip"] = vpn_ip
+    service["lan_ip"] = lan_ip
+    service["fqdn"] =
+      if (service["subdomain"]||"").empty?
+        "#{service["name"]}.#{DOMAIN}"
+      else
+        "#{service["subdomain"]}.#{DOMAIN}"
+      end
+  end
+end
+
+ssh BEACON_HOST, 
+  "tee /var/lib/headscale/extra-records.json >/dev/null", 
+  services.map do |service|
+    {
+      name: service["fqdn"],
+      type: "A",
+      value: service["vpn_ip"]
+    }
+  end.to_json
+
+ssh FORGE_HOST, 
+  "tee /var/lib/coredns/custom.conf >/dev/null", 
+  services
+    .select { |s| s["visibility"] != "vpn" }
+    .map { |s| "#{s["lan_ip"]} #{s["fqdn"]}" }
+    .join("\n")
+
+public_vhosts = <<-EOF
+# Managed by fort-service-registry
+
+map $http_upgrade $connection_upgrade {
+ default upgrade;
+ "" close;
+}
+EOF
+services
+  .select { |s| s["visibility"] == "public" }
+  .each do |service|
+    public_vhosts << <<-EOF
+    server {
+      listen 80;
+      listen 443 ssl http2;
+      server_name #{service["fqdn"]};
+
+      ssl_certificate     /var/lib/fort/ssl/#{DOMAIN}/fullchain.pem;
+      ssl_certificate_key /var/lib/fort/ssl/#{DOMAIN}/key.pem;
+
+      location / {
+        proxy_pass http://#{service["vpn_ip"]}:#{service["port"]};
+        proxy_set_header Host               $host;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+      }
+    }
+    EOF
+  end
+ssh BEACON_HOST,
+  "tee /var/lib/fort/nginx/public-services.conf >/dev/null; systemctl reload nginx",
+  public_vhosts
