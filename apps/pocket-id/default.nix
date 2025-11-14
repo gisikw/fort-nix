@@ -77,15 +77,15 @@ in
       EXPIRES_AT=$(date -u -d "+1 day" +"%Y-%m-%dT%H:%M:%SZ")
       fresh_token=$(curl -sb $cookiejar \
         -XPOST https://id.${domain}/api/api-keys \
-        -d '{"name":"registry-key","description":"service-account","expiresAt":"'$EXPIRES_AT'"}' |\
-        jq -r '.apiKey.id')
+        -d '{"name":"registry-key","description":"service-account","expiresAt":"'$EXPIRES_AT'"}')
+      fresh_token_id=$(echo $fresh_token | jq -r '.apiKey.id')
 
       curl -sb $cookiejar \
         https://id.${domain}/api/api-keys | \
-        jq -r '.data[] | select((.description == "service-account") and .id != "'$fresh_token'") | .id' |\
+        jq -r '.data[] | select((.description == "service-account") and .id != "'$fresh_token_id'") | .id' |\
         xargs -I{} -n1 curl -sb $cookiejar -XDELETE https://id.${domain}/api/api-keys/{}
 
-      echo $fresh_token > /var/lib/pocket-id/service-key
+      echo $fresh_token | jq -r '.token' > /var/lib/pocket-id/service-key
       rm -f $cookiejar
     '';
   };
