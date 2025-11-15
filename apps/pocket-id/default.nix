@@ -26,6 +26,7 @@ in
     settings = {
       TRUST_PROXY = true;
       APP_URL = "https://id.${domain}";
+      EMAILS_VERIFIED = true;
 
       LDAP_ENABLED = true;
       UI_CONFIG_DISABLED = true;
