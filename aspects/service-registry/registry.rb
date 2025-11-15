@@ -1,3 +1,4 @@
+require 'net/http'
 require 'json'
 
 DOMAIN=ENV["DOMAIN"]
@@ -38,6 +39,7 @@ services = hosts.reduce([]) do |services, host|
 
   services | JSON.parse(lines[2]).each do |service|
     service["hostname"] = "#{host}.fort.#{DOMAIN}"
+    service["host"] = host
     service["vpn_ip"] = vpn_ip
     service["lan_ip"] = lan_ip
     service["fqdn"] =
@@ -102,3 +104,82 @@ services
 ssh BEACON_HOST,
   "tee /var/lib/fort/nginx/public-services.conf >/dev/null; systemctl reload nginx",
   public_vhosts
+
+def pocket_service_key
+  @pocket_service_key ||= File.read("/var/lib/pocket-id/service-key").chomp
+end
+
+def get_pocketid_clients
+  results = []
+  while true do
+    uri = URI("https://id.#{DOMAIN}/api/oidc/clients")
+    uri.query = URI.encode_www_form({ "pagination[page]" => 2 })
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    request = Net::HTTP::Get.new(uri.request_uri)
+    request['X-API-KEY'] = pocket_service_key
+    response = JSON.parse(http.request(request).body)
+    results |= response["data"]
+    break if response["pagination"]["totalPages"] == response["pagination"]["currentPage"]
+  end
+  results
+end
+
+def create_pocketid_client(service)
+  uri = URI("https://id.#{DOMAIN}/api/oidc/clients")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  request = Net::HTTP::Post.new(uri.request_uri)
+
+  request.body = {
+    callbackURLs: [],
+    credentials: {
+      federatedIdentities: []
+    },
+    isPublic: false,
+    logoutCallbackURLs: [],
+    name: service["fqdn"],
+    pkceEnabled: false,
+    requiresReauthentication: false
+  }.to_json
+
+  request['X-API-KEY'] = pocket_service_key
+  response = JSON.parse(http.request(request).body)
+
+  client_id = response["id"]
+
+  uri = URI("https://id.#{DOMAIN}/api/oidc/clients/#{client_id}/secret")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  request = Net::HTTP::Post.new(uri.request_uri)
+  request['X-API-KEY'] = pocket_service_key
+  client_secret = JSON.parse(http.request(request).body)["secret"]
+
+  ssh service["host"], "cat > /var/lib/fort-auth/#{service["name"]}/client-id", client_id
+  ssh service["host"], "cat > /var/lib/fort-auth/#{service["name"]}/client-secret", client_secret
+end
+
+def delete_pocketid_client(client)
+  uri = URI("https://id.#{DOMAIN}/api/oidc/clients/#{client["id"]}")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  request = Net::HTTP::Delete.new(uri.request_uri)
+  request['X-API-KEY'] = pocket_service_key
+  http.request(request)
+end
+
+target_clients = services.reject { |s| s["sso"]["mode"] == "none" rescue true }
+puts target_clients.inspect
+current_clients = get_pocketid_clients
+
+target_clients
+  .reject { |c| current_clients.any? { |cc| cc["name"] == c["fqdn"] } }
+  .each { |c| create_pocketid_client(c) }
+
+current_clients
+  .reject { |c| target_clients.include?(c["name"]) }
+  .each { |c| delete_pocketid_client(c) }
