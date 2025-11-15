@@ -49,9 +49,7 @@ in
       };
       "auth.proxy" = {
         enabled = true;
-        header_name = "X-Auth-User";
-        auto-sign_up = true;
-        whitelist = "127.0.0.1, unix:";
+        header_name = "X-Forwarded-User";
       };
     };
 

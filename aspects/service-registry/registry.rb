@@ -160,6 +160,7 @@ def create_pocketid_client(service)
 
   ssh service["host"], "cat > /var/lib/fort-auth/#{service["name"]}/client-id", client_id
   ssh service["host"], "cat > /var/lib/fort-auth/#{service["name"]}/client-secret", client_secret
+  ssh service["host"], "systemctl restart oauth2-proxy-#{service["name"]}"
 end
 
 def delete_pocketid_client(client)

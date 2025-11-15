@@ -153,15 +153,11 @@ in
                   --http-address=unix://${authProxySock} \
                   --client-secret-file=/var/lib/fort-auth/${svc.name}/client-secret \
                   --cookie-secret-file=/var/lib/fort-auth/${svc.name}/cookie-secret \
+                  --pass-user-headers \
                   --email-domain=* \
                   --skip-provider-button=true \
                   ${lib.concatStringsSep " " (map (g: "--allowed-group=" + g) svc.sso.groups)}
               '';
-
-              RestartTriggers = [
-                "/var/lib/fort-auth/${svc.name}/client-id"
-                "/var/lib/fort-auth/${svc.name}/client-secret"
-              ];
 
               EnvironmentFile = "-${envFile}";
               Group = "nginx";
