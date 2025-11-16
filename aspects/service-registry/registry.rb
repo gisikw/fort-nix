@@ -53,13 +53,13 @@ end
 
 ssh BEACON_HOST, 
   "tee /var/lib/headscale/extra-records.json >/dev/null", 
-  services.map do |service|
+  services.map { |service|
     {
       name: service["fqdn"],
       type: "A",
       value: service["vpn_ip"]
     }
-  end.to_json
+  }.to_json
 
 ssh FORGE_HOST, 
   "tee /var/lib/coredns/custom.conf >/dev/null", 

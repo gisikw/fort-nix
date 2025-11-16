@@ -67,6 +67,7 @@ in
     system = deviceProfileManifest.system;
     modules = [
       {
+        nixpkgs.config.allowUnfree = true;
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
         environment.persistence."/persist/system" = {

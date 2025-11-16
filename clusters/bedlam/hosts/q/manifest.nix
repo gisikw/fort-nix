@@ -12,6 +12,8 @@ rec {
     "readarr"
     "qbittorrent"
     "vikunja"
+    "outline"
+    "super-productivity"
   ];
 
   aspects = [
