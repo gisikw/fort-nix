@@ -10,8 +10,8 @@
   };
 
   systemd.services.qbittorrent = {
-    after = [ "egress-vpm-namespace.service" ];
-    wants = [ "egress-vpm-namespace.service" ];
+    after = [ "egress-vpn-namespace.service" ];
+    wants = [ "egress-vpn-namespace.service" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {

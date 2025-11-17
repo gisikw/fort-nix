@@ -4,6 +4,7 @@
   services.prowlarr.enable = true;
   systemd.services.prowlarr.serviceConfig.NetworkNamespacePath = "/run/netns/egress-vpn";
   systemd.services.prowlarr.wants = [ "egress-vpn-namespace.service" ];
+  systemd.services.prowlarr.after = [ "egress-vpn-namespace.service" ];
 
   services.flaresolverr.enable = true;
   systemd.services.flaresolverr.serviceConfig.NetworkNamespacePath = "/run/netns/egress-vpn";
