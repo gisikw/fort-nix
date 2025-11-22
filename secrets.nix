@@ -24,4 +24,6 @@ in
   "./aspects/ldap/ldap-admin-pass.age".publicKeys = activeKeys;
   "./aspects/ldap/ldap-users.age".publicKeys = activeKeys;
   "./aspects/ldap/ldap-groups.age".publicKeys = activeKeys;
+  "./aspects/mosquitto/mosquitto-zigbee2mqtt-password.age".publicKeys = activeKeys;
+  "./aspects/mosquitto/mosquitto-homeassistant-password.age".publicKeys = activeKeys;
 }

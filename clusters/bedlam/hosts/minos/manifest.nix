@@ -8,6 +8,7 @@ rec {
 
   aspects = [
     "mesh"
+    "mosquitto"
     "observable"
   ];
 
