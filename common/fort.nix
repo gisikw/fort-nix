@@ -62,14 +62,23 @@ in
                   type = lib.types.submodule {
                     options = {
                       mode = lib.mkOption {
-                        type = lib.types.enum [ "none" "headers" "basicauth" "gatekeeper" ];
+                        type = lib.types.enum [ "none" "oidc" "headers" "basicauth" "gatekeeper" ];
                         default = "none";
                         description = ''
                           SSO handling mode for this service:
                           - `none`: no authentication, plain reverse proxy.
+                          - `oidc`: provision an oidc client, delivering credentials to /var/lib/fort-auth/<service>
                           - `headers`: inject X-Auth-* headers from oauth2-proxy.
                           - `basicauth`: translate auth into BasicAuth credentials for backend.
                           - `gatekeeper`: enforce login but do not inject identity.
+                        '';
+                      };
+
+                      restart = lib.mkOption {
+                        type = nullOr str;
+                        default = null;
+                        description = ''
+                          Name of the systemd service to restart after OIDC credentials are delivered.
                         '';
                       };
 
@@ -117,7 +126,7 @@ in
         let
           authProxySock = "/run/fort-auth/${svc.name}.sock";
           envFile = "/var/lib/fort-auth/${svc.name}/oauth2-proxy.env";
-        in lib.optionalAttrs (svc.sso.mode != "none") {
+        in lib.optionalAttrs (svc.sso.mode != "none" && svc.sso.mode != "oidc") {
           "oauth2-proxy-${svc.name}" = {
             wantedBy = [ "multi-user.target" ];
 
@@ -201,7 +210,7 @@ in
                       return 444;
                     }
                   '';
-                  proxyPass = if svc.sso.mode != "none" then
+                  proxyPass = if (svc.sso.mode != "none" && svc.sso.mode != "oidc") then
                     "http://unix:/run/fort-auth/${svc.name}.sock"
                   else
                     "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";

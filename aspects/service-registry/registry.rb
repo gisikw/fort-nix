@@ -158,9 +158,12 @@ def create_pocketid_client(service)
   request['X-API-KEY'] = pocket_service_key
   client_secret = JSON.parse(http.request(request).body)["secret"]
 
-  ssh service["host"], "cat > /var/lib/fort-auth/#{service["name"]}/client-id", client_id
-  ssh service["host"], "cat > /var/lib/fort-auth/#{service["name"]}/client-secret", client_secret
-  ssh service["host"], "systemctl restart oauth2-proxy-#{service["name"]}"
+  dir = "/var/lib/fort-auth/#{service["name"]}/"
+  ssh service["host"], "cat > #{dir}/client-id && chmod 644 #{dir}/client-id", client_id
+  ssh service["host"], "cat > #{dir}/client-secret && chmod 644 #{dir}/client-secret", client_secret
+
+  restart_target = (service["sso"]&.[]("restart") || "oauth2-proxy-#{service["name"]}")
+  ssh service["host"], "systemctl restart #{restart_target}"
 end
 
 def delete_pocketid_client(client)
@@ -174,13 +177,14 @@ def delete_pocketid_client(client)
 end
 
 target_clients = services.reject { |s| s["sso"]["mode"] == "none" rescue true }
-puts target_clients.inspect
 current_clients = get_pocketid_clients
 
-target_clients
-  .reject { |c| current_clients.any? { |cc| cc["name"] == c["fqdn"] } }
-  .each { |c| create_pocketid_client(c) }
+clients_to_create =
+  target_clients.reject { |c| current_clients.any? { |cc| cc["name"] == c["fqdn"] } }
+puts "Creating #{clients_to_create.size} new clients..."
+clients_to_create.each { |c| create_pocketid_client(c) }
 
-current_clients
-  .reject { |c| target_clients.include?(c["name"]) }
-  .each { |c| delete_pocketid_client(c) }
+clients_to_delete =
+  current_clients.reject { |cc| target_clients.any? { |c| cc["name"] == c["fqdn"] } }
+puts "Deleting #{clients_to_delete.size} orphaned clients..."
+clients_to_delete.each { |c| delete_pocketid_client(c) }
