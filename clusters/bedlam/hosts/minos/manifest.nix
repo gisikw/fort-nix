@@ -12,6 +12,7 @@ rec {
       name = "zigbee2mqtt"; 
       passwordFile = ./mosquitto-zigbee2mqtt-password.age; 
       mqttSecretName = "mosquitto-zigbee2mqtt-password";
+      iot.manifest = ./iot.manifest.age;
     }
     { 
       name = "mosquitto";

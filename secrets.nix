@@ -25,5 +25,6 @@ in
   "./aspects/ldap/ldap-users.age".publicKeys = activeKeys;
   "./aspects/ldap/ldap-groups.age".publicKeys = activeKeys;
   "./clusters/bedlam/hosts/minos/mosquitto-zigbee2mqtt-password.age".publicKeys = activeKeys;
+  "./clusters/bedlam/hosts/minos/iot.manifest.age".publicKeys = activeKeys;
   # "./aspects/mosquitto/mosquitto-homeassistant-password.age".publicKeys = activeKeys;
 }

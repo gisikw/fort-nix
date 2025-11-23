@@ -1,4 +1,4 @@
-{ passwordFile, mqttSecretName, ... }:
+{ passwordFile, mqttSecretName, iot, ... }:
 { config, pkgs, ... }:
 {
   age.secrets.${mqttSecretName} = {
@@ -6,6 +6,11 @@
     owner = "zigbee2mqtt";
     mode = "0440";
     group = "mosquitto";
+  };
+
+  age.secrets.iotManifest = {
+    file = iot.manifest;
+    owner = "zigbee2mqtt";
   };
 
   users.users.zigbee2mqtt.extraGroups = [ "dialout" ];
@@ -16,6 +21,9 @@
   services.zigbee2mqtt = {
     enable = true;
     package = pkgs.writeShellScriptBin "zigbee2mqtt" ''
+      while IFS=: read ieee friendly_name alias; do
+        ${pkgs.yq-go}/bin/yq -i ".$ieee.friendly_name = \"$friendly_name\"" /var/lib/zigbee2mqtt/devices.yaml
+      done < ${config.age.secrets.iotManifest.path}
       export ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=$(cat ''${CREDENTIALS_DIRECTORY}/mqtt-password)
       exec ${pkgs.zigbee2mqtt}/bin/zigbee2mqtt "$@"
     '';
