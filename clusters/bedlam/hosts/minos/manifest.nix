@@ -8,7 +8,17 @@ rec {
 
   aspects = [
     "mesh"
-    "mosquitto"
+    { 
+      name = "zigbee2mqtt"; 
+      passwordFile = ./mosquitto-zigbee2mqtt-password.age; 
+      mqttSecretName = "mosquitto-zigbee2mqtt-password";
+    }
+    { 
+      name = "mosquitto";
+      users = [
+        { name = "zigbee2mqtt"; secret = "mosquitto-zigbee2mqtt-password"; }
+      ];
+    }
     "observable"
   ];
 
