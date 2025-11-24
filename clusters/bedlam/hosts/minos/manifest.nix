@@ -4,7 +4,13 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [
+    {
+      name = "homeassistant";
+      mqttPasswordFile = ./mosquitto-homeassistant-password.age;
+      mqttPasswordSecretName = "mosquitto-homeassistant-password";
+    }
+  ];
 
   aspects = [
     "mesh"
@@ -18,6 +24,7 @@ rec {
       name = "mosquitto";
       users = [
         { name = "zigbee2mqtt"; secret = "mosquitto-zigbee2mqtt-password"; }
+        { name = "hass"; secret = "mosquitto-homeassistant-password"; }
       ];
     }
     "observable"
