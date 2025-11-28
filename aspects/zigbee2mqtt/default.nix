@@ -52,6 +52,7 @@
     {
       name = "zigbee";
       port = 8080;
+      visibility = "local";
     }
   ];
 }
