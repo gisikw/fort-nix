@@ -1,5 +1,8 @@
-{ mqttPasswordFile, mqttPasswordSecretName, ... }:
+{ mqttPasswordFile, mqttPasswordSecretName, rootManifest, ... }:
 { config, pkgs, lib, ... }:
+let
+  domain = rootManifest.fortConfig.settings.domain;
+in
 {
   age.secrets.${mqttPasswordSecretName} = {
     file = mqttPasswordFile;
@@ -35,6 +38,8 @@
         elevation = "!secret elevation";
         unit_system = "us_customary";
         time_zone = "America/Chicago";
+        external_url = "https://house.${domain}";
+        internal_url = "https://house.${domain}";
       };
 
       automation = "!include automations.yaml";
