@@ -65,6 +65,7 @@ in
     {
       name = "homeassistant";
       subdomain = "house";
+      visibility = "local";
       port = 8123;
     }
   ];
