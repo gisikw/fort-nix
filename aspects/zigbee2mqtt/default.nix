@@ -11,6 +11,8 @@
   age.secrets.iotManifest = {
     file = iot.manifest;
     owner = "zigbee2mqtt";
+    mode = "0440";
+    group = "hass";
   };
 
   users.users.zigbee2mqtt.extraGroups = [ "dialout" ];

@@ -1,5 +1,4 @@
-args@{
-  self,
+{
   nixpkgs,
   disko,
   impermanence,

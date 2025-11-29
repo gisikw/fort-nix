@@ -1,7 +1,12 @@
-{ mqttPasswordFile, mqttPasswordSecretName, rootManifest, ... }:
+{ mqttPasswordFile, mqttPasswordSecretName, rootManifest, declarative, ... }:
 { config, pkgs, lib, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+  yamlFormat = pkgs.formats.yaml { };
+  automationsFile = yamlFormat.generate "hass-automations.yaml" (import declarative.automations);
+  lightsFile = yamlFormat.generate "hass-lights.yaml" (import declarative.lights);
+  scenesFile = yamlFormat.generate "hass-scenes.yaml" (import declarative.scenes);
+  scriptsFile = yamlFormat.generate "hass-scripts.yaml" (import declarative.scripts);
 in
 {
   age.secrets.${mqttPasswordSecretName} = {
@@ -45,6 +50,7 @@ in
       automation = "!include automations.yaml";
       script = "!include scripts.yaml";
       scene = "!include scenes.yaml";
+      light = "!include lights.yaml";
 
       http = {
         server_port = 8123;
@@ -54,12 +60,46 @@ in
     };
   };
 
-  systemd.tmpfiles.rules = [
-    "d /var/lib/hass 0750 hass hass -"
-    "f /var/lib/hass/automations.yaml 0640 hass hass -"
-    "f /var/lib/hass/scripts.yaml 0640 hass hass -"
-    "f /var/lib/hass/scenes.yaml 0640 hass hass -"
+  systemd.services.home-assistant.restartTriggers = [
+    automationsFile
+    lightsFile
+    scenesFile
+    scriptsFile
   ];
+
+  systemd.services.home-assistant-config-fixup = {
+    description = "Substitute entity IDs in Home Assistant config";
+    before = [ "home-assistant.service" ];
+    requiredBy = [ "home-assistant.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "hass";
+    };
+    restartTriggers = [
+      automationsFile
+      lightsFile
+      scriptsFile
+      scenesFile
+    ];
+    script = ''
+      rm -f /var/lib/hass/automations.yaml
+      rm -f /var/lib/hass/lights.yaml
+      rm -f /var/lib/hass/scenes.yaml
+      rm -f /var/lib/hass/scripts.yaml
+      cp ${automationsFile} /var/lib/hass/automations.yaml
+      cp ${lightsFile} /var/lib/hass/lights.yaml
+      cp ${scenesFile} /var/lib/hass/scenes.yaml
+      cp ${scriptsFile} /var/lib/hass/scripts.yaml
+
+      while IFS=: read ieee script_name friendly_name; do
+        [ -z "$ieee" ] && continue
+        sed -i "s/$script_name/$ieee/g" /var/lib/hass/automations.yaml
+        sed -i "s/$script_name/$ieee/g" /var/lib/hass/scripts.yaml
+        sed -i "s/$script_name/$ieee/g" /var/lib/hass/scenes.yaml
+        sed -i "s/$script_name/$ieee/g" /var/lib/hass/lights.yaml
+      done < <(grep -v -e '^$' -e '^#' ${config.age.secrets.iotManifest.path})
+    '';
+  };
 
   fortCluster.exposedServices = [
     {

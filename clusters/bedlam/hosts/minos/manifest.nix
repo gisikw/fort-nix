@@ -9,6 +9,10 @@ rec {
       name = "homeassistant";
       mqttPasswordFile = ./mosquitto-homeassistant-password.age;
       mqttPasswordSecretName = "mosquitto-homeassistant-password";
+      declarative.automations = ./automations.nix;
+      declarative.lights = ./lights.nix;
+      declarative.scenes = ./scenes.nix;
+      declarative.scripts = ./scripts.nix;
     }
   ];
 
