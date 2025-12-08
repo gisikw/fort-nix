@@ -5,6 +5,7 @@ rec {
   roles = [ ];
 
   apps = [
+    "actualbudget"
     "prowlarr"
     "radarr"
     "lidarr"

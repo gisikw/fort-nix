@@ -1,8 +1,7 @@
 {
   inputs = {
     root.url = "path:../../../..";
-    # nixpkgs.follows = "root/nixpkgs";
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.follows = "root/nixpkgs";
     disko.follows = "root/disko";
     impermanence.follows = "root/impermanence";
     deploy-rs.follows = "root/deploy-rs";
