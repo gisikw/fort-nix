@@ -67,6 +67,7 @@ in
     system = deviceProfileManifest.system;
     modules = [
       {
+        nix.settings.experimental-features = [ "nix-command" "flakes" ];
         nixpkgs.config.allowUnfree = true;
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
