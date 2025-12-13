@@ -1,10 +1,12 @@
 { ... }:
 { ... }:
 {
-  services.actual-server = {
+  services.actual = {
     enable = true;
-    host = "127.0.0.1";
-    port = 5006;
+    settings = {
+      hostname = "127.0.0.1";
+      port = 5006;
+    };
   };
 
   fortCluster.exposedServices = [
