@@ -18,16 +18,23 @@ rec {
 
   aspects = [
     "mesh"
-    { 
-      name = "zigbee2mqtt"; 
-      passwordFile = ./mosquitto-zigbee2mqtt-password.age; 
+    {
+      name = "zigbee2mqtt";
+      passwordFile = ./mosquitto-zigbee2mqtt-password.age;
       mqttSecretName = "mosquitto-zigbee2mqtt-password";
       iot.manifest = ./iot.manifest.age;
     }
-    { 
+    {
+      name = "zwave-js-ui";
+      passwordFile = ./mosquitto-zwave-js-ui-password.age;
+      mqttSecretName = "mosquitto-zwave-js-ui-password";
+      securityKeysFile = ./zwave-security-keys.json.age;
+    }
+    {
       name = "mosquitto";
       users = [
         { name = "zigbee2mqtt"; secret = "mosquitto-zigbee2mqtt-password"; }
+        { name = "zwave"; secret = "mosquitto-zwave-js-ui-password"; }
         { name = "hass"; secret = "mosquitto-homeassistant-password"; }
       ];
     }

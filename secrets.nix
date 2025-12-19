@@ -28,5 +28,6 @@ in
   "./clusters/bedlam/hosts/minos/mosquitto-zwave-js-ui-password.age".publicKeys = activeKeys;
   "./clusters/bedlam/hosts/minos/mosquitto-homeassistant-password.age".publicKeys = activeKeys;
   "./clusters/bedlam/hosts/minos/iot.manifest.age".publicKeys = activeKeys;
+  "./clusters/bedlam/hosts/minos/zwave-security-keys.json.age".publicKeys = activeKeys;
   "./apps/homeassistant/secrets.yaml.age".publicKeys = activeKeys;
 }
