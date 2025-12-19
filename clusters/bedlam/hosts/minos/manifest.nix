@@ -29,6 +29,7 @@ rec {
       passwordFile = ./mosquitto-zwave-js-ui-password.age;
       mqttSecretName = "mosquitto-zwave-js-ui-password";
       securityKeysFile = ./zwave-security-keys.json.age;
+      iot.manifest = ./iot.manifest.age;
     }
     {
       name = "mosquitto";

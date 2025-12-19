@@ -75,6 +75,7 @@ Fort includes modules for deploying a variety of self-hosted applications:
 
 | App | Description |
 |-----|-------------|
+| actualbudget | Self-hosted budgeting software |
 | audiobookshelf | Audiobook and podcast server |
 | calibre-web | E-book management web interface |
 | coredns | Internal DNS for the mesh network |
@@ -113,6 +114,7 @@ Aspects are host characteristics that can be composed together:
 | wifi-access | WiFi network configuration |
 | zfs | ZFS filesystem support |
 | zigbee2mqtt | Zigbee device gateway |
+| zwave-js-ui | Z-Wave device gateway |
 
 ## Setting Up a New Host
 
@@ -186,8 +188,17 @@ running it.
 
 Fort supports declarative Home Assistant configuration with:
 
-- **Zigbee2MQTT**: Declarative device configuration via encrypted manifests
+- **Zigbee2MQTT**: Zigbee device gateway with declarative device naming
+- **Z-Wave JS UI**: Z-Wave device gateway with declarative device naming
 - **Mosquitto**: MQTT broker for device communication
 - **Home Assistant**: Automations, scenes, and scripts defined in Nix
 
-IoT device manifests are encrypted and can define Zigbee devices with deterministic, PII-obfuscated friendly names for privacy.
+IoT device manifests are encrypted and can define both Zigbee and Z-Wave devices with friendly names. The manifest format supports both device types:
+
+```
+# Zigbee devices use IEEE address
+0x00158d00xxxxxxxx:script_name:Friendly Name
+
+# Z-Wave devices use DSK (note: name cannot contain spaces)
+00000-00000-00000-00000-00000-00000-00000-00000:script_name:FriendlyName
+```

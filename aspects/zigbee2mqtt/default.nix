@@ -31,7 +31,7 @@
     package = pkgs.writeShellScriptBin "zigbee2mqtt" ''
       while IFS=: read ieee script_name friendly_name; do
         ${pkgs.yq-go}/bin/yq -i ".$ieee.friendly_name = \"$friendly_name\"" /var/lib/zigbee2mqtt/devices.yaml
-      done < <(grep -v -e '^$' -e '^#' ${config.age.secrets.iotManifest.path})
+      done < <(grep -e '^0x' ${config.age.secrets.iotManifest.path})
       export ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=$(cat ''${CREDENTIALS_DIRECTORY}/mqtt-password)
       exec ${pkgs.zigbee2mqtt}/bin/zigbee2mqtt "$@"
     '';
