@@ -30,4 +30,5 @@ in
   "./clusters/bedlam/hosts/minos/iot.manifest.age".publicKeys = activeKeys;
   "./clusters/bedlam/hosts/minos/zwave-security-keys.json.age".publicKeys = activeKeys;
   "./apps/homeassistant/secrets.yaml.age".publicKeys = activeKeys;
+  "./apps/fort-mcp/secrets.env.age".publicKeys = activeKeys;
 }

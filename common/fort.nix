@@ -131,6 +131,8 @@ in
             wantedBy = [ "multi-user.target" ];
 
             serviceConfig = {
+              Restart = "on-failure";
+              RestartSec = "10s";
               ExecStartPre = pkgs.writeShellScript "ensure-secrets" ''
                 set -euo pipefail
                 mkdir -p /var/lib/fort-auth/${svc.name}

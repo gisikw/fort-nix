@@ -27,6 +27,7 @@ in
       TRUST_PROXY = true;
       APP_URL = "https://id.${domain}";
       EMAILS_VERIFIED = true;
+      ALLOW_DOWNGRADE = true;
 
       LDAP_ENABLED = true;
       UI_CONFIG_DISABLED = true;
@@ -53,7 +54,6 @@ in
   systemd.services.pocket-id-service-key = {
     after = [ "pocket-id.service" ];
     wants = [ "pocket-id.service" ];
-    wantedBy = [ "multi-user.target" ];
     startAt = "*:0/30";
 
     serviceConfig = {

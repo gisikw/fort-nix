@@ -1,0 +1,6 @@
+source 'https://rubygems.org'
+
+gem 'mcp'
+gem 'sinatra'
+gem 'puma'
+gem 'rackup'
