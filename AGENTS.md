@@ -106,6 +106,8 @@ See `pkgs/zot/` for a working example.
 
 **What stays in `apps/`**: Context-dependent wraps (secret injection, config overrides) that are specific to how we deploy the service. See `apps/outline/` for an example using `symlinkJoin` + `wrapProgram`.
 
+**Self-contained services**: For fast-moving packages where the nixpkgs module may lag or have compatibility issues, define the systemd service directly in `apps/` rather than using `services.<name>`. See `apps/pocket-id/` - it defines users, tmpfiles, and systemd services inline rather than relying on nixpkgs' `services.pocket-id` module.
+
 ### Parameterized Aspects
 
 Aspects can receive arguments when declared in a host manifest:
@@ -190,11 +192,13 @@ Before closing a ticket:
 
 3. **Close the ticket**: `bd close <id>`
 
-4. **Reflect** on these questions:
+4. **Reflect** and triage with the user:
    - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
-   - **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated? Surface these to the user - either to address now or ticket as hygiene.
+   - **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated?
    - **Pattern extraction**: Did the code changes reveal a pattern worth generalizing? A new SSO mode, a reusable derivation structure, a common module shape?
-   - **Discovered work**: Did you uncover related issues while working? Create tickets with `discovered-from` dependencies rather than letting them get lost.
+   - **Discovered work**: Did you uncover related issues while working?
+
+   For each item surfaced: **ticket it, document it, address it now, or explicitly discard it**. Don't just note friction and move on - that's venting, not improving. Quick triage with the user ensures nothing gets lost.
 
 5. **Commit immediately** after reflection (so doc updates are included):
    ```bash
