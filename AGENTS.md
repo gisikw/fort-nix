@@ -28,6 +28,7 @@ clusters/<cluster>/
   manifest.nix               # Cluster settings (domain, SSH keys)
   hosts/<name>/manifest.nix  # Host config: roles, apps, aspects
   devices/<uuid>/            # Auto-generated device bindings
+pkgs/<name>/default.nix      # Custom derivations for external projects
 apps/<name>/default.nix      # App modules
 aspects/<name>/default.nix   # Aspect modules
 roles/<name>.nix             # Role definitions (sets of apps + aspects)
@@ -72,23 +73,38 @@ Then add it to a host's `manifest.nix`:
 
 ### Custom Derivations
 
-For fast-moving projects without good nixpkgs support, follow the Zot pattern in `apps/zot/default.nix`:
+For external projects that are too fast-moving for nixpkgs (or not in nixpkgs), create a derivation in `pkgs/<name>/default.nix`:
 
 ```nix
-let
-  myapp = pkgs.stdenv.mkDerivation {
-    pname = "myapp";
-    version = "1.2.3";
-    src = pkgs.fetchurl {
-      url = "https://github.com/.../releases/download/v1.2.3/myapp-linux-amd64";
-      sha256 = "sha256-...";
-    };
-    dontUnpack = true;
-    nativeBuildInputs = [ pkgs.autoPatchelfHook ];
-    installPhase = ''install -Dm755 $src $out/bin/myapp'';
+# pkgs/myapp/default.nix
+{ pkgs }:
+
+pkgs.stdenv.mkDerivation {
+  pname = "myapp";
+  version = "1.2.3";
+  src = pkgs.fetchurl {
+    url = "https://github.com/.../releases/download/v1.2.3/myapp-linux-amd64";
+    sha256 = "sha256-...";
   };
+  dontUnpack = true;
+  nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+  installPhase = ''install -Dm755 $src $out/bin/myapp'';
+}
+```
+
+Then import it in the app module:
+```nix
+# apps/myapp/default.nix
+let
+  myapp = import ../../pkgs/myapp { inherit pkgs; };
 in { ... }
 ```
+
+See `pkgs/zot/` for a working example.
+
+**What goes in `pkgs/`**: External projects we're packaging ourselves.
+
+**What stays in `apps/`**: Context-dependent wraps (secret injection, config overrides) that are specific to how we deploy the service. See `apps/outline/` for an example using `symlinkJoin` + `wrapProgram`.
 
 ### Parameterized Aspects
 
@@ -138,6 +154,8 @@ just deploy <host> [ip]      # Deploy (IP needed for first deploy)
 
 ## Debugging Deployment Failures
 
+**Important**: deploy-rs automatically rolls back on activation failure. If a deploy fails, the host reverts to its previous state - checking service status afterward won't reflect your changes.
+
 Agents cannot use interactive SSH. For remote diagnostics, get the SSH key path and domain from the cluster manifest (`clusters/<cluster>/manifest.nix`), then construct one-shot commands:
 
 ```bash
@@ -164,14 +182,24 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 
 ## Completing Work
 
-When finishing a ticket or session, take a moment to reflect:
+Before closing a ticket:
 
-- **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
+1. **Stage files**: `git add <files>` - Nix requires files to be staged to see them in the flake.
 
-- **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated? Surface these to the user - either to address now or ticket as hygiene.
+2. **Validate**: Deploy to all hosts impacted by the change (`just deploy <host>`). The user will intervene if unsafe.
 
-- **Pattern extraction**: Did the code changes reveal a pattern worth generalizing? A new SSO mode, a reusable derivation structure, a common module shape?
+3. **Close the ticket**: `bd close <id>`
 
-- **Discovered work**: Did you uncover related issues while working? Create tickets with `discovered-from` dependencies rather than letting them get lost.
+4. **Reflect** on these questions:
+   - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
+   - **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated? Surface these to the user - either to address now or ticket as hygiene.
+   - **Pattern extraction**: Did the code changes reveal a pattern worth generalizing? A new SSO mode, a reusable derivation structure, a common module shape?
+   - **Discovered work**: Did you uncover related issues while working? Create tickets with `discovered-from` dependencies rather than letting them get lost.
+
+5. **Commit immediately** after reflection (so doc updates are included):
+   ```bash
+   git add <files>
+   git commit -m "<beads-id>: <summary>"
+   ```
 
 This isn't ceremony for its own sake - it's how the codebase and tooling improve over time.
