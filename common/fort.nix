@@ -158,8 +158,7 @@ in
               ExecStart = ''
                 ${pkgs.oauth2-proxy}/bin/oauth2-proxy \
                   --provider=oidc \
-                  --oidc-issuer-url=http://127.0.0.1:1411 \
-                  --insecure-oidc-skip-issuer-verification=true \
+                  --oidc-issuer-url=https://id.${domain} \
                   --upstream=http://127.0.0.1:${toString svc.port} \
                   --http-address=unix://${authProxySock} \
                   --client-secret-file=/var/lib/fort-auth/${svc.name}/client-secret \

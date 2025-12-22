@@ -6,6 +6,7 @@ rec {
 
   apps = [
     "actualbudget"
+    "claude-code-ui"
     "prowlarr"
     "radarr"
     "lidarr"
@@ -24,9 +25,13 @@ rec {
   ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
+    let
+      claude-code = import ../../../../pkgs/claude-code { inherit pkgs; };
+    in
     {
       config.fort.host = { inherit roles apps aspects; };
+      config.environment.systemPackages = [ claude-code ];
       config.fileSystems."/ingest" = {
         device = "/dev/disk/by-label/ingest";
         fsType = "ext4";

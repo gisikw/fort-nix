@@ -11,7 +11,10 @@
       "Bash(bd dep add:*)",
       "Bash(bd list:*)",
       "Bash(bd ready:*)",
-      "Bash(bd update:*)"
+      "Bash(bd update:*)",
+      "Bash(bd show:*)",
+      "Bash(git add:*)",
+      "Bash(just test:*)"
     ],
     "deny": [],
     "ask": []
