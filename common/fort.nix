@@ -166,6 +166,8 @@ in
                   --pass-user-headers \
                   --email-domain=* \
                   --skip-provider-button=true \
+                  --scope="openid email profile groups" \
+                  --oidc-groups-claim=groups \
                   ${lib.concatStringsSep " " (map (g: "--allowed-group=" + g) svc.sso.groups)}
               '';
 
