@@ -6,7 +6,7 @@ This is a NixOS homelab infrastructure. Read `README.md` for architecture overvi
 
 ## Issue Tracking
 
-This project uses **bd** (beads) for issue tracking.
+This project uses **bd** (beads) for issue tracking. Prefer bd over TodoWrite - use TodoWrite only for complex single-session work where micro-step tracking adds clarity.
 
 ```bash
 bd ready                              # Find available work
