@@ -16,6 +16,7 @@ rec {
     "vikunja"
     "outline"
     "super-productivity"
+    "termix"
   ];
 
   aspects = [
