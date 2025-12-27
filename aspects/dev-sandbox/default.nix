@@ -73,8 +73,18 @@ in
   # Install dev tools system-wide
   environment.systemPackages = devTools;
 
-  # Enable zsh
-  programs.zsh.enable = true;
+  # Enable zsh with tmux auto-attach
+  programs.zsh = {
+    enable = true;
+    interactiveShellInit = ''
+      # Auto-attach to tmux on SSH connection
+      # Skip if: already in tmux, not interactive, not SSH session
+      if [[ -z "$TMUX" && -n "$SSH_CONNECTION" && $- == *i* ]]; then
+        # Attach to any existing session if one exists
+        tmux attach-session 2>/dev/null || true
+      fi
+    '';
+  };
 
   # Enable direnv with nix-direnv integration
   programs.direnv = {
