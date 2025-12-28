@@ -192,6 +192,7 @@ EOF
       openssh
       coreutils
       gnugrep
+      gawk
     ];
     # Best-effort sync - failures shouldn't block deploys
     # Wrap entire script so any failure exits 0 (will retry on next timer)
@@ -218,8 +219,8 @@ endpoint = "${cacheUrl}"
 token = "$(cat $ADMIN_TOKEN_FILE)"
 EOF
 
-        # Get the cache public key (attic outputs to stderr, not stdout)
-        PUBLIC_KEY=$(attic cache info ${cacheName} 2>&1 | grep "Public Key:" | cut -d' ' -f3-)
+        # Get the cache public key (attic outputs to stderr with leading spaces)
+        PUBLIC_KEY=$(attic cache info ${cacheName} 2>&1 | awk '/Public Key:/ {print $NF}')
         if [ -z "$PUBLIC_KEY" ]; then
           echo "Could not get public key for cache ${cacheName}"
           return 1
