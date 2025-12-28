@@ -211,6 +211,34 @@ ssh host:
 age path:
   nix run .#agenix -- -i {{deploy_key}} -e {{path}}
 
+sync-services:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  hosts_root="./hosts"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
+
+  # Find the host with forge role
+  forge_host=""
+  for host_dir in "${hosts_root}"/*; do
+    [[ -d "${host_dir}" ]] || continue
+    manifest="${host_dir}/manifest.nix"
+    [[ -f "${manifest}" ]] || continue
+    if grep -q '"forge"' "${manifest}"; then
+      forge_host=$(basename "${host_dir}")
+      break
+    fi
+  done
+
+  if [[ -z "${forge_host}" ]]; then
+    echo "[Fort] ERROR: No host with forge role found" >&2
+    exit 1
+  fi
+
+  echo "[Fort] Triggering service-registry on ${forge_host}"
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no "root@${forge_host}.fort.{{domain}}" \
+    'systemctl start fort-service-registry.service && journalctl -u fort-service-registry.service -n 50 --no-pager'
+
 test:
   #!/usr/bin/env bash
   set -euo pipefail
