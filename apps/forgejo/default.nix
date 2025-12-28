@@ -308,7 +308,6 @@ EOF
 
     environment = {
       HOME = runnerDir;
-      PATH = lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.nodejs ];
     };
 
     serviceConfig = {
