@@ -52,21 +52,14 @@ in
   # Declare the secret (root-owned, atticd reads via EnvironmentFile)
   age.secrets.attic-server-token.file = ./attic-server-token.age;
 
-  # Bootstrap script that runs after atticd starts (as same dynamic user)
+  # Bootstrap script that runs after atticd starts
   systemd.services.atticd.serviceConfig.ExecStartPost = let
     atticadm = "${config.services.atticd.package}/bin/atticadm";
-    # Minimal config for atticadm (just needs database path for token generation)
-    atticadmConfig = pkgs.writeText "atticadm-config.toml" ''
-      database.url = "sqlite:///var/lib/atticd/server.db?mode=rwc"
-
-      [storage]
-      type = "local"
-      path = "/var/lib/atticd/storage"
-    '';
+    # Generate config file using the same format as nixpkgs module
+    # This ensures atticadm gets all required fields (chunking, storage, etc.)
+    format = pkgs.formats.toml { };
+    atticadmConfig = format.generate "atticadm-config.toml" config.services.atticd.settings;
     bootstrapScript = pkgs.writeShellScript "attic-bootstrap" ''
-      # TODO: Complete bootstrap - see fort-qg0
-      exit 0
-
       set -euo pipefail
       export PATH="${pkgs.coreutils}/bin:$PATH"
       export HOME="/var/lib/atticd"
@@ -93,8 +86,7 @@ in
 
       # Create admin token if not exists
       if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
-        echo "Creating admin token"
-        echo "DEBUG: Using config: ${atticadmConfig}"
+        echo "Creating admin token..."
         ${atticadm} -f ${atticadmConfig} make-token \
           --sub "admin" \
           --validity "10y" \
@@ -106,14 +98,13 @@ in
           --destroy-cache "*" \
           --delete "*" \
           > "$ADMIN_TOKEN_FILE"
-        echo "DEBUG: atticadm exited with $?"
-        echo "DEBUG: Token file exists: $(ls -la $ADMIN_TOKEN_FILE 2>&1)"
         chmod 600 "$ADMIN_TOKEN_FILE"
+        echo "Admin token created"
       fi
 
       # Create CI token (push/pull only) if not exists
       if [ ! -s "$CI_TOKEN_FILE" ]; then
-        echo "Creating CI token"
+        echo "Creating CI token..."
         ${atticadm} -f ${atticadmConfig} make-token \
           --sub "ci" \
           --validity "10y" \
@@ -121,6 +112,7 @@ in
           --pull "*" \
           > "$CI_TOKEN_FILE"
         chmod 600 "$CI_TOKEN_FILE"
+        echo "CI token created"
       fi
 
       # Configure attic CLI for cache creation
@@ -129,12 +121,12 @@ in
       mkdir -p "$BOOTSTRAP_DIR/attic"
 
       cat > "$BOOTSTRAP_DIR/attic/config.toml" <<EOF
-      default-server = "local"
+default-server = "local"
 
-      [servers.local]
-      endpoint = "${cacheUrl}"
-      token = "$ADMIN_TOKEN"
-      EOF
+[servers.local]
+endpoint = "${cacheUrl}"
+token = "$ADMIN_TOKEN"
+EOF
 
       # Create cache if not exists
       if ! ${pkgs.attic-client}/bin/attic cache info "${cacheName}" > /dev/null 2>&1; then
