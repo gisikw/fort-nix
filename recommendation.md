@@ -58,7 +58,7 @@ services.comin = {
   enable = true;
   remotes = [{
     name = "origin";
-    url = "https://git.fort.gisi.network/infra/fort-nix.git";
+    url = "https://git.gisi.network/infra/fort-nix.git";
     branches.main.name = "main";
   }];
 };
@@ -170,7 +170,7 @@ services.comin = {
   enable = true;
   remotes = [{
     name = "origin";
-    url = "https://git.fort.gisi.network/infra/fort-nix.git";
+    url = "https://git.gisi.network/infra/fort-nix.git";
     branches.main.name = "release";  # Pull from release, not main
   }];
 };
@@ -273,7 +273,7 @@ On all hosts:
 
 ```nix
 nix.settings = {
-  substituters = [ "https://cache.fort.gisi.network" ];
+  substituters = [ "https://cache.gisi.network" ];
   trusted-public-keys = [
     "fort-cache:XXXXX..."  # forge's key
     # Future: add keys for other arches as needed
