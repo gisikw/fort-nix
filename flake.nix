@@ -6,7 +6,6 @@
     agenix.url = "github:ryantm/agenix";
     nixos-anywhere.url = "github:nix-community/nixos-anywhere";
     deploy-rs.url = "github:serokell/deploy-rs";
-    attic.url = "github:zhaofengli/attic";
   };
 
   outputs =
