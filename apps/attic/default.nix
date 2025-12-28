@@ -57,6 +57,7 @@ in
     bootstrapScript = pkgs.writeShellScript "attic-bootstrap" ''
       set -euo pipefail
       export PATH="${pkgs.coreutils}/bin:${config.services.atticd.package}/bin:$PATH"
+      export HOME="/var/lib/atticd"
 
       BOOTSTRAP_DIR="/var/lib/atticd/bootstrap"
       ADMIN_TOKEN_FILE="$BOOTSTRAP_DIR/admin-token"
