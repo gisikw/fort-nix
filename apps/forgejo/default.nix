@@ -44,7 +44,6 @@ in
   systemd.services.forgejo-oidc-setup = {
     description = "Configure Forgejo OIDC authentication source";
     after = [ "forgejo.service" ];
-    requires = [ "forgejo.service" ];
     path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils ];
 
     environment = {
