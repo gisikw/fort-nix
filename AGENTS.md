@@ -173,6 +173,35 @@ fortCluster.exposedServices = [{
 
 The host must have the `egress-vpn` aspect enabled.
 
+### Forge Configuration
+
+The cluster manifest can declare forge-specific settings for the git infrastructure:
+
+```nix
+# clusters/<cluster>/manifest.nix
+fortConfig = {
+  settings = { ... };
+
+  forge = {
+    org = "infra";           # Forgejo organization name
+    repo = "fort-nix";       # Repository name
+    mirrors = {
+      github = {
+        remote = "github.com/user/repo";
+        tokenFile = ./github-mirror-token.age;  # PAT for push access
+      };
+    };
+  };
+};
+```
+
+The `forgejo` app reads this config and runs a bootstrap service on activation that:
+1. Creates a `forge-admin` service account with API token
+2. Creates the org and repo if they don't exist
+3. Configures push mirrors to sync to external remotes (e.g., GitHub)
+
+Mirror tokens should be added to `secrets.nix` with the appropriate public keys.
+
 ## Secrets
 
 Uses **agenix**. Secrets are `.age` files decrypted at activation time.
