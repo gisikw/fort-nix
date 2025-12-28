@@ -36,7 +36,7 @@ in
     description = "Configure Forgejo OIDC authentication source";
     after = [ "forgejo.service" ];
     requires = [ "forgejo.service" ];
-    path = [ config.services.forgejo.package ];
+    path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils ];
 
     serviceConfig = {
       Type = "oneshot";
@@ -57,12 +57,12 @@ in
       CLIENT_SECRET=$(cat ${authDir}/client-secret)
       DISCOVER_URL="https://id.${domain}/.well-known/openid-configuration"
 
-      # Check if auth source already exists
-      EXISTING_ID=$(forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
+      # Check if auth source already exists (forgejo uses gitea binary name)
+      EXISTING_ID=$(gitea admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
 
       if [ -n "$EXISTING_ID" ]; then
         echo "Updating existing OIDC auth source (ID: $EXISTING_ID)"
-        forgejo admin auth update-oauth \
+        gitea admin auth update-oauth \
           --id "$EXISTING_ID" \
           --name "Pocket ID" \
           --provider openidConnect \
@@ -72,7 +72,7 @@ in
           --skip-local-2fa
       else
         echo "Creating new OIDC auth source"
-        forgejo admin auth add-oauth \
+        gitea admin auth add-oauth \
           --name "Pocket ID" \
           --provider openidConnect \
           --key "$CLIENT_ID" \
