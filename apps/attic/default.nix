@@ -54,9 +54,10 @@ in
 
   # Bootstrap script that runs after atticd starts (as same dynamic user)
   systemd.services.atticd.serviceConfig.ExecStartPost = let
+    atticadm = "${config.services.atticd.package}/bin/atticadm";
     bootstrapScript = pkgs.writeShellScript "attic-bootstrap" ''
       set -euo pipefail
-      export PATH="${pkgs.coreutils}/bin:${config.services.atticd.package}/bin:$PATH"
+      export PATH="${pkgs.coreutils}/bin:$PATH"
       export HOME="/var/lib/atticd"
 
       # Source credentials (ExecStartPost may not inherit EnvironmentFile)
@@ -82,10 +83,7 @@ in
       # Create admin token if not exists
       if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
         echo "Creating admin token"
-        echo "DEBUG: ADMIN_TOKEN_FILE=$ADMIN_TOKEN_FILE"
-        echo "DEBUG: Running atticadm from $(which atticadm)"
-        echo "DEBUG: ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64 is ''${ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64:+set}"
-        atticadm make-token \
+        ${atticadm} make-token \
           --sub "admin" \
           --validity "10y" \
           --push "*" \
@@ -104,7 +102,7 @@ in
       # Create CI token (push/pull only) if not exists
       if [ ! -s "$CI_TOKEN_FILE" ]; then
         echo "Creating CI token"
-        atticadm make-token \
+        ${atticadm} make-token \
           --sub "ci" \
           --validity "10y" \
           --push "${cacheName}" \
