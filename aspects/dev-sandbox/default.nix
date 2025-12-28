@@ -41,6 +41,7 @@ let
     # Nix development
     direnv
     nix-direnv
+    just
 
     # Claude/AI tools
     claude-code
