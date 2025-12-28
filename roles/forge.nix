@@ -1,6 +1,6 @@
 {
   apps = [
-    # "cluster-autodeploy"
+    "attic"
     "coredns"
     "forgejo"
     "fort-mcp"

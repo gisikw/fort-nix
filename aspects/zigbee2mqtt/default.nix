@@ -46,7 +46,6 @@
         user = "zigbee2mqtt";
       };
 
-      homeassistant = true;
       permit_join = false;
 
       frontend = {

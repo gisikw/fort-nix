@@ -6,6 +6,7 @@
     impermanence.follows = "root/impermanence";
     deploy-rs.follows = "root/deploy-rs";
     agenix.follows = "root/agenix";
+    attic.follows = "root/attic";
   };
 
   outputs =
@@ -16,6 +17,7 @@
       impermanence,
       deploy-rs,
       agenix,
+      attic,
       ...
     }:
     import ../../../../common/host.nix {
@@ -26,6 +28,7 @@
         impermanence
         deploy-rs
         agenix
+        attic
         ;
       hostDir = ./.;
     };

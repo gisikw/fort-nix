@@ -35,4 +35,5 @@ in
   "./aspects/dev-sandbox/dev-ssh-key.age".publicKeys = activeKeys;
   "./clusters/bedlam/github-mirror-token.age".publicKeys = activeKeys;
   "./apps/forgejo/runner-secret.age".publicKeys = activeKeys;
+  "./apps/attic/attic-server-token.age".publicKeys = activeKeys;
 }

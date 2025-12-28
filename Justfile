@@ -118,6 +118,7 @@ assign device host:
       impermanence.follows = "root/impermanence";
       deploy-rs.follows = "root/deploy-rs";
       agenix.follows = "root/agenix";
+      attic.follows = "root/attic";
     };
 
     outputs =
@@ -128,6 +129,7 @@ assign device host:
         impermanence,
         deploy-rs,
         agenix,
+        attic,
         ...
       }:
       import ../../common/host.nix {
@@ -138,6 +140,7 @@ assign device host:
           impermanence
           deploy-rs
           agenix
+          attic
           ;
         hostDir = ./.;
       };
