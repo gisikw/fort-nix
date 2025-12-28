@@ -1,14 +1,27 @@
 { rootManifest, ... }:
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
   authDir = "/var/lib/fort-auth/git";
+  oidcPath = "/user/oauth2/Pocket%20ID";
 in
 {
   # Credential directory for OIDC client credentials (delivered by service-registry)
   systemd.tmpfiles.rules = [
     "d ${authDir} 0700 forgejo forgejo -"
   ];
+
+  # Auto-redirect to OIDC for unauthenticated users
+  services.nginx.virtualHosts."git.${domain}".locations = {
+    "= /".extraConfig = ''
+      if ($cookie_session = "") {
+        return 302 ${oidcPath};
+      }
+      proxy_pass http://127.0.0.1:3001;
+      proxy_set_header Host $host;
+    '';
+    "= /user/login".return = "302 ${oidcPath}";
+  };
 
   services.forgejo = {
     enable = true;
@@ -51,6 +64,8 @@ in
       User = "forgejo";
       Group = "forgejo";
       WorkingDirectory = "/var/lib/forgejo";
+      # Restart forgejo after updating auth source (+ prefix runs as root)
+      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart forgejo.service";
     };
 
     script = ''
