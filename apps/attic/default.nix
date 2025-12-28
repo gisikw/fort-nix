@@ -82,6 +82,9 @@ in
       # Create admin token if not exists
       if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
         echo "Creating admin token"
+        echo "DEBUG: ADMIN_TOKEN_FILE=$ADMIN_TOKEN_FILE"
+        echo "DEBUG: Running atticadm from $(which atticadm)"
+        echo "DEBUG: ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64 is ${ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64:+set}"
         atticadm make-token \
           --sub "admin" \
           --validity "10y" \
@@ -93,6 +96,8 @@ in
           --destroy-cache "*" \
           --delete "*" \
           > "$ADMIN_TOKEN_FILE"
+        echo "DEBUG: atticadm exited with $?"
+        echo "DEBUG: Token file exists: $(ls -la $ADMIN_TOKEN_FILE 2>&1)"
         chmod 600 "$ADMIN_TOKEN_FILE"
       fi
 
