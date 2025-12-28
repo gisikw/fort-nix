@@ -271,11 +271,13 @@ in
     script = ''
       set -euo pipefail
 
-      # Always ensure config.yml exists with correct labels
-      cat > "${runnerDir}/config.yml" <<'EOF'
+      # Always ensure config.yml exists with correct labels and PATH
+      cat > "${runnerDir}/config.yml" <<EOF
 runner:
   labels:
     - "nixos:host"
+  envs:
+    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip ]}"
 EOF
 
       RUNNER_FILE="${runnerDir}/.runner"
