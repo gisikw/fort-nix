@@ -84,7 +84,7 @@ in
         echo "Creating admin token"
         echo "DEBUG: ADMIN_TOKEN_FILE=$ADMIN_TOKEN_FILE"
         echo "DEBUG: Running atticadm from $(which atticadm)"
-        echo "DEBUG: ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64 is ${ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64:+set}"
+        echo "DEBUG: ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64 is ''${ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64:+set}"
         atticadm make-token \
           --sub "admin" \
           --validity "10y" \
