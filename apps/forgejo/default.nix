@@ -284,8 +284,14 @@ in
       forgejo-runner create-runner-file \
         --instance "https://git.${domain}" \
         --secret "$RUNNER_SECRET" \
-        --name "forge-runner" \
-        --labels "nixos:host"
+        --name "forge-runner"
+
+      # Create runner config with labels
+      cat > "${runnerDir}/config.yml" <<'EOF'
+runner:
+  labels:
+    - "nixos:host"
+EOF
 
       echo "Runner config created"
     '';
@@ -308,7 +314,7 @@ in
       User = "forgejo";
       Group = "forgejo";
       WorkingDirectory = runnerDir;
-      ExecStart = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon";
+      ExecStart = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon -c ${runnerDir}/config.yml";
       Restart = "on-failure";
       RestartSec = "5s";
     };
