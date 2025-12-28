@@ -2,6 +2,7 @@
   apps = [
     # "cluster-autodeploy"
     "coredns"
+    "forgejo"
     "fort-mcp"
     "fort-observability"
     "zot"
