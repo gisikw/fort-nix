@@ -55,6 +55,14 @@ in
   # Bootstrap script that runs after atticd starts (as same dynamic user)
   systemd.services.atticd.serviceConfig.ExecStartPost = let
     atticadm = "${config.services.atticd.package}/bin/atticadm";
+    # Minimal config for atticadm (just needs database path for token generation)
+    atticadmConfig = pkgs.writeText "atticadm-config.toml" ''
+      database.url = "sqlite:///var/lib/atticd/server.db?mode=rwc"
+
+      [storage]
+      type = "local"
+      path = "/var/lib/atticd/storage"
+    '';
     bootstrapScript = pkgs.writeShellScript "attic-bootstrap" ''
       set -euo pipefail
       export PATH="${pkgs.coreutils}/bin:$PATH"
@@ -83,11 +91,8 @@ in
       # Create admin token if not exists
       if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
         echo "Creating admin token"
-        echo "DEBUG: atticadm path: ${atticadm}"
-        echo "DEBUG: ls atticadm: $(ls -la ${atticadm} 2>&1)"
-        echo "DEBUG: env vars: ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64=''${ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64:+[set]}"
-        # Try running with verbose output
-        ${atticadm} make-token \
+        echo "DEBUG: Using config: ${atticadmConfig}"
+        ${atticadm} -f ${atticadmConfig} make-token \
           --sub "admin" \
           --validity "10y" \
           --push "*" \
@@ -106,7 +111,7 @@ in
       # Create CI token (push/pull only) if not exists
       if [ ! -s "$CI_TOKEN_FILE" ]; then
         echo "Creating CI token"
-        ${atticadm} make-token \
+        ${atticadm} -f ${atticadmConfig} make-token \
           --sub "ci" \
           --validity "10y" \
           --push "${cacheName}" \
