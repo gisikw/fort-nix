@@ -33,4 +33,5 @@ in
   "./apps/fort-mcp/secrets.env.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/dev-ssh-key.age".publicKeys = activeKeys;
   "./clusters/bedlam/github-mirror-token.age".publicKeys = activeKeys;
+  "./apps/forgejo/runner-secret.age".publicKeys = activeKeys;
 }

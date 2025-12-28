@@ -6,10 +6,11 @@ let
   authDir = "/var/lib/fort-auth/git";
   oidcPath = "/user/oauth2/Pocket%20ID";
   bootstrapDir = "/var/lib/forgejo/bootstrap";
+  runnerDir = "/var/lib/forgejo-runner";
   mirrorNames = builtins.attrNames forgeConfig.mirrors;
 in
 {
-  # Age secrets for mirror tokens
+  # Age secrets for mirror tokens and runner
   age.secrets = builtins.listToAttrs (map (name: {
     name = "forge-mirror-${name}";
     value = {
@@ -18,12 +19,20 @@ in
       group = "forgejo";
       mode = "0400";
     };
-  }) mirrorNames);
+  }) mirrorNames) // {
+    forgejo-runner-secret = {
+      file = ./runner-secret.age;
+      owner = "forgejo";
+      group = "forgejo";
+      mode = "0400";
+    };
+  };
 
   # Credential directories
   systemd.tmpfiles.rules = [
     "d ${authDir} 0700 forgejo forgejo -"
     "d ${bootstrapDir} 0700 forgejo forgejo -"
+    "d ${runnerDir} 0750 forgejo forgejo -"
   ];
 
   # Auto-redirect to OIDC - skip the login page entirely
@@ -51,6 +60,9 @@ in
         ENABLE_AUTO_REGISTRATION = true;
         USERNAME = "preferred_username";
         ACCOUNT_LINKING = "auto";
+      };
+      actions = {
+        ENABLED = true;
       };
     };
   };
@@ -225,8 +237,80 @@ in
         fi
       done
 
+      # Register runner with Forgejo using shared secret
+      RUNNER_SECRET=$(cat ${config.age.secrets.forgejo-runner-secret.path})
+      RUNNER_MARKER="${bootstrapDir}/runner-registered"
+      if [ ! -f "$RUNNER_MARKER" ]; then
+        echo "Registering Actions runner with Forgejo"
+        gitea forgejo-cli actions register --secret "$RUNNER_SECRET"
+        touch "$RUNNER_MARKER"
+      else
+        echo "Actions runner already registered"
+      fi
+
       echo "Forgejo bootstrap complete"
     '';
+  };
+
+  # Create runner config file using shared secret
+  systemd.services.forgejo-runner-register = {
+    description = "Create Forgejo Actions runner config";
+    after = [ "forgejo-bootstrap.service" ];
+    requires = [ "forgejo-bootstrap.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.forgejo-runner ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      User = "forgejo";
+      Group = "forgejo";
+      WorkingDirectory = runnerDir;
+      RemainAfterExit = true;
+    };
+
+    script = ''
+      set -euo pipefail
+
+      RUNNER_FILE="${runnerDir}/.runner"
+
+      if [ -f "$RUNNER_FILE" ]; then
+        echo "Runner config already exists"
+        exit 0
+      fi
+
+      RUNNER_SECRET=$(cat ${config.age.secrets.forgejo-runner-secret.path})
+
+      echo "Creating runner config file"
+      forgejo-runner create-runner-file \
+        --instance "https://git.${domain}" \
+        --secret "$RUNNER_SECRET" \
+        --name "forge-runner"
+
+      echo "Runner config created"
+    '';
+  };
+
+  # Actions runner daemon
+  systemd.services.forgejo-runner = {
+    description = "Forgejo Actions runner";
+    after = [ "network.target" "forgejo-runner-register.service" ];
+    requires = [ "forgejo-runner-register.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.forgejo-runner pkgs.nix pkgs.git pkgs.nodejs ];
+
+    environment = {
+      HOME = runnerDir;
+    };
+
+    serviceConfig = {
+      Type = "simple";
+      User = "forgejo";
+      Group = "forgejo";
+      WorkingDirectory = runnerDir;
+      ExecStart = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon";
+      Restart = "on-failure";
+      RestartSec = "5s";
+    };
   };
 
   fortCluster.exposedServices = [
