@@ -131,10 +131,13 @@ EOF
       # Create cache if not exists
       if ! ${pkgs.attic-client}/bin/attic cache info "${cacheName}" > /dev/null 2>&1; then
         echo "Creating cache: ${cacheName}"
-        ${pkgs.attic-client}/bin/attic cache create "${cacheName}"
+        ${pkgs.attic-client}/bin/attic cache create --public "${cacheName}"
       else
         echo "Cache already exists: ${cacheName}"
       fi
+
+      # Ensure cache is public (for nix to pull without auth - network is VPN-only)
+      ${pkgs.attic-client}/bin/attic cache configure --public "${cacheName}" || true
 
       echo "Attic bootstrap complete"
     '';
@@ -227,8 +230,8 @@ EOF
         fi
         echo "Cache public key: $PUBLIC_KEY"
 
-        # Build the nix config snippet
-        NIX_CONF="extra-substituters = ${cacheUrl}
+        # Build the nix config snippet (URL must include cache name)
+        NIX_CONF="extra-substituters = ${cacheUrl}/${cacheName}
 extra-trusted-public-keys = $PUBLIC_KEY"
 
         # Enumerate all hosts in the mesh
