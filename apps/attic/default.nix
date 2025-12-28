@@ -140,6 +140,39 @@ EOF
     '';
   in "+${bootstrapScript}"; # + runs as root to read credentials file
 
+  # Post-build hook to push all builds to the cache
+  # Runs after every nix build on this host, warming the cache automatically
+  nix.settings.post-build-hook = let
+    ciTokenFile = "${bootstrapDir}/ci-token";
+    uploadScript = pkgs.writeShellScript "upload-to-cache" ''
+      set -euf
+      export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils ]}:$PATH"
+
+      # Skip if token doesn't exist yet (before bootstrap)
+      if [ ! -s "${ciTokenFile}" ]; then
+        exit 0
+      fi
+
+      # Configure attic client
+      export HOME=$(mktemp -d)
+      trap 'rm -rf "$HOME"' EXIT
+      mkdir -p "$HOME/.config/attic"
+      cat > "$HOME/.config/attic/config.toml" <<EOF
+      default-server = "local"
+
+      [servers.local]
+      endpoint = "${cacheUrl}"
+      token = "$(cat ${ciTokenFile})"
+      EOF
+
+      # Push paths to cache (ignore failures - cache may be temporarily unavailable)
+      if [ -n "''${OUT_PATHS:-}" ]; then
+        echo "Uploading to cache: $OUT_PATHS"
+        attic push ${cacheName} $OUT_PATHS || true
+      fi
+    '';
+  in "${uploadScript}";
+
   # Expose via reverse proxy
   fortCluster.exposedServices = [
     {

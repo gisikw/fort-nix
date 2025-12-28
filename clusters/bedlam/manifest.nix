@@ -6,6 +6,12 @@ rec {
       domain = "gisi.network";
       dnsProvider = "porkbun";
 
+      # Binary cache configuration (populated after attic bootstrap)
+      # Get public key with: attic cache info fort
+      binaryCache = {
+        publicKey = null; # e.g., "fort:abc123..." - set after first deploy
+      };
+
       sshKey = {
         publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort";
         privateKeyPath = "~/.ssh/fort";
