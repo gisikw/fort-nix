@@ -38,10 +38,16 @@ in
     requires = [ "forgejo.service" ];
     path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils ];
 
+    environment = {
+      GITEA_WORK_DIR = "/var/lib/forgejo";
+      GITEA_CUSTOM = "/var/lib/forgejo/custom";
+    };
+
     serviceConfig = {
       Type = "oneshot";
       User = "forgejo";
       Group = "forgejo";
+      WorkingDirectory = "/var/lib/forgejo";
     };
 
     script = ''
