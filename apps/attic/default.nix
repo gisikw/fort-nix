@@ -49,43 +49,24 @@ in
     };
   };
 
-  # Declare the secret
-  age.secrets.attic-server-token = {
-    file = ./attic-server-token.age;
-    owner = "atticd";
-    group = "atticd";
-  };
+  # Declare the secret (root-owned, atticd reads via EnvironmentFile)
+  age.secrets.attic-server-token.file = ./attic-server-token.age;
 
-  # Bootstrap directory for tokens
-  systemd.tmpfiles.rules = [
-    "d ${bootstrapDir} 0700 atticd atticd -"
-  ];
-
-  # Bootstrap: create admin token and cache
-  systemd.services.attic-bootstrap = {
-    description = "Bootstrap Attic cache and tokens";
-    after = [ "atticd.service" ];
-    requires = [ "atticd.service" ];
-    wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.curl pkgs.coreutils pkgs.attic-client config.services.atticd.package ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      User = "atticd";
-      Group = "atticd";
-      WorkingDirectory = "/var/lib/atticd";
-      RemainAfterExit = true;
-    };
-
-    script = ''
+  # Bootstrap script that runs after atticd starts (as same dynamic user)
+  systemd.services.atticd.serviceConfig.ExecStartPost = let
+    bootstrapScript = pkgs.writeShellScript "attic-bootstrap" ''
       set -euo pipefail
+      export PATH="${pkgs.coreutils}/bin:${config.services.atticd.package}/bin:$PATH"
 
-      ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
-      CI_TOKEN_FILE="${bootstrapDir}/ci-token"
+      BOOTSTRAP_DIR="/var/lib/atticd/bootstrap"
+      ADMIN_TOKEN_FILE="$BOOTSTRAP_DIR/admin-token"
+      CI_TOKEN_FILE="$BOOTSTRAP_DIR/ci-token"
 
-      # Wait for atticd to be ready
+      mkdir -p "$BOOTSTRAP_DIR"
+
+      # Wait for atticd to be ready (it might still be initializing)
       for i in $(seq 1 30); do
-        if curl -sf "http://[::]:8080/" > /dev/null 2>&1; then
+        if ${pkgs.curl}/bin/curl -sf "http://[::]:8080/" > /dev/null 2>&1; then
           break
         fi
         echo "Waiting for atticd..."
@@ -121,13 +102,12 @@ in
         chmod 600 "$CI_TOKEN_FILE"
       fi
 
+      # Configure attic CLI for cache creation
       ADMIN_TOKEN=$(cat "$ADMIN_TOKEN_FILE")
+      export XDG_CONFIG_HOME="$BOOTSTRAP_DIR"
+      mkdir -p "$BOOTSTRAP_DIR/attic"
 
-      # Configure attic CLI
-      export XDG_CONFIG_HOME="${bootstrapDir}"
-      mkdir -p "${bootstrapDir}/attic"
-
-      cat > "${bootstrapDir}/attic/config.toml" <<EOF
+      cat > "$BOOTSTRAP_DIR/attic/config.toml" <<EOF
       default-server = "local"
 
       [servers.local]
@@ -136,16 +116,16 @@ in
       EOF
 
       # Create cache if not exists
-      if ! attic cache info "${cacheName}" > /dev/null 2>&1; then
+      if ! ${pkgs.attic-client}/bin/attic cache info "${cacheName}" > /dev/null 2>&1; then
         echo "Creating cache: ${cacheName}"
-        attic cache create "${cacheName}"
+        ${pkgs.attic-client}/bin/attic cache create "${cacheName}"
       else
         echo "Cache already exists: ${cacheName}"
       fi
 
       echo "Attic bootstrap complete"
     '';
-  };
+  in "${bootstrapScript}";
 
   # Expose via reverse proxy
   fortCluster.exposedServices = [
