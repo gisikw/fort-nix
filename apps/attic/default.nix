@@ -173,6 +173,88 @@ EOF
     '';
   in "${uploadScript}";
 
+  # Sync cache public key to all hosts in the mesh
+  # This allows hosts to trust and pull from the cache
+  systemd.timers."attic-key-sync" = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2m";      # First run 2min after boot (after bootstrap completes)
+      OnUnitActiveSec = "10m";
+    };
+  };
+
+  systemd.services."attic-key-sync" = {
+    path = with pkgs; [
+      attic-client
+      tailscale
+      jq
+      openssh
+      coreutils
+      gnugrep
+    ];
+    script = ''
+      set -euo pipefail
+      SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+
+      # Configure attic client to talk to local server
+      export HOME=$(mktemp -d)
+      trap 'rm -rf "$HOME"' EXIT
+      mkdir -p "$HOME/.config/attic"
+
+      ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
+      if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
+        echo "Admin token not yet created, skipping key sync"
+        exit 0
+      fi
+
+      cat > "$HOME/.config/attic/config.toml" <<EOF
+      default-server = "local"
+
+      [servers.local]
+      endpoint = "${cacheUrl}"
+      token = "$(cat $ADMIN_TOKEN_FILE)"
+      EOF
+
+      # Get the cache public key
+      PUBLIC_KEY=$(attic cache info ${cacheName} 2>/dev/null | grep "Public Key:" | cut -d' ' -f3-)
+      if [ -z "$PUBLIC_KEY" ]; then
+        echo "Could not get public key for cache ${cacheName}"
+        exit 1
+      fi
+      echo "Cache public key: $PUBLIC_KEY"
+
+      # Build the nix config snippet
+      NIX_CONF="extra-substituters = ${cacheUrl}
+      extra-trusted-public-keys = $PUBLIC_KEY"
+
+      # Enumerate all hosts in the mesh
+      mesh=$(tailscale status --json)
+      user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
+      peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
+
+      for peer in localhost $peers; do
+        echo "Syncing cache key to $peer..."
+        if ssh $SSH_OPTS "$peer" "
+          mkdir -p /var/lib/fort/nix
+          cat > /var/lib/fort/nix/attic-cache.conf << 'NIXCONF'
+      $NIX_CONF
+      NIXCONF
+          chmod 644 /var/lib/fort/nix/attic-cache.conf
+        "; then
+          echo "Key synced to $peer"
+        else
+          echo "Failed to sync to $peer, continuing..."
+        fi
+      done
+
+      echo "Cache key sync complete"
+    '';
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+    };
+  };
+
   # Expose via reverse proxy
   fortCluster.exposedServices = [
     {

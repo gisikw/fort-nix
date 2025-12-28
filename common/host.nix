@@ -66,25 +66,12 @@ in
   nixosConfigurations.${hostManifest.hostName} = nixpkgs.lib.nixosSystem {
     system = deviceProfileManifest.system;
     modules = [
-      ({ lib, ... }:
-      let
-        domain = rootManifest.fortConfig.settings.domain;
-        cacheSettings = rootManifest.fortConfig.settings.binaryCache or { };
-        cachePublicKey = cacheSettings.publicKey or null;
-        hasCacheKey = cachePublicKey != null;
-      in {
-        nix.settings = {
-          experimental-features = [ "nix-command" "flakes" ];
-          # Add attic cache as substituter if public key is configured
-          substituters = lib.mkIf hasCacheKey [
-            "https://cache.nixos.org"
-            "https://cache.${domain}"
-          ];
-          trusted-public-keys = lib.mkIf hasCacheKey [
-            "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-            cachePublicKey
-          ];
-        };
+      {
+        nix.settings.experimental-features = [ "nix-command" "flakes" ];
+        # Include attic cache config if it exists (delivered by attic-key-sync)
+        nix.extraOptions = ''
+          !include /var/lib/fort/nix/attic-cache.conf
+        '';
         nixpkgs.config.allowUnfree = true;
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
@@ -104,7 +91,7 @@ in
         age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
         users.users.root.openssh.authorizedKeys.keys = rootManifest.fortConfig.settings.authorizedDeployKeys;
-      })
+      }
       impermanence.nixosModules.impermanence
       rootManifest.module
       hostManifest.module
