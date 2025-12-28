@@ -310,6 +310,15 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 - Don't add nginx virtual hosts manually - use `fortCluster.exposedServices`
 - Don't commit unencrypted secrets
 
+## Working on Tickets
+
+- Include the ticket ID in commit messages (e.g., `fort-cy6.9: Add attic binary cache`)
+- For extended debugging sessions (3+ iterations without clear progress), pause and consider:
+  - Is this the right approach, or am I in a rabbit hole?
+  - Should we ticket remaining work and get a clean deploy first?
+  - Ask the user for a gut check
+- When adding debug logging, **leave it in place until the issue is confirmed fixed**. Removing debug lines prematurely just leads to re-adding them when the next issue appears.
+
 ## Completing Work
 
 Before closing a ticket:
