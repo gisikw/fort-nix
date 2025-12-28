@@ -210,8 +210,8 @@ in
         token_path=$(echo "$MIRRORS" | jq -r --arg n "$mirror_name" '.[$n].tokenPath')
         token=$(cat "$token_path")
 
-        # Build authenticated URL (https://token@github.com/user/repo.git)
-        mirror_url="https://$token@$remote.git"
+        # Build mirror URL (credentials passed separately)
+        mirror_url="https://$remote.git"
 
         # Check if mirror already exists
         existing=$(api "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO/push_mirrors" | jq -r --arg r "$remote" '.[] | select(.remote_address | contains($r)) | .id' || true)
@@ -219,7 +219,7 @@ in
         if [ -z "$existing" ]; then
           echo "Adding push mirror: $mirror_name ($remote)"
           api -X POST "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO/push_mirrors" \
-            -d "{\"remote_address\": \"$mirror_url\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
+            -d "{\"remote_address\": \"$mirror_url\", \"remote_username\": \"x-access-token\", \"remote_password\": \"$token\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
         else
           echo "Push mirror already configured: $mirror_name"
         fi
