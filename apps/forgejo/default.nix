@@ -168,7 +168,8 @@ in
           --username "$ADMIN_USER" \
           --password "$ADMIN_PASS" \
           --email "forge-admin@localhost" \
-          --admin
+          --admin \
+          --must-change-password=false
       fi
 
       # Generate access token if not exists

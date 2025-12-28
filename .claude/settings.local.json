@@ -16,7 +16,9 @@
       "Bash(git add:*)",
       "Bash(just test:*)",
       "Bash(cat:*)",
-      "WebFetch(domain:docs.termix.site)"
+      "WebFetch(domain:docs.termix.site)",
+      "Bash(bd close:*)",
+      "Bash(bd sync:*)"
     ],
     "deny": [],
     "ask": []
