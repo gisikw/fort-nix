@@ -6,7 +6,6 @@ rec {
 
   apps = [
     "actualbudget"
-    "claude-code-ui"
     "prowlarr"
     "radarr"
     "lidarr"
