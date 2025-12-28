@@ -67,7 +67,7 @@ in
     after = [ "atticd.service" ];
     requires = [ "atticd.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.curl pkgs.coreutils config.services.atticd.package ];
+    path = [ pkgs.curl pkgs.coreutils pkgs.attic-client config.services.atticd.package ];
 
     serviceConfig = {
       Type = "oneshot";

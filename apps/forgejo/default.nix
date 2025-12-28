@@ -102,8 +102,8 @@ in
       CLIENT_SECRET=$(cat ${authDir}/client-secret)
       DISCOVER_URL="https://id.${domain}/.well-known/openid-configuration"
 
-      # Check if auth source already exists (forgejo uses gitea binary name)
-      EXISTING_ID=$(gitea admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
+      # Check if auth source already exists
+      EXISTING_ID=$(forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
 
       COMMON_OPTS="--name 'Pocket ID' \
         --provider openidConnect \
@@ -117,10 +117,10 @@ in
 
       if [ -n "$EXISTING_ID" ]; then
         echo "Updating existing OIDC auth source (ID: $EXISTING_ID)"
-        eval "gitea admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
+        eval "forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
       else
         echo "Creating new OIDC auth source"
-        eval "gitea admin auth add-oauth $COMMON_OPTS"
+        eval "forgejo admin auth add-oauth $COMMON_OPTS"
       fi
     '';
   };
@@ -173,10 +173,10 @@ in
       done
 
       # Create admin user if not exists
-      if ! gitea admin user list 2>/dev/null | grep -q "^[0-9]*[[:space:]]*$ADMIN_USER[[:space:]]"; then
+      if ! forgejo admin user list 2>/dev/null | grep -q "^[0-9]*[[:space:]]*$ADMIN_USER[[:space:]]"; then
         echo "Creating admin user: $ADMIN_USER"
         ADMIN_PASS=$(openssl rand -base64 32)
-        gitea admin user create \
+        forgejo admin user create \
           --username "$ADMIN_USER" \
           --password "$ADMIN_PASS" \
           --email "forge-admin@localhost" \
@@ -187,7 +187,7 @@ in
       # Generate access token if not exists
       if [ ! -s "$TOKEN_FILE" ]; then
         echo "Generating admin access token"
-        TOKEN=$(gitea admin user generate-access-token \
+        TOKEN=$(forgejo admin user generate-access-token \
           --username "$ADMIN_USER" \
           --token-name "bootstrap" \
           --scopes "write:organization,write:repository,write:admin" \
@@ -242,7 +242,7 @@ in
       RUNNER_MARKER="${bootstrapDir}/runner-registered"
       if [ ! -f "$RUNNER_MARKER" ]; then
         echo "Registering Actions runner with Forgejo"
-        gitea forgejo-cli actions register --secret "$RUNNER_SECRET"
+        forgejo forgejo-cli actions register --secret "$RUNNER_SECRET"
         touch "$RUNNER_MARKER"
       else
         echo "Actions runner already registered"
