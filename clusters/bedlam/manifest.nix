@@ -15,6 +15,17 @@ rec {
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ6yMYrTeaT8CU7pjOVYQ1vP/dJTDan8KmBWSFngWbQ1 fort-deployer"
       ];
     };
+
+    forge = {
+      org = "infra";
+      repo = "fort-nix";
+      mirrors = {
+        github = {
+          remote = "github.com/gisikw/fort-nix";
+          tokenFile = ./github-mirror-token.age;
+        };
+      };
+    };
   };
 
   module =

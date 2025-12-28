@@ -32,4 +32,5 @@ in
   "./apps/homeassistant/secrets.yaml.age".publicKeys = activeKeys;
   "./apps/fort-mcp/secrets.env.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/dev-ssh-key.age".publicKeys = activeKeys;
+  "./clusters/bedlam/github-mirror-token.age".publicKeys = activeKeys;
 }
