@@ -178,12 +178,13 @@ EOF
   systemd.timers."attic-key-sync" = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnBootSec = "2m";      # First run 2min after boot (after bootstrap completes)
+      OnBootSec = "5m";       # First run 5min after boot (after bootstrap completes)
       OnUnitActiveSec = "10m";
     };
   };
 
   systemd.services."attic-key-sync" = {
+    after = [ "atticd.service" ];
     path = with pkgs; [
       attic-client
       tailscale
@@ -192,62 +193,71 @@ EOF
       coreutils
       gnugrep
     ];
+    # Best-effort sync - failures shouldn't block deploys
+    # Wrap entire script so any failure exits 0 (will retry on next timer)
     script = ''
-      set -euo pipefail
-      SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+      sync_keys() {
+        SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 
-      # Configure attic client to talk to local server
-      export HOME=$(mktemp -d)
-      trap 'rm -rf "$HOME"' EXIT
-      mkdir -p "$HOME/.config/attic"
+        # Configure attic client to talk to local server
+        export HOME=$(mktemp -d)
+        trap 'rm -rf "$HOME"' EXIT
+        mkdir -p "$HOME/.config/attic"
 
-      ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
-      if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
-        echo "Admin token not yet created, skipping key sync"
-        exit 0
-      fi
-
-      cat > "$HOME/.config/attic/config.toml" <<EOF
-      default-server = "local"
-
-      [servers.local]
-      endpoint = "${cacheUrl}"
-      token = "$(cat $ADMIN_TOKEN_FILE)"
-      EOF
-
-      # Get the cache public key
-      PUBLIC_KEY=$(attic cache info ${cacheName} 2>/dev/null | grep "Public Key:" | cut -d' ' -f3-)
-      if [ -z "$PUBLIC_KEY" ]; then
-        echo "Could not get public key for cache ${cacheName}"
-        exit 1
-      fi
-      echo "Cache public key: $PUBLIC_KEY"
-
-      # Build the nix config snippet
-      NIX_CONF="extra-substituters = ${cacheUrl}
-      extra-trusted-public-keys = $PUBLIC_KEY"
-
-      # Enumerate all hosts in the mesh
-      mesh=$(tailscale status --json)
-      user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
-      peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
-
-      for peer in localhost $peers; do
-        echo "Syncing cache key to $peer..."
-        if ssh $SSH_OPTS "$peer" "
-          mkdir -p /var/lib/fort/nix
-          cat > /var/lib/fort/nix/attic-cache.conf << 'NIXCONF'
-      $NIX_CONF
-      NIXCONF
-          chmod 644 /var/lib/fort/nix/attic-cache.conf
-        "; then
-          echo "Key synced to $peer"
-        else
-          echo "Failed to sync to $peer, continuing..."
+        ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
+        if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
+          echo "Admin token not yet created, skipping key sync"
+          return 0
         fi
-      done
 
-      echo "Cache key sync complete"
+        cat > "$HOME/.config/attic/config.toml" <<EOF
+default-server = "local"
+
+[servers.local]
+endpoint = "${cacheUrl}"
+token = "$(cat $ADMIN_TOKEN_FILE)"
+EOF
+
+        # Get the cache public key
+        PUBLIC_KEY=$(attic cache info ${cacheName} 2>/dev/null | grep "Public Key:" | cut -d' ' -f3-)
+        if [ -z "$PUBLIC_KEY" ]; then
+          echo "Could not get public key for cache ${cacheName}"
+          return 1
+        fi
+        echo "Cache public key: $PUBLIC_KEY"
+
+        # Build the nix config snippet
+        NIX_CONF="extra-substituters = ${cacheUrl}
+extra-trusted-public-keys = $PUBLIC_KEY"
+
+        # Enumerate all hosts in the mesh
+        mesh=$(tailscale status --json)
+        user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
+        peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
+
+        for peer in localhost $peers; do
+          echo "Syncing cache key to $peer..."
+          if ssh $SSH_OPTS "$peer" "
+            mkdir -p /var/lib/fort/nix
+            cat > /var/lib/fort/nix/attic-cache.conf << 'NIXCONF'
+$NIX_CONF
+NIXCONF
+            chmod 644 /var/lib/fort/nix/attic-cache.conf
+          "; then
+            echo "Key synced to $peer"
+          else
+            echo "Failed to sync to $peer, continuing..."
+          fi
+        done
+
+        echo "Cache key sync complete"
+      }
+
+      # Run sync, but always exit 0 (best-effort, will retry on next timer)
+      if ! sync_keys; then
+        echo "Key sync failed, will retry on next timer run"
+      fi
+      exit 0
     '';
     serviceConfig = {
       Type = "oneshot";
