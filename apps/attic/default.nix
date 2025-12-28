@@ -218,8 +218,8 @@ endpoint = "${cacheUrl}"
 token = "$(cat $ADMIN_TOKEN_FILE)"
 EOF
 
-        # Get the cache public key
-        PUBLIC_KEY=$(attic cache info ${cacheName} 2>/dev/null | grep "Public Key:" | cut -d' ' -f3-)
+        # Get the cache public key (attic outputs to stderr, not stdout)
+        PUBLIC_KEY=$(attic cache info ${cacheName} 2>&1 | grep "Public Key:" | cut -d' ' -f3-)
         if [ -z "$PUBLIC_KEY" ]; then
           echo "Could not get public key for cache ${cacheName}"
           return 1
