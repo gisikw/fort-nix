@@ -83,6 +83,10 @@ in
       # Create admin token if not exists
       if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
         echo "Creating admin token"
+        echo "DEBUG: atticadm path: ${atticadm}"
+        echo "DEBUG: ls atticadm: $(ls -la ${atticadm} 2>&1)"
+        echo "DEBUG: env vars: ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64=''${ATTIC_SERVER_TOKEN_HS256_SECRET_BASE64:+[set]}"
+        # Try running with verbose output
         ${atticadm} make-token \
           --sub "admin" \
           --validity "10y" \
