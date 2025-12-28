@@ -284,7 +284,8 @@ in
       forgejo-runner create-runner-file \
         --instance "https://git.${domain}" \
         --secret "$RUNNER_SECRET" \
-        --name "forge-runner"
+        --name "forge-runner" \
+        --labels "nixos:host"
 
       echo "Runner config created"
     '';
