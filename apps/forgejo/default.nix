@@ -302,7 +302,7 @@ EOF
     after = [ "network.target" "forgejo-runner-register.service" ];
     requires = [ "forgejo-runner-register.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.forgejo-runner pkgs.nix pkgs.git pkgs.nodejs ];
+    path = [ pkgs.forgejo-runner pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.nodejs ];
 
     environment = {
       HOME = runnerDir;
