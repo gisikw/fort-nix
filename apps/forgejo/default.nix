@@ -277,7 +277,7 @@ runner:
   labels:
     - "nixos:host"
   envs:
-    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip ]}"
+    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs ]}"
 EOF
 
       RUNNER_FILE="${runnerDir}/.runner"
