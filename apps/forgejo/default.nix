@@ -20,8 +20,11 @@ in
         HTTP_PORT = 3001;
       };
       service = {
-        DISABLE_REGISTRATION = true;
+        DISABLE_REGISTRATION = false;
         ALLOW_ONLY_EXTERNAL_REGISTRATION = true;
+      };
+      security = {
+        PASSWORD_SIGN_IN_DISABLED = true;
       };
       oauth2_client = {
         ENABLE_AUTO_REGISTRATION = true;
@@ -66,25 +69,22 @@ in
       # Check if auth source already exists (forgejo uses gitea binary name)
       EXISTING_ID=$(gitea admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
 
+      COMMON_OPTS="--name 'Pocket ID' \
+        --provider openidConnect \
+        --key $CLIENT_ID \
+        --secret $CLIENT_SECRET \
+        --auto-discover-url $DISCOVER_URL \
+        --scopes openid,profile,email,groups \
+        --required-claim-name groups \
+        --required-claim-value admin \
+        --skip-local-2fa"
+
       if [ -n "$EXISTING_ID" ]; then
         echo "Updating existing OIDC auth source (ID: $EXISTING_ID)"
-        gitea admin auth update-oauth \
-          --id "$EXISTING_ID" \
-          --name "Pocket ID" \
-          --provider openidConnect \
-          --key "$CLIENT_ID" \
-          --secret "$CLIENT_SECRET" \
-          --auto-discover-url "$DISCOVER_URL" \
-          --skip-local-2fa
+        eval "gitea admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
       else
         echo "Creating new OIDC auth source"
-        gitea admin auth add-oauth \
-          --name "Pocket ID" \
-          --provider openidConnect \
-          --key "$CLIENT_ID" \
-          --secret "$CLIENT_SECRET" \
-          --auto-discover-url "$DISCOVER_URL" \
-          --skip-local-2fa
+        eval "gitea admin auth add-oauth $COMMON_OPTS"
       fi
     '';
   };
