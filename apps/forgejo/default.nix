@@ -271,29 +271,28 @@ in
     script = ''
       set -euo pipefail
 
-      RUNNER_FILE="${runnerDir}/.runner"
-
-      if [ -f "$RUNNER_FILE" ]; then
-        echo "Runner config already exists"
-        exit 0
-      fi
-
-      RUNNER_SECRET=$(cat ${config.age.secrets.forgejo-runner-secret.path})
-
-      echo "Creating runner config file"
-      forgejo-runner create-runner-file \
-        --instance "https://git.${domain}" \
-        --secret "$RUNNER_SECRET" \
-        --name "forge-runner"
-
-      # Create runner config with labels
+      # Always ensure config.yml exists with correct labels
       cat > "${runnerDir}/config.yml" <<'EOF'
 runner:
   labels:
     - "nixos:host"
 EOF
 
-      echo "Runner config created"
+      RUNNER_FILE="${runnerDir}/.runner"
+      if [ -f "$RUNNER_FILE" ]; then
+        echo "Runner already registered"
+        exit 0
+      fi
+
+      RUNNER_SECRET=$(cat ${config.age.secrets.forgejo-runner-secret.path})
+
+      echo "Creating runner file"
+      forgejo-runner create-runner-file \
+        --instance "https://git.${domain}" \
+        --secret "$RUNNER_SECRET" \
+        --name "forge-runner"
+
+      echo "Runner registered"
     '';
   };
 
