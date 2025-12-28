@@ -212,6 +212,14 @@ age.secrets.my-secret.file = ./my-secret.age;
 # Access via: config.age.secrets.my-secret.path
 ```
 
+### Dev Sandbox Decryption
+
+The dev sandbox has an age key at `~/.config/age/keys.txt` that can decrypt secrets on `main` (but not `release`). To test decryption:
+
+```bash
+nix-shell -p age --run "age -d -i ~/.config/age/keys.txt <secret.age>"
+```
+
 ## Testing & Deployment
 
 ```bash
