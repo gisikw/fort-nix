@@ -271,7 +271,11 @@ in
     script = ''
       set -euo pipefail
 
-      # Always ensure config.yml exists with correct labels and PATH
+      # Runner config with labels and PATH for workflow jobs.
+      # PATH must be in config.yml envs (not systemd environment) - jobs don't inherit daemon env.
+      # Required tools: bash/coreutils (shell), nix (flake ops), git (checkout),
+      # nodejs (JS-based actions like actions/checkout), gnutar/gzip (artifacts).
+      # TODO: Investigate nix develop-based runner for per-repo dependency control.
       cat > "${runnerDir}/config.yml" <<EOF
 runner:
   labels:
