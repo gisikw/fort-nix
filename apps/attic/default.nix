@@ -76,7 +76,7 @@ in
       # Create admin token if not exists
       if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
         echo "Creating admin token"
-        atticd-atticadm make-token \
+        atticadm make-token \
           --sub "admin" \
           --validity "10y" \
           --push "*" \
@@ -93,7 +93,7 @@ in
       # Create CI token (push/pull only) if not exists
       if [ ! -s "$CI_TOKEN_FILE" ]; then
         echo "Creating CI token"
-        atticd-atticadm make-token \
+        atticadm make-token \
           --sub "ci" \
           --validity "10y" \
           --push "${cacheName}" \
