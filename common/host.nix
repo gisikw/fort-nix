@@ -70,7 +70,13 @@ in
       {
         nix.settings.experimental-features = [ "nix-command" "flakes" ];
         nixpkgs.config.allowUnfree = true;
-        nixpkgs.overlays = [ attic.overlays.default ];
+        # Use static attic builds to avoid nix 2.31 C++ incompatibility
+        nixpkgs.overlays = [
+          (final: prev: {
+            attic-server = attic.packages.${deviceProfileManifest.system}.attic-server-static;
+            attic-client = attic.packages.${deviceProfileManifest.system}.attic-client-static;
+          })
+        ];
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
         environment.persistence."/persist/system" = {
