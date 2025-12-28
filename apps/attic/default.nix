@@ -64,6 +64,9 @@ in
       path = "/var/lib/atticd/storage"
     '';
     bootstrapScript = pkgs.writeShellScript "attic-bootstrap" ''
+      # TODO: Complete bootstrap - see fort-qg0
+      exit 0
+
       set -euo pipefail
       export PATH="${pkgs.coreutils}/bin:$PATH"
       export HOME="/var/lib/atticd"
