@@ -38,6 +38,10 @@ let
     wget
     httpie
 
+    # Crypto/secrets
+    openssl
+    age
+
     # Nix development
     direnv
     nix-direnv

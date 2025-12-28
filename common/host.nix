@@ -70,6 +70,7 @@ in
       {
         nix.settings.experimental-features = [ "nix-command" "flakes" ];
         nixpkgs.config.allowUnfree = true;
+        nixpkgs.overlays = [ attic.overlays.default ];
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
         environment.persistence."/persist/system" = {
