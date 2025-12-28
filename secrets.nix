@@ -4,7 +4,8 @@ let
 
   sshKeyPub = settings.sshKey.publicKey;
   deployKeys = settings.authorizedDeployKeys;
-  primaryKeys = [ sshKeyPub ] ++ deployKeys;
+  ciAgeKey = settings.ciAgeKey;
+  primaryKeys = [ sshKeyPub ciAgeKey ] ++ deployKeys;
 
   deviceDir = cluster.devicesDir;
   deviceEntries = builtins.readDir deviceDir;

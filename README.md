@@ -68,6 +68,27 @@ the system. It handles:
 - Container image caching via Zot (`containers.${domain}`)
 - SSL certificate retrieval and distribution for the network
 - Observability stack (Prometheus, Grafana, Loki)
+- Git hosting via Forgejo with CI/CD via Actions
+
+### CI/CD Pipeline
+
+The forge runs Forgejo Actions workflows that automate the release process. A dedicated **CI age key** is used to decrypt secrets during CI:
+
+- **Public key**: Stored in `clusters/<cluster>/manifest.nix` as `ciAgeKey`
+- **Private key**: Stored ONLY in Forgejo repository secrets as `CI_AGE_KEY`
+
+The release workflow (`release.yml`) runs on pushes to `main`:
+1. Evaluates each host's agenix config to determine required secrets
+2. Re-keys secrets for their target devices
+3. Pushes to `release` branch
+
+To regenerate the CI key (if compromised or rotating):
+```bash
+nix shell nixpkgs#age -c age-keygen
+# Update ciAgeKey in cluster manifest with the public key
+# Update CI_AGE_KEY in Forgejo secrets with the private key
+# Re-key all secrets: nix run .#agenix -- -i ~/.ssh/fort -r
+```
 
 ## Available Apps
 

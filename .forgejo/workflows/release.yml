@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect secrets per host
+        id: collect
+        run: |
+          mkdir -p /tmp/release-work
+
+          # For each host, get its secrets and device key
+          for host_dir in ./clusters/bedlam/hosts/*/; do
+            host=$(basename "$host_dir")
+            echo "::group::Collecting secrets for $host"
+
+            # Get device UUID from host manifest
+            device_uuid=$(nix eval --raw --file "${host_dir}/manifest.nix" device 2>/dev/null || echo "")
+            if [ -z "$device_uuid" ]; then
+              echo "::warning::Could not get device UUID for $host, skipping"
+              echo "::endgroup::"
+              continue
+            fi
+
+            # Get device public key
+            device_key=$(nix eval --raw --file "./clusters/bedlam/devices/${device_uuid}/manifest.nix" pubkey 2>/dev/null || echo "")
+            if [ -z "$device_key" ]; then
+              echo "::warning::Could not get device key for $host (device $device_uuid), skipping"
+              echo "::endgroup::"
+              continue
+            fi
+
+            echo "Device: $device_uuid"
+            echo "Key: $device_key"
+
+            # Get secrets this host uses
+            secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${host}.config.age.secrets" --json 2>/dev/null || echo "{}")
+
+            # Extract .file paths from each secret
+            # Note: nix eval returns store paths like /nix/store/<hash>-source/path/to/secret.age
+            # We need to strip the store prefix to get the relative path
+            echo "$secrets_json" | jq -r 'to_entries[] | .value.file // empty' | while read -r secret_file; do
+              # Strip /nix/store/*-source/ prefix to get relative path
+              secret_file=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
+              echo "  Secret: $secret_file"
+
+              # Append device key to this secret's recipients file
+              echo "$device_key" >> "/tmp/release-work/recipients-$(echo "$secret_file" | sha256sum | cut -d' ' -f1)"
+              echo "$secret_file" > "/tmp/release-work/path-$(echo "$secret_file" | sha256sum | cut -d' ' -f1)"
+            done
+
+            echo "::endgroup::"
+          done
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
+      - name: Re-key secrets
+        env:
+          CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
+        run: |
+          echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
+          trap 'rm -f /tmp/ci-age-key.txt' EXIT
+
+          # Process each secret that has recipients
+          for recipients_file in /tmp/release-work/recipients-*; do
+            [ -f "$recipients_file" ] || continue
+
+            hash="${recipients_file#/tmp/release-work/recipients-}"
+            path_file="/tmp/release-work/path-${hash}"
+            secret_path=$(cat "$path_file")
+
+            echo "::group::Re-keying: $secret_path"
+
+            # Deduplicate recipients
+            sort -u "$recipients_file" > /tmp/unique-recipients.txt
+            echo "Recipients: $(wc -l < /tmp/unique-recipients.txt | tr -d ' ') keys"
+
+            # Decrypt with CI key, re-encrypt for all recipients using -R (recipients file)
+            age -d -i /tmp/ci-age-key.txt "$secret_path" > /tmp/decrypted.tmp
+            age -e -R /tmp/unique-recipients.txt -o "$secret_path.new" /tmp/decrypted.tmp
+            mv "$secret_path.new" "$secret_path"
+            rm -f /tmp/decrypted.tmp /tmp/unique-recipients.txt
+
+            echo "::endgroup::"
+          done
+
+      - name: Commit and push release branch
+        run: |
+          git config user.name "Forge CI"
+          git config user.email "forge@fort.gisi.network"
+
+          git checkout -B release
+          git add -A
+          git commit -m "release: $(git rev-parse --short main) - $(date -Iseconds)" \
+            || echo "No changes to commit"
+          git push -f origin release

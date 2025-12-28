@@ -14,6 +14,10 @@ rec {
       authorizedDeployKeys = [
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ6yMYrTeaT8CU7pjOVYQ1vP/dJTDan8KmBWSFngWbQ1 fort-deployer"
       ];
+
+      # Age public key for CI to decrypt secrets during release workflow.
+      # Private key stored ONLY in Forgejo secrets (CI_AGE_KEY).
+      ciAgeKey = "age1r7ezaxn5zvzlkas0fkvuhwduxcj9t2kzdrfe4zjftrlchrngk5ls6tsxke";
     };
 
     forge = {
