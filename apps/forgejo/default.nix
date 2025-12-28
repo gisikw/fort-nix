@@ -11,15 +11,8 @@ in
     "d ${authDir} 0700 forgejo forgejo -"
   ];
 
-  # Auto-redirect to OIDC for unauthenticated users
+  # Auto-redirect to OIDC - skip the login page entirely
   services.nginx.virtualHosts."git.${domain}".locations = {
-    "= /".extraConfig = ''
-      if ($cookie_session = "") {
-        return 302 ${oidcPath};
-      }
-      proxy_pass http://127.0.0.1:3001;
-      proxy_set_header Host $host;
-    '';
     "= /user/login".return = "302 ${oidcPath}";
   };
 
@@ -64,8 +57,10 @@ in
       User = "forgejo";
       Group = "forgejo";
       WorkingDirectory = "/var/lib/forgejo";
-      # Restart forgejo after updating auth source (+ prefix runs as root)
-      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart forgejo.service";
+      # Restart forgejo after updating auth source
+      # --no-block: queue restart without waiting (avoids dependency cycle with requires)
+      # + prefix: run as root
+      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart --no-block forgejo.service";
     };
 
     script = ''
