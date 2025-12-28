@@ -18,6 +18,12 @@ rec {
       # Age public key for CI to decrypt secrets during release workflow.
       # Private key stored ONLY in Forgejo secrets (CI_AGE_KEY).
       ciAgeKey = "age1r7ezaxn5zvzlkas0fkvuhwduxcj9t2kzdrfe4zjftrlchrngk5ls6tsxke";
+
+      # Keys that can decrypt secrets on the main branch.
+      privilegedKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC1fUAZLXWXgXfTKxejJHTT8rLpmDoTdJOxDV5m3lUHp fort"
+        "age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m"
+      ];
     };
 
     forge = {

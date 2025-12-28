@@ -2,10 +2,10 @@ let
   cluster = import ./common/cluster-context.nix { };
   settings = cluster.manifest.fortConfig.settings;
 
-  sshKeyPub = settings.sshKey.publicKey;
   deployKeys = settings.authorizedDeployKeys;
   ciAgeKey = settings.ciAgeKey;
-  primaryKeys = [ sshKeyPub ciAgeKey ] ++ deployKeys;
+  privilegedKeys = settings.privilegedKeys;
+  primaryKeys = [ ciAgeKey ] ++ privilegedKeys ++ deployKeys;
 
   deviceDir = cluster.devicesDir;
   deviceEntries = builtins.readDir deviceDir;
