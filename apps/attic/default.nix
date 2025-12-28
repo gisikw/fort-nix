@@ -59,6 +59,11 @@ in
       export PATH="${pkgs.coreutils}/bin:${config.services.atticd.package}/bin:$PATH"
       export HOME="/var/lib/atticd"
 
+      # Source credentials (ExecStartPost may not inherit EnvironmentFile)
+      set -a
+      source ${config.age.secrets.attic-server-token.path}
+      set +a
+
       BOOTSTRAP_DIR="/var/lib/atticd/bootstrap"
       ADMIN_TOKEN_FILE="$BOOTSTRAP_DIR/admin-token"
       CI_TOKEN_FILE="$BOOTSTRAP_DIR/ci-token"
@@ -126,7 +131,7 @@ in
 
       echo "Attic bootstrap complete"
     '';
-  in "${bootstrapScript}";
+  in "+${bootstrapScript}"; # + runs as root to read credentials file
 
   # Expose via reverse proxy
   fortCluster.exposedServices = [
