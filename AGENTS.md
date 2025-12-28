@@ -2,6 +2,8 @@
 
 This is a NixOS homelab infrastructure. Read `README.md` for architecture overview.
 
+**Note**: `CLAUDE.md` is a symlink to this file. Edit `AGENTS.md` directly.
+
 **Maintenance note**: When making changes to core infrastructure patterns (common/, new SSO modes, new aspect types, etc.), review this file and update it if the guidance has changed.
 
 ## Issue Tracking
@@ -143,6 +145,59 @@ See `pkgs/zot/` for a working example.
 **What stays in `apps/`**: Context-dependent wraps (secret injection, config overrides) that are specific to how we deploy the service. See `apps/outline/` for an example using `symlinkJoin` + `wrapProgram`.
 
 **Self-contained services**: For fast-moving packages where the nixpkgs module may lag or have compatibility issues, define the systemd service directly in `apps/` rather than using `services.<name>`. See `apps/pocket-id/` - it defines users, tmpfiles, and systemd services inline rather than relying on nixpkgs' `services.pocket-id` module.
+
+### Service Initialization
+
+**Prefer declarative configuration** when the service supports it. Many services allow pre-configuring users, tokens, databases, etc. through their NixOS module options - use these whenever available.
+
+When imperative setup is unavoidable, use one of these patterns:
+
+**Bootstrap services** for one-time setup (tokens, initial resources):
+
+```nix
+systemd.services.myapp-bootstrap = {
+  after = [ "myapp.service" ];
+  requires = [ "myapp.service" ];
+  wantedBy = [ "multi-user.target" ];
+  serviceConfig = {
+    Type = "oneshot";
+    RemainAfterExit = true;  # Don't re-run on restart
+  };
+  script = ''
+    # Idempotent - check before creating
+    if [ ! -s "$TOKEN_FILE" ]; then
+      myapp-admin create-token > "$TOKEN_FILE"
+    fi
+  '';
+};
+```
+
+See `apps/forgejo/default.nix` (org/repo/mirror setup) and `apps/attic/default.nix` (cache/token creation).
+
+**Reconciliation services** for continuous true-up when state must match config:
+
+```nix
+systemd.timers.myapp-sync = {
+  wantedBy = [ "timers.target" ];
+  timerConfig.OnUnitActiveSec = "10m";
+};
+systemd.services.myapp-sync = {
+  serviceConfig.Type = "oneshot";
+  script = ''
+    # Sync declared state to runtime state
+    for client in $DECLARED_CLIENTS; do
+      ensure_client_exists "$client"
+    done
+  '';
+};
+```
+
+See `aspects/service-registry/` (OIDC client sync with pocket-id) and `apps/pocket-id/default.nix` (service key rotation).
+
+Key principles for both patterns:
+- **Idempotent**: Check before creating, handle already-exists gracefully
+- **Persistent state**: Store tokens/markers in `/var/lib/<app>/`
+- **Ordered**: Use `after`/`requires` for dependencies
 
 ### Parameterized Aspects
 
