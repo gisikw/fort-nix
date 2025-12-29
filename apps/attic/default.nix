@@ -239,22 +239,34 @@ extra-trusted-public-keys = $PUBLIC_KEY"
         user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
         peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
 
+        # Get the CI token for push access
+        CI_TOKEN_FILE="${bootstrapDir}/ci-token"
+        if [ ! -s "$CI_TOKEN_FILE" ]; then
+          echo "CI token not yet created, skipping sync"
+          return 0
+        fi
+        CI_TOKEN=$(cat "$CI_TOKEN_FILE")
+
         for peer in localhost $peers; do
-          echo "Syncing cache key to $peer..."
+          echo "Syncing cache config to $peer..."
           if ssh $SSH_OPTS "$peer" "
             mkdir -p /var/lib/fort/nix
             cat > /var/lib/fort/nix/attic-cache.conf << 'NIXCONF'
 $NIX_CONF
 NIXCONF
             chmod 644 /var/lib/fort/nix/attic-cache.conf
+            cat > /var/lib/fort/nix/attic-push-token << 'TOKEN'
+$CI_TOKEN
+TOKEN
+            chmod 600 /var/lib/fort/nix/attic-push-token
           "; then
-            echo "Key synced to $peer"
+            echo "Cache config synced to $peer"
           else
             echo "Failed to sync to $peer, continuing..."
           fi
         done
 
-        echo "Cache key sync complete"
+        echo "Cache config sync complete"
       }
 
       # Run sync, but always exit 0 (best-effort, will retry on next timer)
