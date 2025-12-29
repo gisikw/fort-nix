@@ -107,6 +107,9 @@ jobs:
           # Fetch release branch (may not exist on first run)
           git fetch origin release || true
 
+          # Stash re-keyed changes so we can switch branches
+          git stash --include-untracked
+
           # Check out release, or create orphan if it doesn't exist
           if git rev-parse origin/release >/dev/null 2>&1; then
             git checkout -B release origin/release
@@ -114,6 +117,9 @@ jobs:
             git checkout --orphan release
             git rm -rf . || true
           fi
+
+          # Drop stash (we have the content in /tmp)
+          git stash drop || true
 
           # Replace release content with main's re-keyed content
           git rm -rf . || true
