@@ -1,0 +1,155 @@
+name: Test Branch
+
+on:
+  push:
+    branches:
+      - '*-test'
+
+jobs:
+  test-release:
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract hostname from branch
+        id: extract
+        run: |
+          branch="${GITHUB_REF#refs/heads/}"
+          hostname="${branch%-test}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "hostname=$hostname" >> "$GITHUB_OUTPUT"
+          echo "Host: $hostname (from branch: $branch)"
+
+          # Validate hostname exists
+          host_dir="./clusters/bedlam/hosts/${hostname}"
+          if [ ! -d "$host_dir" ]; then
+            echo "::error::No host found at $host_dir"
+            exit 1
+          fi
+
+      - name: Check host flake
+        run: |
+          hostname="${{ steps.extract.outputs.hostname }}"
+          host_dir="./clusters/bedlam/hosts/${hostname}"
+          echo "::group::Checking host: $hostname"
+          nix flake check "$host_dir" --no-build
+          echo "::endgroup::"
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
+      - name: Collect secrets for host
+        id: collect
+        run: |
+          hostname="${{ steps.extract.outputs.hostname }}"
+          host_dir="./clusters/bedlam/hosts/${hostname}"
+          mkdir -p /tmp/release-work
+
+          echo '{}' > /tmp/release-work/recipients-map.json
+
+          echo "::group::Collecting secrets for $hostname"
+
+          # Get device UUID from host manifest
+          device_uuid=$(nix eval --raw --file "${host_dir}/manifest.nix" device 2>/dev/null || echo "")
+          if [ -z "$device_uuid" ]; then
+            echo "::error::Could not get device UUID for $hostname"
+            exit 1
+          fi
+
+          # Get device public key
+          device_key=$(nix eval --raw --file "./clusters/bedlam/devices/${device_uuid}/manifest.nix" pubkey 2>/dev/null || echo "")
+          if [ -z "$device_key" ]; then
+            echo "::error::Could not get device key for $hostname (device $device_uuid)"
+            exit 1
+          fi
+
+          echo "Device: $device_uuid"
+          echo "Key: ${device_key:0:20}..."
+
+          # Get secrets this host uses
+          secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${hostname}.config.age.secrets" --json 2>/dev/null || echo "{}")
+
+          # Build recipients map for this host's secrets
+          echo "$secrets_json" | jq -r 'to_entries[] | .value.file // empty' | while read -r secret_file; do
+            secret_path=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
+            echo "  Secret: $secret_path"
+
+            jq --arg path "$secret_path" --arg key "$device_key" \
+              '.[$path] = ((.[$path] // []) + [$key] | unique | sort)' \
+              /tmp/release-work/recipients-map.json > /tmp/release-work/recipients-map.json.tmp
+            mv /tmp/release-work/recipients-map.json.tmp /tmp/release-work/recipients-map.json
+          done
+
+          echo "::endgroup::"
+          echo "Secrets to re-key:"
+          jq -r 'keys[]' /tmp/release-work/recipients-map.json
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
+      - name: Re-key secrets for host
+        env:
+          CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
+        run: |
+          echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
+          trap 'rm -f /tmp/ci-age-key.txt' EXIT
+
+          # Re-key all secrets for this host
+          jq -r 'keys[]' /tmp/release-work/recipients-map.json | while read -r secret_path; do
+            [ -n "$secret_path" ] || continue
+
+            echo "::group::Re-keying: $secret_path"
+
+            jq -r --arg path "$secret_path" '.[$path][]' /tmp/release-work/recipients-map.json > /tmp/recipients.txt
+            echo "Recipients: $(wc -l < /tmp/recipients.txt | tr -d ' ') keys"
+
+            age -d -i /tmp/ci-age-key.txt "$secret_path" > /tmp/decrypted.tmp
+            age -e -R /tmp/recipients.txt -o "$secret_path.new" /tmp/decrypted.tmp
+            mv "$secret_path.new" "$secret_path"
+            rm -f /tmp/decrypted.tmp /tmp/recipients.txt
+
+            echo "::endgroup::"
+          done
+
+      - name: Create test release branch
+        run: |
+          hostname="${{ steps.extract.outputs.hostname }}"
+          source_branch="${{ steps.extract.outputs.branch }}"
+          target_branch="release-${hostname}-test"
+
+          git config user.name "Forge CI"
+          git config user.email "forge@fort.gisi.network"
+
+          # Capture current state with re-keyed secrets
+          source_sha=$(git rev-parse --short HEAD)
+          cp -a . /tmp/release-content
+          rm -rf /tmp/release-content/.git
+
+          # Fetch target branch if it exists
+          git fetch origin "$target_branch" || true
+
+          # Stash changes
+          git stash --include-untracked
+
+          # Check out target branch or create orphan
+          if git rev-parse "origin/${target_branch}" >/dev/null 2>&1; then
+            git checkout -B "$target_branch" "origin/${target_branch}"
+          else
+            git checkout --orphan "$target_branch"
+            git rm -rf . || true
+          fi
+
+          git stash drop || true
+
+          # Replace content
+          git rm -rf . || true
+          cp -a /tmp/release-content/. .
+
+          # Commit and push
+          git add -A
+          git commit -m "test: ${hostname} @ ${source_sha} - $(date -Iseconds)" \
+            || echo "No changes to commit"
+          git push origin "$target_branch"
+
+          echo "::notice::Created test branch: $target_branch"
+          echo "::notice::Host $hostname will pick this up via comin testing branch"

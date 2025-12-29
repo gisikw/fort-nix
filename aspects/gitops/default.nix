@@ -74,6 +74,9 @@ in
       name = "origin";
       url = repoUrl;
       branches.main.name = "release";
+      # Testing branch for safe experimentation (deployed with switch-to-configuration test)
+      # Push to <hostname>-test on main, CI creates release-<hostname>-test
+      branches.testing.name = "release-${hostManifest.hostName}-test";
 
       # Auth via deploy token distributed by forge
       auth.access_token_path = tokenFile;
