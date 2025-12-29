@@ -47,6 +47,13 @@ in
                   description = "Whether this service runs inside the egress-vpn namespace";
                 };
 
+                maxBodySize = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = "nginx client_max_body_size for this service (e.g., '2G' for large uploads)";
+                  example = "2G";
+                };
+
                 visibility = lib.mkOption {
                   type = lib.types.enum [ "vpn" "local" "public" ];
                   default = "vpn";
@@ -208,11 +215,16 @@ in
                 sslCertificate = "/var/lib/fort/ssl/${domain}/fullchain.pem";
                 sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
                 locations."/" = {
-                  extraConfig = lib.optionalString (svc.visibility == "vpn") ''
-                    if ($is_vpn = 0) {
-                      return 444;
-                    }
-                  '';
+                  extraConfig = lib.concatStringsSep "\n" (lib.filter (s: s != "") [
+                    (lib.optionalString (svc.visibility == "vpn") ''
+                      if ($is_vpn = 0) {
+                        return 444;
+                      }
+                    '')
+                    (lib.optionalString (svc.maxBodySize != null) ''
+                      client_max_body_size ${svc.maxBodySize};
+                    '')
+                  ]);
                   proxyPass = if (svc.sso.mode != "none" && svc.sso.mode != "oidc") then
                     "http://unix:/run/fort-auth/${svc.name}.sock"
                   else

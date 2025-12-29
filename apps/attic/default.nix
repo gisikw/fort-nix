@@ -288,6 +288,7 @@ TOKEN
       subdomain = "cache";
       port = 8080;
       visibility = "vpn"; # Cache access is token-based, VPN-only for now
+      maxBodySize = "2G"; # Large uploads for binary cache (kernel, initrd, etc.)
     }
   ];
 }
