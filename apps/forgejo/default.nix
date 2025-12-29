@@ -415,7 +415,7 @@ EOF
             cat > /var/lib/fort-git/forge-token << 'TOKEN'
 $TOKEN_TO_SYNC
 TOKEN
-            chmod 600 /var/lib/fort-git/forge-token
+            chmod 644 /var/lib/fort-git/forge-token
           "; then
             echo "Token synced to $peer"
           else
