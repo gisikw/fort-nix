@@ -316,6 +316,27 @@ For hosts with the `gitops` aspect, deployment is automatic:
 
 **GitOps hosts**: joker, lordhenry, minos, q, ratched, ursula
 
+### Testing Changes Safely (Test Branches)
+
+For risky changes, use test branches to deploy without modifying the bootloader (recoverable via reboot):
+
+```bash
+git checkout -b <hostname>-test
+# make changes
+git push origin <hostname>-test
+```
+
+CI will:
+1. Validate only that host's flake
+2. Re-key secrets only for that host
+3. Create `release-<hostname>-test` branch
+
+Comin on the target host picks up the testing branch and deploys with `switch-to-configuration test`. If broken, reboot reverts to the last booted config.
+
+**To finalize**: Merge your changes to `main`. Once the `release` branch updates, comin automatically switches back from the testing branch.
+
+**To abandon**: Delete the `<hostname>-test` branch. Comin will revert to `release` on next poll.
+
 ### Non-GitOps Hosts (Forge/Beacon)
 
 The forge (drhorrible) and beacon (raishan) require manual deployment. After committing and pushing, **ask the user** to deploy:
