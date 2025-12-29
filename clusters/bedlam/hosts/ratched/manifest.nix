@@ -6,7 +6,7 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "mesh" "observable" "dev-sandbox" ];
+  aspects = [ "mesh" "observable" "dev-sandbox" "gitops" ];
 
   module =
     { config, ... }:

@@ -40,6 +40,7 @@ rec {
       ];
     }
     "observable"
+    "gitops"
   ];
 
   module =

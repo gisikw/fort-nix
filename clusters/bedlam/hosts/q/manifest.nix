@@ -22,6 +22,7 @@ rec {
     "mesh"
     "observable"
     "egress-vpn"
+    "gitops"
   ];
 
   module =

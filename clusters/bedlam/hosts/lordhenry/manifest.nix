@@ -13,6 +13,7 @@ rec {
   aspects = [
     "mesh"
     "observable"
+    "gitops"
   ];
 
   module =
