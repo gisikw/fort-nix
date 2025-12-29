@@ -21,46 +21,48 @@ let
   # Post-deployment script to push built system to cache
   postDeployScript = pkgs.writeShellScript "comin-post-deploy-cache-push" ''
     set -euf
-    export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils ]}:$PATH"
+    export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils pkgs.findutils ]}:$PATH"
 
-    # Write to file as proof script ran (stdout may not be captured)
-    echo "$(date): Post-deploy starting status=$COMIN_STATUS gen=''${COMIN_GENERATION:-unset}" >> /var/lib/fort/nix/post-deploy.log
+    LOG="/var/lib/fort/nix/post-deploy.log"
 
-    echo "Post-deploy cache push starting (status=$COMIN_STATUS, generation=''${COMIN_GENERATION:-unset})"
+    # Log all env vars for debugging
+    echo "$(date): Post-deploy hook invoked" >> "$LOG"
+    env | grep -i comin >> "$LOG" 2>&1 || true
 
     # Skip if push token doesn't exist yet (before attic-key-sync runs)
     if [ ! -s "${pushTokenFile}" ]; then
-      echo "Cache push token not available, skipping cache push"
+      echo "$(date): Cache push token not available, skipping" >> "$LOG"
       exit 0
     fi
 
-    # Only push on successful deployments
-    if [ "$COMIN_STATUS" != "success" ]; then
-      echo "Deployment status is $COMIN_STATUS, skipping cache push"
+    # COMIN_STATUS is "done" on success (not "success")
+    if [ "$COMIN_STATUS" != "done" ]; then
+      echo "$(date): Deployment status is $COMIN_STATUS, skipping cache push" >> "$LOG"
       exit 0
     fi
 
-    echo "Configuring attic client..."
+    # Get the current system profile (what comin just activated)
+    SYSTEM_PATH=$(readlink -f /nix/var/nix/profiles/system)
+    echo "$(date): System path: $SYSTEM_PATH" >> "$LOG"
 
     # Configure attic client
     export HOME=$(mktemp -d)
     trap 'rm -rf "$HOME"' EXIT
     mkdir -p "$HOME/.config/attic"
     cat > "$HOME/.config/attic/config.toml" <<EOF
-    default-server = "local"
+default-server = "local"
 
-    [servers.local]
-    endpoint = "${cacheUrl}"
-    token = "$(cat ${pushTokenFile})"
-    EOF
+[servers.local]
+endpoint = "${cacheUrl}"
+token = "$(cat ${pushTokenFile})"
+EOF
 
-    # Push the deployed generation to cache
-    # COMIN_GENERATION contains the store path of the activated system
-    if [ -n "''${COMIN_GENERATION:-}" ]; then
-      echo "Pushing to cache: $COMIN_GENERATION"
-      attic push ${cacheName} "$COMIN_GENERATION" && echo "Cache push complete" || echo "Cache push failed (non-fatal)"
+    # Push the system closure to cache
+    echo "$(date): Pushing to cache: $SYSTEM_PATH" >> "$LOG"
+    if attic push ${cacheName} "$SYSTEM_PATH" 2>> "$LOG"; then
+      echo "$(date): Cache push complete" >> "$LOG"
     else
-      echo "COMIN_GENERATION not set, skipping cache push"
+      echo "$(date): Cache push failed (non-fatal)" >> "$LOG"
     fi
   '';
 in
