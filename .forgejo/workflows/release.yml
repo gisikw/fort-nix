@@ -134,6 +134,28 @@ jobs:
           total=$(jq 'keys | length' /tmp/release-work/recipients-map.json)
           echo "Re-keying $count of $total secrets"
 
+      - name: Copy unchanged secrets from release branch
+        run: |
+          # For secrets with unchanged recipients, copy from release HEAD
+          # This preserves stable ciphertext and avoids spurious changes
+          jq -r 'keys[]' /tmp/release-work/recipients-map.json | while read -r secret_path; do
+            # Skip if this secret needs re-keying
+            if jq -e --arg p "$secret_path" 'index($p)' /tmp/release-work/secrets-to-rekey.json >/dev/null 2>&1; then
+              continue
+            fi
+
+            # Try to copy from release branch
+            if git show "origin/release:${secret_path}" > "${secret_path}.release" 2>/dev/null; then
+              echo "Preserving unchanged: $secret_path"
+              mv "${secret_path}.release" "$secret_path"
+            else
+              echo "::warning::Secret $secret_path not in release branch, will need re-key"
+              # Add to re-key list
+              jq --arg p "$secret_path" '. + [$p]' /tmp/release-work/secrets-to-rekey.json > /tmp/release-work/secrets-to-rekey.json.tmp
+              mv /tmp/release-work/secrets-to-rekey.json.tmp /tmp/release-work/secrets-to-rekey.json
+            fi
+          done
+
       - name: Re-key changed secrets
         env:
           CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
