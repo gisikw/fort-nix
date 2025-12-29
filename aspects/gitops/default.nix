@@ -23,6 +23,9 @@ let
     set -euf
     export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils ]}:$PATH"
 
+    # Write to file as proof script ran (stdout may not be captured)
+    echo "$(date): Post-deploy starting status=$COMIN_STATUS gen=''${COMIN_GENERATION:-unset}" >> /var/lib/fort/nix/post-deploy.log
+
     echo "Post-deploy cache push starting (status=$COMIN_STATUS, generation=''${COMIN_GENERATION:-unset})"
 
     # Skip if push token doesn't exist yet (before attic-key-sync runs)
