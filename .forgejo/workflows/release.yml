@@ -3,21 +3,59 @@ name: Release
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
+  check:
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check root flake
+        run: nix flake check --no-build
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
+      - name: Check host flakes
+        run: |
+          for host_dir in ./clusters/bedlam/hosts/*/; do
+            host=$(basename "$host_dir")
+            echo "::group::Checking host: $host"
+            nix flake check "$host_dir" --no-build
+            echo "::endgroup::"
+          done
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
+      - name: Check device flakes
+        run: |
+          for device_dir in ./clusters/bedlam/devices/*/; do
+            device=$(basename "$device_dir")
+            echo "::group::Checking device: $device"
+            nix flake check "$device_dir" --no-build
+            echo "::endgroup::"
+          done
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
   release:
+    needs: check
+    if: github.event_name == 'push'
     runs-on: nixos
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Collect secrets per host
+      - name: Collect secrets and build recipients map
         id: collect
         run: |
           mkdir -p /tmp/release-work
 
-          # For each host, get its secrets and device key
+          # Will hold: { "path/to/secret.age": ["key1", "key2", ...], ... }
+          echo '{}' > /tmp/release-work/recipients-map.json
+
           for host_dir in ./clusters/bedlam/hosts/*/; do
             host=$(basename "$host_dir")
             echo "::group::Collecting secrets for $host"
@@ -39,55 +77,86 @@ jobs:
             fi
 
             echo "Device: $device_uuid"
-            echo "Key: $device_key"
+            echo "Key: ${device_key:0:20}..."
 
             # Get secrets this host uses
             secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${host}.config.age.secrets" --json 2>/dev/null || echo "{}")
 
-            # Extract .file paths from each secret
-            # Note: nix eval returns store paths like /nix/store/<hash>-source/path/to/secret.age
-            # We need to strip the store prefix to get the relative path
+            # Extract .file paths and add device key to recipients map
             echo "$secrets_json" | jq -r 'to_entries[] | .value.file // empty' | while read -r secret_file; do
               # Strip /nix/store/*-source/ prefix to get relative path
-              secret_file=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
-              echo "  Secret: $secret_file"
+              secret_path=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
+              echo "  Secret: $secret_path"
 
-              # Append device key to this secret's recipients file
-              echo "$device_key" >> "/tmp/release-work/recipients-$(echo "$secret_file" | sha256sum | cut -d' ' -f1)"
-              echo "$secret_file" > "/tmp/release-work/path-$(echo "$secret_file" | sha256sum | cut -d' ' -f1)"
+              # Add key to this secret's recipient list in the map
+              jq --arg path "$secret_path" --arg key "$device_key" \
+                '.[$path] = ((.[$path] // []) + [$key] | unique | sort)' \
+                /tmp/release-work/recipients-map.json > /tmp/release-work/recipients-map.json.tmp
+              mv /tmp/release-work/recipients-map.json.tmp /tmp/release-work/recipients-map.json
             done
 
             echo "::endgroup::"
           done
+
+          echo "Final recipients map:"
+          jq . /tmp/release-work/recipients-map.json
         env:
           NIX_CONFIG: "warn-dirty = false"
 
-      - name: Re-key secrets
+      - name: Fetch previous recipients map
+        run: |
+          # Try to get the previous map from release branch
+          if git show origin/release:.release-recipients.json > /tmp/release-work/previous-map.json 2>/dev/null; then
+            echo "Found previous recipients map"
+            jq . /tmp/release-work/previous-map.json
+          else
+            echo "No previous map found, all secrets will be re-keyed"
+            echo '{}' > /tmp/release-work/previous-map.json
+          fi
+
+      - name: Determine secrets to re-key
+        run: |
+          # Compare maps and output list of secrets that need re-keying
+          jq -n --slurpfile current /tmp/release-work/recipients-map.json \
+                --slurpfile previous /tmp/release-work/previous-map.json '
+            ($current[0] | keys) as $all_secrets |
+            $all_secrets | map(
+              select(
+                ($current[0][.] | tojson) != ($previous[0][.] // [] | tojson)
+              )
+            )
+          ' > /tmp/release-work/secrets-to-rekey.json
+
+          echo "Secrets needing re-key:"
+          jq -r '.[]' /tmp/release-work/secrets-to-rekey.json
+
+          count=$(jq length /tmp/release-work/secrets-to-rekey.json)
+          total=$(jq 'keys | length' /tmp/release-work/recipients-map.json)
+          echo "Re-keying $count of $total secrets"
+
+      - name: Re-key changed secrets
         env:
           CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
         run: |
           echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
           trap 'rm -f /tmp/ci-age-key.txt' EXIT
 
-          # Process each secret that has recipients
-          for recipients_file in /tmp/release-work/recipients-*; do
-            [ -f "$recipients_file" ] || continue
-
-            hash="${recipients_file#/tmp/release-work/recipients-}"
-            path_file="/tmp/release-work/path-${hash}"
-            secret_path=$(cat "$path_file")
+          # Process only secrets that need re-keying
+          jq -r '.[]' /tmp/release-work/secrets-to-rekey.json | while read -r secret_path; do
+            [ -n "$secret_path" ] || continue
 
             echo "::group::Re-keying: $secret_path"
 
-            # Deduplicate recipients
-            sort -u "$recipients_file" > /tmp/unique-recipients.txt
-            echo "Recipients: $(wc -l < /tmp/unique-recipients.txt | tr -d ' ') keys"
+            # Get recipients for this secret
+            jq -r --arg path "$secret_path" '.[$path][]' /tmp/release-work/recipients-map.json > /tmp/recipients.txt
 
-            # Decrypt with CI key, re-encrypt for all recipients using -R (recipients file)
+            echo "Recipients: $(wc -l < /tmp/recipients.txt | tr -d ' ') keys"
+
+            # Decrypt with CI key, re-encrypt for all recipients
             age -d -i /tmp/ci-age-key.txt "$secret_path" > /tmp/decrypted.tmp
-            age -e -R /tmp/unique-recipients.txt -o "$secret_path.new" /tmp/decrypted.tmp
+            age -e -R /tmp/recipients.txt -o "$secret_path.new" /tmp/decrypted.tmp
             mv "$secret_path.new" "$secret_path"
-            rm -f /tmp/decrypted.tmp /tmp/unique-recipients.txt
+            rm -f /tmp/decrypted.tmp /tmp/recipients.txt
 
             echo "::endgroup::"
           done
@@ -97,17 +166,20 @@ jobs:
           git config user.name "Forge CI"
           git config user.email "forge@fort.gisi.network"
 
-          # Capture main's current state (with re-keyed secrets)
+          # Save recipients map for next run
+          cp /tmp/release-work/recipients-map.json .release-recipients.json
+
+          # Capture main's current state
           main_sha=$(git rev-parse --short main)
 
-          # Save the re-keyed working tree
+          # Save the working tree (with re-keyed secrets + map)
           cp -a . /tmp/release-content
           rm -rf /tmp/release-content/.git
 
-          # Fetch release branch (may not exist on first run)
+          # Fetch release branch
           git fetch origin release || true
 
-          # Stash re-keyed changes so we can switch branches
+          # Stash changes so we can switch branches
           git stash --include-untracked
 
           # Check out release, or create orphan if it doesn't exist
@@ -118,14 +190,13 @@ jobs:
             git rm -rf . || true
           fi
 
-          # Drop stash (we have the content in /tmp)
           git stash drop || true
 
-          # Replace release content with main's re-keyed content
+          # Replace release content with main's content
           git rm -rf . || true
           cp -a /tmp/release-content/. .
 
-          # Commit as child of previous release commit
+          # Commit
           git add -A
           git commit -m "release: ${main_sha} - $(date -Iseconds)" \
             || echo "No changes to commit"
