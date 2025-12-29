@@ -257,6 +257,29 @@ The `forgejo` app reads this config and runs a bootstrap service on activation t
 
 Mirror tokens should be added to `secrets.nix` with the appropriate public keys.
 
+### Dev Sandbox Forge Access
+
+Hosts with the `dev-sandbox` aspect get automatic Forgejo access:
+
+**Declarative (in aspect):**
+- Git credential helper at `/etc/fort-git-credential-helper`
+- Git config pointing to the helper for `https://git.<domain>`
+
+**Runtime (distributed by forge):**
+- `forgejo-deploy-token-sync` checks each host's `/var/lib/fort/host-manifest.json`
+- Hosts with `dev-sandbox` aspect receive a read/write token at `/var/lib/fort-git/forge-token`
+- Other hosts receive read-only tokens
+- Sync runs on a 10-minute timer
+
+After deployment, git push just works - no manual credential setup:
+
+```bash
+git clone https://git.<domain>/infra/fort-nix.git
+git push  # Credential helper reads token automatically
+```
+
+If rebuilding the dev-sandbox environment, wait for the next token sync (~10 min) or manually trigger it on the forge host: `systemctl start forgejo-deploy-token-sync`
+
 ## Secrets
 
 Uses **agenix**. Secrets are `.age` files decrypted at activation time.
