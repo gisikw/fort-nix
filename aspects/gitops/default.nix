@@ -23,6 +23,8 @@ let
     set -euf
     export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils ]}:$PATH"
 
+    echo "Post-deploy cache push starting (status=$COMIN_STATUS, generation=''${COMIN_GENERATION:-unset})"
+
     # Skip if push token doesn't exist yet (before attic-key-sync runs)
     if [ ! -s "${pushTokenFile}" ]; then
       echo "Cache push token not available, skipping cache push"
@@ -34,6 +36,8 @@ let
       echo "Deployment status is $COMIN_STATUS, skipping cache push"
       exit 0
     fi
+
+    echo "Configuring attic client..."
 
     # Configure attic client
     export HOME=$(mktemp -d)
@@ -51,7 +55,7 @@ let
     # COMIN_GENERATION contains the store path of the activated system
     if [ -n "''${COMIN_GENERATION:-}" ]; then
       echo "Pushing to cache: $COMIN_GENERATION"
-      attic push ${cacheName} "$COMIN_GENERATION" || echo "Cache push failed (non-fatal)"
+      attic push ${cacheName} "$COMIN_GENERATION" && echo "Cache push complete" || echo "Cache push failed (non-fatal)"
     else
       echo "COMIN_GENERATION not set, skipping cache push"
     fi
