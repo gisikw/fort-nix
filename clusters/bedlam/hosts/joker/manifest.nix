@@ -13,8 +13,9 @@ rec {
   ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
+      config.environment.systemPackages = [ pkgs.openssl ];
     };
 }
