@@ -412,6 +412,7 @@ EOF
 
           if ssh $SSH_OPTS "$peer" "
             mkdir -p /var/lib/fort-git
+            chmod 755 /var/lib/fort-git
             cat > /var/lib/fort-git/forge-token << 'TOKEN'
 $TOKEN_TO_SYNC
 TOKEN
