@@ -21,29 +21,24 @@ let
   # Post-deployment script to push built system to cache
   postDeployScript = pkgs.writeShellScript "comin-post-deploy-cache-push" ''
     set -euf
-    export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils pkgs.findutils ]}:$PATH"
+    export PATH="${lib.makeBinPath [ pkgs.attic-client pkgs.coreutils pkgs.util-linux ]}:$PATH"
 
-    LOG="/var/lib/fort/nix/post-deploy.log"
-
-    # Log all env vars for debugging
-    echo "$(date): Post-deploy hook invoked" >> "$LOG"
-    env | grep -i comin >> "$LOG" 2>&1 || true
+    log() { logger -t comin-cache-push "$@"; }
 
     # Skip if push token doesn't exist yet (before attic-key-sync runs)
     if [ ! -s "${pushTokenFile}" ]; then
-      echo "$(date): Cache push token not available, skipping" >> "$LOG"
+      log "Cache push token not available, skipping"
       exit 0
     fi
 
     # COMIN_STATUS is "done" on success (not "success")
     if [ "$COMIN_STATUS" != "done" ]; then
-      echo "$(date): Deployment status is $COMIN_STATUS, skipping cache push" >> "$LOG"
+      log "Deployment status is $COMIN_STATUS, skipping cache push"
       exit 0
     fi
 
     # Get the current system profile (what comin just activated)
     SYSTEM_PATH=$(readlink -f /nix/var/nix/profiles/system)
-    echo "$(date): System path: $SYSTEM_PATH" >> "$LOG"
 
     # Configure attic client
     export HOME=$(mktemp -d)
@@ -58,11 +53,11 @@ token = "$(cat ${pushTokenFile})"
 EOF
 
     # Push the system closure to cache
-    echo "$(date): Pushing to cache: $SYSTEM_PATH" >> "$LOG"
-    if attic push ${cacheName} "$SYSTEM_PATH" 2>> "$LOG"; then
-      echo "$(date): Cache push complete" >> "$LOG"
+    log "Pushing $SYSTEM_PATH to cache"
+    if attic push ${cacheName} "$SYSTEM_PATH" 2>&1 | logger -t comin-cache-push; then
+      log "Cache push complete"
     else
-      echo "$(date): Cache push failed (non-fatal)" >> "$LOG"
+      log "Cache push failed (non-fatal)"
     fi
   '';
 in
