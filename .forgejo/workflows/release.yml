@@ -97,8 +97,30 @@ jobs:
           git config user.name "Forge CI"
           git config user.email "forge@fort.gisi.network"
 
-          git checkout -B release
+          # Capture main's current state (with re-keyed secrets)
+          main_sha=$(git rev-parse --short main)
+
+          # Save the re-keyed working tree
+          cp -a . /tmp/release-content
+          rm -rf /tmp/release-content/.git
+
+          # Fetch release branch (may not exist on first run)
+          git fetch origin release || true
+
+          # Check out release, or create orphan if it doesn't exist
+          if git rev-parse origin/release >/dev/null 2>&1; then
+            git checkout -B release origin/release
+          else
+            git checkout --orphan release
+            git rm -rf . || true
+          fi
+
+          # Replace release content with main's re-keyed content
+          git rm -rf . || true
+          cp -a /tmp/release-content/. .
+
+          # Commit as child of previous release commit
           git add -A
-          git commit -m "release: $(git rev-parse --short main) - $(date -Iseconds)" \
+          git commit -m "release: ${main_sha} - $(date -Iseconds)" \
             || echo "No changes to commit"
-          git push -f origin release
+          git push origin release
