@@ -302,8 +302,29 @@ nix-shell -p age --run "age -d -i ~/.config/age/keys.txt <secret.age>"
 
 ```bash
 just test                    # Flake check on all hosts/devices
-just deploy <host> [ip]      # Deploy (IP needed for first deploy)
 ```
+
+### GitOps Hosts (Most Hosts)
+
+For hosts with the `gitops` aspect, deployment is automatic:
+
+1. Commit and push to `main`
+2. CI validates and updates `release` branch
+3. Hosts auto-pull and deploy (~5 min total)
+
+**Do NOT run `just deploy` for these hosts** - just commit and push.
+
+**GitOps hosts**: joker, lordhenry, minos, q, ratched, ursula
+
+### Non-GitOps Hosts (Forge/Beacon)
+
+The forge (drhorrible) and beacon (raishan) require manual deployment. After committing and pushing, **ask the user** to deploy:
+
+```
+User, please deploy drhorrible: `just deploy drhorrible`
+```
+
+Agents cannot run `just deploy` directly - it requires SSH access that agents don't have.
 
 ## Debugging Deployment Failures
 
@@ -346,13 +367,15 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 
 Before closing a ticket:
 
-1. **Stage files**: `git add <files>` - Nix requires files to be staged to see them in the flake.
+1. **Stage and test**: `git add <files>` then `just test` - Nix requires files to be staged.
 
-2. **Validate**: Deploy to all hosts impacted by the change (`just deploy <host>`). The user will intervene if unsafe.
+2. **Commit and push**: This triggers GitOps for most hosts.
 
-3. **Close the ticket**: `bd close <id>`
+3. **Request manual deploy if needed**: If the change affects drhorrible (forge) or raishan (beacon), ask the user to deploy those hosts manually.
 
-4. **Reflect** and triage with the user:
+4. **Close the ticket**: `bd close <id>`
+
+5. **Reflect** and triage with the user:
    - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
    - **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated?
    - **Pattern extraction**: Did the code changes reveal a pattern worth generalizing? A new SSO mode, a reusable derivation structure, a common module shape?
@@ -360,10 +383,11 @@ Before closing a ticket:
 
    For each item surfaced: **ticket it, document it, address it now, or explicitly discard it**. Don't just note friction and move on - that's venting, not improving. Quick triage with the user ensures nothing gets lost.
 
-5. **Commit immediately** after reflection (so doc updates are included):
+6. **Commit doc updates** if reflection produced any:
    ```bash
    git add <files>
    git commit -m "<beads-id>: <summary>"
+   git push
    ```
 
 This isn't ceremony for its own sake - it's how the codebase and tooling improve over time.

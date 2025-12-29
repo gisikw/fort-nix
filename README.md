@@ -177,9 +177,29 @@ over VPN.
 
 ### Deploying a Host
 
-If a host has been deployed once, it can be deployed again over the mesh
-network. But for the initial deploy, you'll need to provide the target IP
-address once more.
+#### GitOps (Default for Most Hosts)
+
+Most hosts use **comin** for automatic GitOps deployment. When changes are pushed to `main`:
+
+1. CI validates and re-keys secrets for the `release` branch
+2. Hosts with the `gitops` aspect automatically pull and deploy
+
+No manual intervention needed - just push to `main` and wait (~5 minutes for CI + host poll).
+
+**GitOps hosts**: joker, lordhenry, minos, q, ratched, ursula
+
+#### Manual Deploy (Forge/Beacon)
+
+The forge (drhorrible) and beacon (raishan) require manual deployment since they run critical infrastructure that shouldn't auto-update:
+
+```bash
+just deploy drhorrible
+just deploy raishan
+```
+
+#### Initial Deploy
+
+For the first deploy of any host, provide the IP address:
 
 ```bash
 just deploy <hostname> <ip>
@@ -189,6 +209,19 @@ just deploy <hostname> <ip>
 When the `ip` value is omitted, it's assumed that you're targeting
 `<hostname>.fort.<base domain>`. You'll likely want to put your development box
 on the mesh network ASAP to ensure those resolve for you.
+
+#### Emergency/Override Deploy
+
+For any host (even GitOps ones), you can force an immediate deploy:
+
+```bash
+just deploy <hostname>
+```
+
+Use this when:
+- GitOps is broken and you need to fix it
+- You need immediate deployment without waiting for CI
+- Testing changes locally before committing
 
 ### Validating Changes
 
