@@ -130,4 +130,31 @@ EOF
     chown ${user}:users ${homeDir}/.ssh/id_ed25519.pub
     chmod 644 ${homeDir}/.ssh/id_ed25519.pub
   '';
+
+  # Git credential helper for Forgejo access
+  # Reads the token distributed by forgejo-deploy-token-sync
+  environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
+    # Git credential helper - only respond to "get" action
+    case "$1" in
+      get)
+        TOKEN_FILE="/var/lib/fort-git/forge-token"
+        if [ -s "$TOKEN_FILE" ]; then
+          echo "username=forge-admin"
+          echo "password=$(cat "$TOKEN_FILE")"
+        fi
+        ;;
+    esac
+  '';
+
+  # Configure git to use the credential helper for the forge
+  programs.git = {
+    enable = true;
+    config = {
+      credential."https://git.${domain}" = {
+        helper = "/etc/fort-git-credential-helper";
+      };
+      # Safe directory for the infra repo
+      safe.directory = "${homeDir}/Projects/fort-nix";
+    };
+  };
 }

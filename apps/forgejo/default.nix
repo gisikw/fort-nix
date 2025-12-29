@@ -264,6 +264,22 @@ in
         echo "Deploy token already exists"
       fi
 
+      # Create read/write token for dev-sandbox hosts
+      DEV_TOKEN_FILE="${bootstrapDir}/dev-token"
+      if [ ! -s "$DEV_TOKEN_FILE" ]; then
+        echo "Creating dev token for dev-sandbox hosts"
+        DEV_TOKEN=$(forgejo admin user generate-access-token \
+          --username "$ADMIN_USER" \
+          --token-name "dev-sandbox" \
+          --scopes "read:repository,write:repository" \
+          --raw)
+        echo "$DEV_TOKEN" > "$DEV_TOKEN_FILE"
+        chmod 600 "$DEV_TOKEN_FILE"
+        echo "Dev token created"
+      else
+        echo "Dev token already exists"
+      fi
+
       echo "Forgejo bootstrap complete"
     '';
   };
@@ -360,16 +376,19 @@ EOF
     ];
     # Best-effort sync - wrap entire script so failures exit 0
     script = ''
-      sync_token() {
+      sync_tokens() {
         SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 
         DEPLOY_TOKEN_FILE="${bootstrapDir}/deploy-token"
+        DEV_TOKEN_FILE="${bootstrapDir}/dev-token"
+
         if [ ! -s "$DEPLOY_TOKEN_FILE" ]; then
           echo "Deploy token not yet created, skipping sync"
           return 0
         fi
 
         DEPLOY_TOKEN=$(cat "$DEPLOY_TOKEN_FILE")
+        DEV_TOKEN=$(cat "$DEV_TOKEN_FILE" 2>/dev/null || echo "")
 
         # Enumerate all hosts in the mesh
         mesh=$(tailscale status --json)
@@ -377,13 +396,26 @@ EOF
         peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
 
         for peer in localhost $peers; do
-          echo "Syncing deploy token to $peer..."
+          echo "Checking $peer..."
+
+          # Read host manifest to check for dev-sandbox aspect
+          manifest=$(ssh $SSH_OPTS "$peer" "cat /var/lib/fort/host-manifest.json 2>/dev/null" || echo '{}')
+          has_dev_sandbox=$(echo "$manifest" | jq -r '.aspects // [] | any(. == "dev-sandbox")')
+
+          if [ "$has_dev_sandbox" = "true" ] && [ -n "$DEV_TOKEN" ]; then
+            echo "Syncing dev (RW) token to $peer (has dev-sandbox aspect)..."
+            TOKEN_TO_SYNC="$DEV_TOKEN"
+          else
+            echo "Syncing deploy (RO) token to $peer..."
+            TOKEN_TO_SYNC="$DEPLOY_TOKEN"
+          fi
+
           if ssh $SSH_OPTS "$peer" "
             mkdir -p /var/lib/fort-git
-            cat > /var/lib/fort-git/deploy-token << 'TOKEN'
-$DEPLOY_TOKEN
+            cat > /var/lib/fort-git/forge-token << 'TOKEN'
+$TOKEN_TO_SYNC
 TOKEN
-            chmod 600 /var/lib/fort-git/deploy-token
+            chmod 600 /var/lib/fort-git/forge-token
           "; then
             echo "Token synced to $peer"
           else
@@ -391,11 +423,11 @@ TOKEN
           fi
         done
 
-        echo "Deploy token sync complete"
+        echo "Token sync complete"
       }
 
       # Run sync, but always exit 0 (best-effort, will retry on next timer)
-      if ! sync_token; then
+      if ! sync_tokens; then
         echo "Token sync failed, will retry on next timer run"
       fi
       exit 0

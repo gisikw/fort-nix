@@ -248,5 +248,20 @@ in
         install -Dm0640 ${servicesJson} /var/lib/fort/services.json
       '';
     }
+
+    # Write host manifest (apps, aspects, roles) for service discovery
+    {
+      system.activationScripts.fortHostManifest.text = let
+        # Extract aspect names (handle both string and {name=...} forms)
+        aspectName = a: if builtins.isString a then a else a.name or "unknown";
+        hostManifestJson = builtins.toFile "host-manifest.json" (builtins.toJSON {
+          apps = config.fort.host.apps or [];
+          aspects = map aspectName (config.fort.host.aspects or []);
+          roles = config.fort.host.roles or [];
+        });
+      in ''
+        install -Dm0644 ${hostManifestJson} /var/lib/fort/host-manifest.json
+      '';
+    }
   ];
 }
