@@ -248,6 +248,22 @@ in
         echo "Actions runner already registered"
       fi
 
+      # Create read-only deploy token for GitOps (comin)
+      DEPLOY_TOKEN_FILE="${bootstrapDir}/deploy-token"
+      if [ ! -s "$DEPLOY_TOKEN_FILE" ]; then
+        echo "Creating deploy token for GitOps"
+        DEPLOY_TOKEN=$(forgejo admin user generate-access-token \
+          --username "$ADMIN_USER" \
+          --token-name "gitops-deploy" \
+          --scopes "read:repository" \
+          --raw)
+        echo "$DEPLOY_TOKEN" > "$DEPLOY_TOKEN_FILE"
+        chmod 600 "$DEPLOY_TOKEN_FILE"
+        echo "Deploy token created"
+      else
+        echo "Deploy token already exists"
+      fi
+
       echo "Forgejo bootstrap complete"
     '';
   };
@@ -322,6 +338,71 @@ EOF
       ExecStart = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon -c ${runnerDir}/config.yml";
       Restart = "on-failure";
       RestartSec = "5s";
+    };
+  };
+
+  # Sync deploy token to all hosts in the mesh for GitOps (comin)
+  systemd.timers."forgejo-deploy-token-sync" = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5m";
+      OnUnitActiveSec = "10m";
+    };
+  };
+
+  systemd.services."forgejo-deploy-token-sync" = {
+    after = [ "forgejo-bootstrap.service" ];
+    path = with pkgs; [
+      tailscale
+      jq
+      openssh
+      coreutils
+    ];
+    # Best-effort sync - wrap entire script so failures exit 0
+    script = ''
+      sync_token() {
+        SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+
+        DEPLOY_TOKEN_FILE="${bootstrapDir}/deploy-token"
+        if [ ! -s "$DEPLOY_TOKEN_FILE" ]; then
+          echo "Deploy token not yet created, skipping sync"
+          return 0
+        fi
+
+        DEPLOY_TOKEN=$(cat "$DEPLOY_TOKEN_FILE")
+
+        # Enumerate all hosts in the mesh
+        mesh=$(tailscale status --json)
+        user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
+        peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
+
+        for peer in localhost $peers; do
+          echo "Syncing deploy token to $peer..."
+          if ssh $SSH_OPTS "$peer" "
+            mkdir -p /var/lib/fort-git
+            cat > /var/lib/fort-git/deploy-token << 'TOKEN'
+$DEPLOY_TOKEN
+TOKEN
+            chmod 600 /var/lib/fort-git/deploy-token
+          "; then
+            echo "Token synced to $peer"
+          else
+            echo "Failed to sync to $peer, continuing..."
+          fi
+        done
+
+        echo "Deploy token sync complete"
+      }
+
+      # Run sync, but always exit 0 (best-effort, will retry on next timer)
+      if ! sync_token; then
+        echo "Token sync failed, will retry on next timer run"
+      fi
+      exit 0
+    '';
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
     };
   };
 

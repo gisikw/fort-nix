@@ -6,6 +6,7 @@ args@{
   deploy-rs,
   hostDir,
   agenix,
+  comin,
   ...
 }:
 let
@@ -98,6 +99,7 @@ in
       deviceProfileManifest.module
       disko.nixosModules.disko
       agenix.nixosModules.age
+      comin.nixosModules.comin
       (cluster.devicesDir + "/${hostManifest.device}/hardware-configuration.nix")
       {
         config.fort = {
