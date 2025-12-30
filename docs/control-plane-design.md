@@ -42,11 +42,34 @@ Every host exposes an HTTP API at `https://<host>.fort.<domain>/agent/`. Capabil
 
 Every agent exposes these (no RBAC, cluster-internal only):
 
-| Endpoint | What It Returns |
-|----------|-----------------|
-| `POST /agent/status` | Health, uptime, version |
-| `POST /agent/manifest` | This host's declared configuration |
-| `POST /agent/holdings` | Handles this host is currently using |
+| Endpoint | What It Does |
+|----------|--------------|
+| `POST /agent/status` | Returns health, uptime, version |
+| `POST /agent/manifest` | Returns this host's declared configuration |
+| `POST /agent/holdings` | Returns handles this host is currently using |
+| `POST /agent/release` | Release handles, trigger GC (see below) |
+
+### The Release Endpoint
+
+Two modes with different auth:
+
+**Self-release (no RBAC):** Host announces it's done with handles.
+```http
+POST /agent/release
+{ "handles": ["sha256:abc...", "sha256:def..."] }  # Specific handles
+{ "handles": [] }                                   # "Re-check my holdings now"
+{ "handles": [...], "force": "ignore-grace" }       # Skip grace period (fresh boot, lost state)
+```
+Removes handles from holdings, notifies relevant providers.
+
+**Admin sweep (RBAC: admin only):** Trigger cluster-wide GC.
+```http
+POST /agent/release
+{ "scope": "cluster" }                             # Sweep all hosts
+{ "scope": "cluster", "force": "ignore-grace" }    # Skip grace period
+{ "scope": "cluster", "force": "gc-unreachable" }  # Include unreachable hosts
+```
+For emergency rotation when credentials may be compromised.
 
 ## Custom Capabilities
 
@@ -193,8 +216,8 @@ Nix knows what every host needs and where to get it. At eval time, we compute a 
 
 ## Needs Manifest
 
-```nix
-# /var/lib/fort/needs.json
+```json
+// /var/lib/fort/needs.json
 [
   {
     "id": "oidc-outline",
@@ -202,7 +225,7 @@ Nix knows what every host needs and where to get it. At eval time, we compute a 
     "providers": ["drhorrible"],
     "request": { "service": "outline" },
     "store": "/var/lib/fort/oidc/outline/",
-    "restart": "outline.service"
+    "restart": ["outline.service", "oauth2-proxy-outline.service"]
   },
   {
     "id": "proxy-outline",
@@ -210,12 +233,13 @@ Nix knows what every host needs and where to get it. At eval time, we compute a 
     "providers": ["raishan"],
     "request": { "service": "outline", "upstream": "ursula:4654" },
     "store": null,
-    "restart": null
+    "restart": []
   }
 ]
 ```
 
-**providers is an array of hostnames** - allows for load balancing, failover. The fulfillment service tries them in order.
+- **providers**: Array of hostnames - enables failover, load balancing
+- **restart**: Array of services to restart after fulfillment
 
 ## Storage Layout
 
@@ -287,11 +311,90 @@ Fulfillment is the most common pattern (resolve needs at activation), but it's n
 
 ---
 
-# Part 3: Migration & Summary
+# Part 3: Nix Abstractions
+
+The needs manifest and capability handlers shouldn't be hand-written. They emerge from module options.
+
+## Declaring Needs
+
+Services declare what they need via options. The system consolidates these into `needs.json`:
+
+```nix
+# apps/outline/default.nix
+{
+  fort.needs.oidc.outline = {
+    providers = [ "drhorrible" ];
+    request = { service = "outline"; };
+    restart = [ "outline.service" ];
+  };
+
+  fort.needs.proxy.outline = {
+    providers = [ "raishan" ];
+    request = { service = "outline"; upstream = "${config.networking.hostName}:4654"; };
+  };
+}
+```
+
+The `fort.needs` option type handles:
+- Generating `/var/lib/fort/needs.json` from all declarations
+- Computing store paths consistently
+- Validating that referenced providers exist in cluster topology
+
+## Declaring Capabilities
+
+Providers declare what capabilities they expose. The system generates handlers, RBAC, and GC:
+
+```nix
+# apps/pocket-id/default.nix
+{
+  fort.capabilities.oidc-register = {
+    description = "Register OIDC client in pocket-id";
+    handler = ./handlers/oidc-register;  # Script to run
+    needsGC = true;                       # Auto-add handle headers, GC timer
+    # RBAC computed automatically: hosts that declare fort.needs.oidc.*
+  };
+}
+```
+
+When `needsGC = true`, the system:
+- Wraps the handler to add `X-Fort-Handle` header to responses
+- Tracks issued handles in provider state
+- Adds a systemd timer for periodic GC sweeps
+- Wires up the holdings-check logic
+
+## RBAC Derivation
+
+RBAC rules are computed, not configured:
+
+```nix
+# Pseudo-code for what the module system does:
+fortAgent.rbac = {
+  "oidc-register" =
+    # All hosts that declare any fort.needs.oidc.* need
+    filter (h: h.config.fort.needs.oidc != {}) allHosts;
+
+  "proxy-configure" =
+    # All hosts that declare any fort.needs.proxy.* need
+    filter (h: h.config.fort.needs.proxy != {}) allHosts;
+};
+```
+
+A host can only request what it declares needing. The manifest IS the authorization.
+
+## Benefits
+
+- **Single source of truth**: Apps declare their needs/capabilities, not plumbing
+- **Type-safe**: Invalid references caught at eval time
+- **Consistent**: Storage paths, restart logic, GC all follow the same pattern
+- **Auditable**: `needs.json` and `rbac.json` are readable artifacts
+
+---
+
+# Part 4: Migration & Summary
 
 ## Migration Path
 
-1. **Add agent to all hosts** - Mandatory endpoints (`status`, `manifest`, `holdings`)
+1. **Add agent to all hosts** - Mandatory endpoints (`status`, `manifest`, `holdings`, `release`)
 2. **Add custom handlers to forge/beacon** - Whatever capabilities they provide
 3. **Add `fort-fulfill.service`** - Runs on activation, processes needs.json
 4. **Run in parallel** - Both old (SSH push) and new (host pull) work
