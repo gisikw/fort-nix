@@ -129,6 +129,12 @@ in
           deviceProfileManifest
           ;
       }))
+      (import ./fort-agent.nix {
+        inherit
+          rootManifest
+          cluster
+          ;
+      })
     ]
     ++ map (mkModule "app") allApps
     ++ map (mkModule "aspect") allAspects;

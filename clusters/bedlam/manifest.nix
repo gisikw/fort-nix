@@ -53,12 +53,49 @@ rec {
   module =
     { config, lib, pkgs, ... }:
     {
-      options.fort = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = { };
+      # Fort cluster-level config (settings, forge, etc.)
+      # Structured to allow fort-agent.nix to add fort.needs and fort.capabilities
+      options.fort = {
+        settings = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = { };
+          description = "Cluster-wide settings";
+        };
+        forge = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = { };
+          description = "Forge configuration";
+        };
+        host = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = { };
+          description = "Host-level metadata (set by host manifest)";
+        };
+        # Cluster context options (set by host.nix)
+        clusterName = lib.mkOption {
+          type = lib.types.str;
+          description = "Name of the cluster";
+        };
+        clusterDir = lib.mkOption {
+          type = lib.types.str;
+          description = "Path to cluster directory";
+        };
+        clusterHostsDir = lib.mkOption {
+          type = lib.types.str;
+          description = "Path to cluster hosts directory";
+        };
+        clusterDevicesDir = lib.mkOption {
+          type = lib.types.str;
+          description = "Path to cluster devices directory";
+        };
+        clusterSettings = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          description = "Cluster settings (alias for fort.settings)";
+        };
       };
 
-      config.fort = fortConfig;
+      config.fort.settings = fortConfig.settings;
+      config.fort.forge = fortConfig.forge;
 
       config.environment.systemPackages = [ pkgs.neovim ];
     };
