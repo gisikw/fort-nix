@@ -1,258 +1,357 @@
 # Fort Control Plane Design
 
-Technical design for a unified runtime coordination layer.
+Technical design for unified runtime coordination.
 
-## Motivation
+## The Core Insight
 
-Current state has multiple mechanisms doing similar credential/config delivery:
-- `service-registry` - OIDC registration, credential delivery, DNS updates (Ruby, SSH-based)
-- `certificate-broker` - SSL cert generation and distribution
-- `forgejo-bootstrap` - Git credential delivery
-- `attic` bootstrap - Cache token delivery
-- Various one-shot systemd services for runtime reconciliation
+In most distributed systems, you need coordination because nodes don't have perfect knowledge. Node A doesn't know Node B exists. Someone has to introduce them.
 
-All rely on forge having root SSH access to all hosts, which is:
-- A security concern (master key grants full access)
-- Fragile (SSH timeouts, connection ordering)
-- Push-based (forge must know about and reach all clients)
+**We have perfect knowledge at eval time.** Nix knows:
+- Every host in the cluster
+- Every service on every host
+- Every provider and its capabilities
+- The full topology
 
-## Architecture Overview
+So there's nothing to coordinate at runtime. The host already knows what it needs and where to get it. Just bake it in and let hosts fetch their own dependencies.
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Build time (Nix)                                       │
-│  - exposedServices, aspects, roles declarations         │
-│  - Output: /var/lib/fort/host-manifest.json             │
-└─────────────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────┐
-│  Agent (runs on each host)                              │
-│  - Exposes host-manifest.json                           │
-│  - Accepts credential writes                            │
-│  - Provides sync capabilities (restart, journal, etc.)  │
-│  - Authenticates callers via tailnet identity           │
-└─────────────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────┐
-│  Providers (forge, beacon, etc.)                        │
-│  - Poll agents for manifests                            │
-│  - Derive fulfillment needs from declarations           │
-│  - Reconcile: create credentials, configure proxies     │
-│  - Deliver via agent RPC                                │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         Eval Time (Nix)                         │
+│                                                                 │
+│  Host manifest includes:                                        │
+│    - What services I run                                        │
+│    - What each service needs (OIDC, SSL, public proxy, etc.)    │
+│    - Where to get each thing (computed from cluster topology)   │
+│                                                                 │
+│  This is COMPUTED, not configured. Nix knows everything.        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ deployed to host
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Activation                              │
+│                                                                 │
+│  for each unfulfilled need:                                     │
+│    request it from the provider (with backoff)                  │
+│                                                                 │
+│  Host is responsible for itself. No coordinator needed.         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│  Forge (Server)  │ │ Beacon (Server)  │ │  Other Provider  │
+│                  │ │                  │ │                  │
+│  POST /oidc/...  │ │  POST /proxy/... │ │  POST /...       │
+│  POST /ssl/...   │ │                  │ │                  │
+│  POST /git/...   │ │                  │ │                  │
+│                  │ │                  │ │                  │
+│  Serves requests │ │  Serves requests │ │  Serves requests │
+│  from hosts      │ │  from hosts      │ │  from hosts      │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
-## Core Concepts
+## The Model
 
-### Declaration Layer (Nix - already exists)
+**Providers are servers, not controllers.**
 
-Services declare their needs via `fortCluster.exposedServices`:
+Forge isn't "orchestrating credential delivery." Forge runs an API:
+```
+POST /oidc/register { service: "outline", host: "ursula" }
+  → { client_id: "...", client_secret: "..." }
+```
+
+Beacon isn't "scanning for public services." Beacon runs an API:
+```
+POST /proxy/configure { host: "ursula", service: "outline", port: 4654 }
+  → { status: "configured" }
+```
+
+They're servers. They serve. Hosts request.
+
+**Hosts are clients, not targets.**
+
+Ursula doesn't wait to be provisioned. On activation:
+1. Check what's needed (from manifest)
+2. Check what's already fulfilled (files exist?)
+3. Request anything missing (with backoff)
+4. Done
+
+**It's just `fetchurl` for credentials.**
 
 ```nix
-fortCluster.exposedServices = [{
-  name = "outline";
-  port = 4654;
-  visibility = "public";      # needs: beacon reverse proxy
-  sso = {
-    mode = "oidc";            # needs: OIDC client registration + credentials
-    restart = "outline.service";
+# Nix derivation fetching source:
+src = fetchurl { url = "https://..."; sha256 = "..."; };
+
+# Host fetching credential (same pattern):
+creds = fetchCredential { provider = forge; service = "outline"; };
+```
+
+Host knows what it needs. Host fetches it. Provider serves it.
+
+## Manifest Shape
+
+```nix
+# Computed at eval time from exposedServices + cluster topology
+{
+  hostname = "ursula";
+
+  exposedServices = [{
+    name = "outline";
+    port = 4654;
+    sso.mode = "oidc";
+    sso.restart = "outline.service";
+    visibility = "public";
+  }];
+
+  # DERIVED from cluster config - host doesn't configure this
+  providers = {
+    oidc = "https://drhorrible.fort.gisi.network:agent";
+    ssl = "https://drhorrible.fort.gisi.network:agent";
+    publicProxy = "https://raishan.fort.gisi.network:agent";
   };
-}];
-# implicitly needs: SSL cert delivery (any exposed service)
+}
 ```
 
-The declaration is the contract. Providers derive what needs to happen.
+The host knows what it needs (from `exposedServices`) and where to get it (from `providers`). Both computed by Nix.
 
-### Host Manifest (generated at build time)
+## Activation Flow
 
-Each host gets `/var/lib/fort/host-manifest.json` containing:
-- `exposedServices` - services and their requirements
-- `apps` - installed apps
-- `aspects` - enabled aspects
-- `roles` - assigned roles
+```bash
+#!/usr/bin/env bash
+# Runs on host activation
 
-Agents expose this to providers. This is the source of truth for "what does this host need?"
+set -euo pipefail
 
-### Agents
+fetch_with_backoff() {
+  local url="$1"
+  local output="$2"
+  local attempt=1
 
-Lightweight daemon on each host. Two types of operations:
+  while [ $attempt -le 10 ]; do
+    if curl -sf "$url" -o "$output"; then
+      return 0
+    fi
+    echo "Attempt $attempt failed, retrying..."
+    sleep $((2 ** attempt))
+    attempt=$((attempt + 1))
+  done
 
-**Async Needs** (provider-initiated):
-- Credential delivery - provider writes to `/var/lib/fort-auth/{service}/`
-- SSL delivery - provider writes to `/var/lib/fort/ssl/`
-- Service signal - provider requests restart/reload after delivery
+  echo "Failed to fetch $url after $attempt attempts"
+  return 1
+}
 
-**Sync Capabilities** (caller-initiated):
-- `journal:read` - stream journald logs for a service
-- `status:query` - return system status, failed units
-- `file:read` - read specific paths (scoped)
-- `service:signal` - restart/reload a service
+# For each service needing OIDC
+for service in outline wiki; do
+  cred_dir="/var/lib/fort-auth/$service"
 
-Agents validate all operations against:
-1. Caller identity (via tailnet peer identity)
-2. RBAC rules (does this principal have this capability?)
-3. Manifest (can't restart a service that doesn't exist here)
+  if [ ! -f "$cred_dir/client-id" ]; then
+    echo "Fetching OIDC credentials for $service..."
+    mkdir -p "$cred_dir"
 
-### Providers
+    fetch_with_backoff \
+      "$OIDC_PROVIDER/oidc/register?service=$service&host=$HOSTNAME" \
+      "$cred_dir/credentials.json"
 
-Each provider owns a domain of fulfillment:
+    # Parse response, write files, restart service
+    jq -r '.client_id' "$cred_dir/credentials.json" > "$cred_dir/client-id"
+    jq -r '.client_secret' "$cred_dir/credentials.json" > "$cred_dir/client-secret"
+    systemctl restart "$service.service"
+  fi
+done
 
-| Provider | Fulfills |
-|----------|----------|
-| forge | OIDC registration, credential delivery, SSL certs, git tokens |
-| beacon | Public reverse proxy configuration |
-| (future) | Headscale host registration |
-
-Providers run reconciliation loops:
-
-```
-every 60s:
-  for host in known_hosts:
-    manifest = GET host:agent/manifest
-    for need in derive_needs(manifest):
-      if not fulfilled(host, need):
-        fulfill(host, need)
-```
-
-Fulfillment is idempotent. "Already exists" is success, not error.
-
-## Data Flow Example
-
-Ursula boots with a new service needing OIDC + public exposure:
-
-```
-1. Ursula boots
-   └─ Agent starts, exposes manifest at :agent/manifest
-
-2. Forge reconciler (next poll cycle)
-   ├─ GET ursula:agent/manifest
-   ├─ Sees: service "wiki" needs sso.mode=oidc
-   ├─ Checks: /var/lib/fort-auth/wiki/client-id exists? No
-   ├─ Registers OIDC client in pocket-id
-   ├─ POST ursula:agent/credentials/wiki {client-id, client-secret}
-   └─ POST ursula:agent/signal/wiki.service (restart)
-
-3. Forge SSL reconciler (same or next cycle)
-   ├─ Sees: ursula has exposed services
-   ├─ Checks: SSL cert delivered? No
-   └─ POST ursula:agent/credentials/ssl {fullchain, key}
-
-4. Beacon reconciler (next poll cycle)
-   ├─ GET ursula:agent/manifest
-   ├─ Sees: service "wiki" has visibility=public
-   ├─ Checks: nginx upstream configured? No
-   └─ Adds upstream, reloads nginx
+# For each service needing public proxy
+for service in outline; do
+  echo "Ensuring public proxy for $service..."
+  fetch_with_backoff \
+    "$PROXY_PROVIDER/proxy/ensure?host=$HOSTNAME&service=$service&port=4654" \
+    /dev/null
+done
 ```
 
-## RBAC Model
+## Provider Implementation
 
-### Principals
+Providers expose simple HTTP APIs. Handlers are idempotent.
 
-Principals are identities that can make RPC calls. Currently defined in cluster manifest:
+**OIDC Registration (on forge):**
 
+```bash
+#!/usr/bin/env bash
+# /oidc/register handler
+
+service="$QUERY_service"
+host="$QUERY_host"
+client_name="${service}.${host}"
+
+# Check if already registered
+existing=$(pocket-id-admin list-clients | grep "$client_name" || true)
+
+if [ -n "$existing" ]; then
+  # Return existing credentials
+  pocket-id-admin get-client "$client_name" --format json
+else
+  # Register new client
+  pocket-id-admin create-client "$client_name" --format json
+fi
+```
+
+**Public Proxy (on beacon):**
+
+```bash
+#!/usr/bin/env bash
+# /proxy/ensure handler
+
+host="$QUERY_host"
+service="$QUERY_service"
+port="$QUERY_port"
+
+upstream_file="/etc/nginx/upstreams.d/${host}-${service}.conf"
+
+if [ ! -f "$upstream_file" ]; then
+  cat > "$upstream_file" <<EOF
+upstream ${host}_${service} {
+  server ${host}.fort.gisi.network:${port};
+}
+EOF
+
+  # Add server block...
+  nginx -s reload
+fi
+
+echo '{"status": "configured"}'
+```
+
+## Failure Handling
+
+**Provider down:** Host retries with exponential backoff. Eventually consistent.
+
+**Activation doesn't block:** Fetch script runs in background. Services start with placeholder creds (like today), real creds arrive when provider responds.
+
+**Deploys are retries:** Redeploy host = re-run activation = retry failed fetches.
+
+**Provider comes back:** Next host activation (or redeploy) succeeds. No manual intervention.
+
+## Credential Rotation
+
+**Option A: Periodic refresh**
 ```nix
-principals = {
-  admin = { publicKey = "ssh-ed25519 ..."; roles = ["root" "secrets"]; };
-  forge = { publicKey = "ssh-ed25519 ..."; roles = ["credential-provider"]; };
-  ratched = { publicKey = "age1..."; roles = ["dev-sandbox" "secrets"]; };
+systemd.timers.refresh-credentials = {
+  wantedBy = [ "timers.target" ];
+  timerConfig.OnCalendar = "daily";
+};
+
+systemd.services.refresh-credentials = {
+  script = ''
+    # Re-fetch all credentials, providers return fresh ones
+    ${activationScript}
+  '';
 };
 ```
 
-### Capability Mapping
+**Option B: Redeploy**
 
-Roles map to agent capabilities:
+Credential rotation = bump a version in manifest = deploy = hosts fetch new creds.
 
-| Role | Capabilities |
-|------|--------------|
-| `credential-provider` | `credentials:write`, `service:signal` |
-| `dev-sandbox` | `journal:read`, `status:query`, `file:read` |
-| `root` | all |
+This is actually correct for GitOps: changes flow through the repo, not side-channels.
 
-### Authentication
+**Option C: Host exposes rotation endpoint**
 
-**Open question:** How do we authenticate RPC callers?
-
-Options:
-1. **Tailnet identity** - Caller is a tailscale peer, we know their hostname
-2. **SSH key signing** - Reuse existing SSH keys to sign requests
-3. **mTLS** - Agent requires client cert, maps cert to principal
-4. **Bearer token** - Distribute tokens to principals (another credential to manage)
-
-Tailnet identity gives us the *host*, but principals are *keys* not hosts. A host could have multiple principals (e.g., ratched has both the dev-sandbox key and CI keys).
-
-**Pragmatic approach:** Use SSH keys to sign RPC requests. We already have the infrastructure - principals have keys, hosts have authorized keys. Agent validates signature against known principal keys.
-
+If forge needs to *force* rotation:
 ```
-Request:
-  POST /signal/outline.service
-  X-Principal: ratched
-  X-Signature: <ssh-signature of request body>
-
-Agent:
-  1. Look up ratched's public key
-  2. Verify signature
-  3. Check ratched's roles → capabilities
-  4. Execute if permitted
+POST ursula:agent/rotate?service=outline
 ```
 
-### RBAC Delivery
+But ursula *chooses* to expose this. The host is the authority on its affordances.
 
-For now: RBAC rules baked into agent at build time from cluster manifest.
+## RBAC
 
-Future consideration: Runtime RBAC updates via gitops (agents poll repo) or dedicated delivery. Deferred - the declarative baseline is sufficient initially.
+Providers need to validate requests. "Is this host allowed to request OIDC for this service?"
 
-## Agent Implementation
+**Simple approach:** Provider checks the cluster manifest.
+- Host requests: "I'm ursula, I need OIDC for outline"
+- Provider checks: "Does ursula's manifest include outline with sso.mode=oidc?"
+- If yes, fulfill. If no, reject.
 
-Intentionally simple. Candidates:
-- **Go** - Single static binary, easy to package in Nix, boring and reliable
-- **Rust** - Same benefits, slightly harder to build
-- **Elixir** - Overkill for a dumb agent, save for provider if needed
+The manifest is the authorization. It's signed (part of the Nix closure). Hosts can only request what they're configured to need.
 
-The agent is NOT the smart part. It's a secure RPC endpoint that validates and executes.
+**Authentication:** Requests come over tailnet. Tailscale identity = host identity. No additional auth needed.
+
+## Agent API
+
+Each host runs a simple agent that:
+1. Exposes the manifest (`GET /manifest`)
+2. Accepts credential writes (`POST /credentials/{service}`)
+3. Provides capabilities (`GET /journal/{service}`, etc.)
+
+But the agent is **reactive**, not **passive**. The host drives its own fulfillment. The agent is just the API for providers to respond through (and for optional capabilities like journal access).
 
 ```
-Endpoints:
-  GET  /manifest              → return host-manifest.json
-  GET  /status                → return system status
-  POST /credentials/{type}/{service}  → write credentials, return ok
-  POST /signal/{service}      → restart/reload service
-  GET  /journal/{service}     → stream journald logs (SSE or websocket)
-  GET  /file?path=...         → read file (scoped to allowed paths)
+Host Activation:
+  POST forge/oidc/register?service=outline
+    → forge validates, registers, responds with creds
+  Host writes creds locally
+  Host restarts service
+
+vs. today's model:
+  Host sits there
+  Forge SSHes in, writes creds, restarts service
+  Host is passive target
 ```
 
 ## Migration Path
 
-1. **Build agent** - Simple Go binary, package in Nix
-2. **Add agent aspect** - Deploy to all hosts (like host-status)
-3. **Build forge provider** - Reconciler for OIDC, SSL, git credentials
-4. **Run in parallel** - Both old (SSH) and new (agent) mechanisms
-5. **Validate** - Ensure new path works for all credential types
-6. **Cut over** - Disable SSH-based delivery
-7. **Remove deployer SSH key** - Forge no longer needs root everywhere
-8. **Build beacon provider** - Public proxy reconciliation
-9. **Consolidate** - Remove service-registry, certificate-broker aspects
+1. **Add provider endpoints to forge** - `/oidc/register`, `/ssl/cert`, `/git/token`
+2. **Add provider endpoints to beacon** - `/proxy/ensure`
+3. **Add fetch script to host activation** - Requests what's needed
+4. **Run in parallel** - Both old (SSH push) and new (host pull) work
+5. **Validate** - Ensure all credential types work
+6. **Remove SSH-based delivery** - service-registry, certificate-broker, etc.
+7. **Remove forge's SSH key** - It's just a server now
 
-## Open Questions
+## What We're Building
 
-1. **Agent discovery** - Providers iterate known hosts from manifest, or agents register on boot?
-2. **Health checking** - How do providers know an agent is healthy vs just slow?
-3. **Credential rotation** - How do we handle secret rotation? Providers re-deliver, agents restart?
-4. **Multi-cluster** - Does this design extend if we ever have multiple clusters?
-5. **Audit logging** - Where do RPC calls get logged? Agent-side, provider-side, both?
+| Component | What It Does |
+|-----------|--------------|
+| **Provider API (forge)** | Serves OIDC, SSL, git credentials on request |
+| **Provider API (beacon)** | Configures public proxies on request |
+| **Activation script (hosts)** | Fetches unfulfilled needs with backoff |
+| **Agent (hosts)** | Exposes capabilities (journal, status, etc.) |
 
-## Non-Goals (for now)
+That's it. No coordinator. No pub/sub. No polling. No scanning.
 
-- **Event-driven pubsub** - Polling is simpler and the reliability model is clearer
-- **Distributed coordination** - Single provider per domain is fine at our scale
-- **Runtime RBAC updates** - Declarative baseline is sufficient initially
+## Why This Works
+
+**Perfect knowledge:** Nix computes the full topology. Hosts know everything at build time.
+
+**Unidirectional flow:** State (manifest) flows from Nix. Requests flow from hosts to providers. No bidirectional bindings.
+
+**Host autonomy:** Hosts are responsible for themselves. They request what they need. No one pushes to them without consent.
+
+**Idempotent providers:** Request the same thing twice, get the same result. Safe to retry.
+
+**Eventual consistency:** Provider down? Retry later. Deploy out of order? Everyone catches up.
+
+## The Philosophy
+
+> Fetching OIDC credentials is no different than fetching a tarball.
+>
+> The host knows what it needs (declared in Nix).
+> The host knows where to get it (computed from cluster topology).
+> The host fetches it (on activation, with backoff).
+>
+> Providers don't coordinate. They serve.
+> Hosts don't wait to be provisioned. They request.
+>
+> There's no coordination layer because there's nothing to coordinate.
+> The coordination happened at eval time. Runtime is just execution.
 
 ---
 
 # Appendix: Alternative Universes
 
-Three idealized solutions from different engineering traditions, presented for entertainment and/or future regret.
+Four idealized solutions from different engineering traditions, presented for entertainment and/or future regret.
 
 ---
 
@@ -383,45 +482,6 @@ status:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### The Operators
-
-```go
-// oidc_credential_controller.go
-func (r *OIDCCredentialReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-    var cred fortv1.OIDCCredential
-    if err := r.Get(ctx, req.NamespacedName, &cred); err != nil {
-        return ctrl.Result{}, client.IgnoreNotFound(err)
-    }
-
-    // Check if credentials exist on target host
-    exists, err := r.AgentClient.CredentialsExist(cred.Namespace, cred.Spec.Service)
-    if err != nil {
-        return ctrl.Result{RequeueAfter: time.Minute}, err
-    }
-
-    if !exists {
-        // Register with pocket-id, deliver to agent
-        clientCreds, _ := r.PocketID.RegisterClient(cred.Spec.Service)
-        r.AgentClient.WriteCredentials(cred.Namespace, cred.Spec.Service, clientCreds)
-        r.AgentClient.RestartService(cred.Namespace, cred.Spec.Restart)
-    }
-
-    // Update status
-    cred.Status.Provisioned = true
-    r.Status().Update(ctx, &cred)
-
-    return ctrl.Result{RequeueAfter: time.Hour}, nil  // Re-check for rotation
-}
-```
-
-### Key Properties
-
-- **GitOps native** - The repo IS the desired state, ArgoCD enforces it
-- **CRDs as schema** - Type-safe(ish) YAML with validation
-- **Operators are just controllers** - Same pattern as our Model A, but in k8s idiom
-- **Vault handles secrets lifecycle** - Rotation, access control, audit - Vault's problem
-- **Mesh handles identity** - SPIFFE gives workload identity, mTLS everywhere
-
 ### Why It's Overkill
 
 You're running an entire k8s cluster (etcd, API server, controllers, CNI, CSI, service mesh, vault, argocd...) to manage 8 NixOS hosts. The k8s cluster has more moving parts than the infrastructure it manages.
@@ -438,27 +498,6 @@ The ecosystem is *there*. Need secret rotation? Vault has it. Need policy? OPA/G
 - Linkerd for service mesh
 - Custom operators in Go (kubebuilder)
 - Prometheus + Grafana + Loki
-
-### Sample Day-2 Operation
-
-```bash
-# Add new service needing OIDC
-cat <<EOF | kubectl apply -f -
-apiVersion: fort.nix/v1alpha1
-kind: OIDCCredential
-metadata:
-  name: wiki
-  namespace: ursula
-spec:
-  service: wiki
-  provider: pocket-id
-  restart: wiki.service
-EOF
-
-# Operator reconciles, credentials appear on ursula
-# Git commit happens automatically via ArgoCD write-back
-# Grafana alert confirms provisioning latency was 3.2s
-```
 
 ---
 
@@ -507,52 +546,6 @@ There is no forge. There is no beacon. There are only **peers**. Every node is e
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### How It Works
-
-**Discovery:**
-```
-ursula publishes to DHT:
-  key: hash("needs:oidc:outline")
-  value: {peer_id: ursula, service: outline, timestamp: ...}
-
-any peer providing OIDC capability is subscribed to "needs:oidc:*"
-  → receives notification via DHT pub/sub
-  → fulfills if it can
-  → publishes fulfillment to DHT
-```
-
-**Credential Distribution:**
-```
-credential = {client_id: "...", client_secret: "...", for: "outline@ursula"}
-cid = ipfs.add(credential)  # Content-addressed
-
-fulfillment published to DHT:
-  key: hash("fulfilled:oidc:outline@ursula")
-  value: {cid: cid, provider: drhorrible, sig: ...}
-
-ursula subscribes to "fulfilled:*:*@ursula"
-  → receives fulfillment
-  → fetches content by CID (from any peer that has it!)
-  → verifies provider signature against web of trust
-  → applies credential
-```
-
-**Web of Trust:**
-```
-# Bootstrap: cluster root key signs initial peer keys
-root_key.sign(drhorrible_key, capabilities: [:oidc_provider, :ssl_provider])
-root_key.sign(raishan_key, capabilities: [:proxy_provider])
-root_key.sign(ursula_key, capabilities: [:service_host])
-
-# Peers can delegate:
-drhorrible_key.sign(ci_key, capabilities: [:oidc_provider],
-                    constraint: {services: ["forgejo-*"]})
-
-# Verification is a chain walk:
-#   ci_key → signed by drhorrible → signed by root → trusted
-#   with accumulated constraints checked at each hop
-```
-
 ### The Manifesto
 
 > "You call it 'forge' and 'beacon' but what you mean is 'master' and 'gatekeeper.'
@@ -574,14 +567,6 @@ drhorrible_key.sign(ci_key, capabilities: [:oidc_provider],
 > The only hierarchy should be the transitive delegation of capabilities,
 > and that hierarchy is *chosen* by each peer, not imposed by architecture."
 
-### Key Properties
-
-- **No special nodes** - "Forge" is just a peer that happens to have pocket-id credentials
-- **Location-independent** - Credentials identified by content hash, fetchable from anywhere
-- **Partition-tolerant** - Network splits? Each partition continues operating with available providers
-- **Censorship-resistant** - No single node can refuse service to another (okay, maybe less relevant for a homelab)
-- **Emergent coordination** - Order arises from local rules, not global orchestration
-
 ### Why It's Overkill
 
 You're building a decentralized autonomous organization to manage 8 computers in your house that you own. The web of trust has 8 nodes. The DHT has 8 nodes. The "partition tolerance" protects against... your router rebooting.
@@ -589,8 +574,6 @@ You're building a decentralized autonomous organization to manage 8 computers in
 ### Why It's Philosophically Appealing
 
 The architecture has no lies in it. There IS no master. There IS no center. It's not "master with extra steps" - it's genuinely flat. If you believe architectures encode values, this one encodes the right ones.
-
-Also if you ever wanted to make your homelab a template that others could federate with... it's already designed for that. Your ursula could request credentials from my forge. We're all just peers.
 
 ### Tech Stack
 
@@ -600,27 +583,6 @@ Also if you ever wanted to make your homelab a template that others could federa
 - Gossipsub for pub/sub
 - UCAN or Biscuit for capability tokens
 - Custom web-of-trust implementation (or adapt Keybase's)
-
-### Sample Interaction
-
-```
-# ursula needs OIDC for new service
-$ fort-peer publish-need --type oidc --service wiki
-
-# propagates via gossip, any capable peer can fulfill
-# on drhorrible (or any OIDC-capable peer):
-[fort-peer] Received need: oidc for wiki@ursula
-[fort-peer] I have oidc_provider capability, fulfilling...
-[fort-peer] Registered client with pocket-id
-[fort-peer] Published credential to network: QmXyz...
-[fort-peer] Announced fulfillment to DHT
-
-# back on ursula:
-[fort-peer] Received fulfillment for wiki from drhorrible
-[fort-peer] Fetching credential QmXyz... (found 2 peers with content)
-[fort-peer] Verifying signature chain: drhorrible → root ✓
-[fort-peer] Applying credential, restarting wiki.service
-```
 
 ---
 
@@ -668,158 +630,6 @@ The entire cluster state is a Nix expression. Credentials aren't "delivered" - t
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Credentials as Derivations
-
-```nix
-# lib/credentials.nix
-{ pkgs, domain }:
-
-{
-  mkOIDCCredential = { service, host }: pkgs.runCommand "oidc-${service}-${host}" {
-    nativeBuildInputs = [ pkgs.curl pkgs.jq ];
-
-    # Fixed-output derivation - we declare the hash, builder can be impure
-    outputHashMode = "recursive";
-    outputHashAlgo = "sha256";
-    outputHash = ""; # Computed after first build, pinned thereafter
-
-    # Inputs that affect the output
-    inherit service host;
-    pocketIdUrl = "https://id.${domain}";
-
-    # This is the controversial part
-    __impure = true; # Or use IFD, or accept the hash dance
-  } ''
-    mkdir -p $out
-
-    # Register client with pocket-id
-    response=$(curl -s -X POST "$pocketIdUrl/api/oidc/clients" \
-      -H "Authorization: Bearer $POCKET_ID_ADMIN_TOKEN" \
-      -d '{"name": "${service}.${host}"}')
-
-    echo "$response" | jq -r '.client_id' > $out/client-id
-    echo "$response" | jq -r '.client_secret' > $out/client-secret
-
-    # Include metadata for auditability
-    cat > $out/metadata.json <<EOF
-    {
-      "service": "${service}",
-      "host": "${host}",
-      "created": "$(date -Iseconds)",
-      "derivation": "$drv"
-    }
-    EOF
-  '';
-
-  mkSSLCert = { domain, hosts }: /* similar pattern */;
-
-  mkGitCredential = { host, scope }: /* similar pattern */;
-}
-```
-
-### Cluster State as a Flake
-
-```nix
-# flake.nix (or cluster-credentials.nix)
-{
-  outputs = { self, nixpkgs, ... }:
-  let
-    credentials = import ./lib/credentials.nix {
-      inherit (nixpkgs.legacyPackages.x86_64-linux) pkgs;
-      domain = "gisi.network";
-    };
-  in {
-    # The entire credential state, declaratively
-    clusterCredentials = {
-      ursula = {
-        oidc.outline = credentials.mkOIDCCredential {
-          service = "outline";
-          host = "ursula";
-        };
-        oidc.wiki = credentials.mkOIDCCredential {
-          service = "wiki";
-          host = "ursula";
-        };
-      };
-      minos = {
-        oidc.homeassistant = credentials.mkOIDCCredential {
-          service = "homeassistant";
-          host = "minos";
-        };
-      };
-      # Every credential in the cluster, all derivations
-    };
-
-    # Build all credentials for a host
-    packages.x86_64-linux = {
-      ursula-credentials = pkgs.symlinkJoin {
-        name = "ursula-credentials";
-        paths = builtins.attrValues self.clusterCredentials.ursula;
-      };
-    };
-  };
-}
-```
-
-### Deployment
-
-```bash
-# "Credential delivery" is just nix copy
-$ nix build .#ursula-credentials
-$ nix copy --to ssh://ursula.fort.gisi.network ./result
-
-# On ursula, activation script symlinks into place
-# /var/lib/fort-auth/outline → /nix/store/abc123-oidc-outline-ursula
-
-# Rollback? Just switch the symlink to the previous store path
-$ nix profile rollback
-
-# Audit? The store path IS the audit trail
-$ nix derivation show /nix/store/abc123-oidc-outline-ursula
-# Shows exactly what inputs produced this credential
-```
-
-### The Impurity Problem
-
-OIDC registration has side effects - it creates state in pocket-id. Three approaches:
-
-**1. Fixed-Output Derivations (FOD)**
-```nix
-# Declare the expected hash, let builder be impure
-outputHash = "sha256-abc123...";
-# First build computes hash, subsequent builds verify
-# Problem: hash changes if pocket-id returns different client_id
-```
-
-**2. Import From Derivation (IFD)**
-```nix
-# Build a "registration" derivation that outputs the hash
-# Then import that hash into the credential derivation
-# Problem: IFD is slow and controversial
-```
-
-**3. Two-Phase Reconciliation**
-```nix
-# Pure derivation describes INTENT
-credentialSpec = {
-  type = "oidc";
-  service = "outline";
-  host = "ursula";
-  provider = "pocket-id";
-};
-
-# Impure reconciler (separate from Nix) ensures pocket-id state matches
-# Then builds credential derivation with known values
-# This is basically what we're already doing, just more honest about it
-```
-
-**4. Embrace Impurity**
-```nix
-# Just mark it __impure and move on
-# "Reproducible where possible, honest where not"
-# The store path still gives you content-addressing and rollback
-```
-
 ### The Manifesto
 
 > "You have `/var/lib/fort-auth/outline/client-secret`. What produced it? When? With what inputs? Can you rebuild it? Can you diff it against last week's version?
@@ -835,15 +645,6 @@ credentialSpec = {
 > Runtime coordination isn't 'delivering credentials.' It's ensuring the correct store paths are present on the correct hosts. `nix copy` is the delivery mechanism. The agent is a binary cache. The manifest is a flake.
 >
 > You're already doing this for packages. Why are credentials special?"
-
-### Key Properties
-
-- **Immutable** - Credentials are store paths, not mutable files
-- **Content-addressed** - The hash IS the identity
-- **Auditable** - `nix derivation show` gives full provenance
-- **Rollback-native** - Previous credentials are still in the store
-- **Reproducible** - Given the same inputs... okay, mostly reproducible
-- **Unified tooling** - `nix build`, `nix copy`, `nix profile` - no new verbs
 
 ### Why It's Overkill
 
@@ -863,64 +664,29 @@ And rollback! If a credential rotation breaks something, `nix profile rollback` 
 - Fixed-output derivations for impure builds
 - `nix copy` for distribution
 - Activation scripts for symlinking
-- Maybe `agenix` or `sops-nix` for the encryption layer (store paths are world-readable)
-
-### Sample Workflow
-
-```bash
-# Add new service needing OIDC
-$ cat >> cluster-credentials.nix <<EOF
-ursula.oidc.newservice = mkOIDCCredential {
-  service = "newservice";
-  host = "ursula";
-};
-EOF
-
-# Build (registers with pocket-id, outputs store path)
-$ nix build .#clusterCredentials.ursula.oidc.newservice
-/nix/store/def456-oidc-newservice-ursula
-
-# Deploy
-$ nix copy --to ssh://ursula ./result
-$ ssh ursula 'systemctl restart newservice'
-
-# Oh no, it broke something
-$ ssh ursula 'nix profile rollback'
-# Previous credential restored instantly
-
-# Audit trail
-$ nix derivation show /nix/store/def456-oidc-newservice-ursula
-{
-  "inputDrvs": { ... },
-  "env": {
-    "service": "newservice",
-    "host": "ursula",
-    "pocketIdUrl": "https://id.gisi.network"
-  }
-}
-```
+- Maybe `agenix` or `sops-nix` for the encryption layer
 
 ---
 
 ## Comparison Matrix
 
-| Aspect | Erlang Telephony | Kubernetes | P2P Anarchist | Store-Passing Purist |
-|--------|------------------|------------|---------------|----------------------|
-| State model | CRDTs | etcd + CRDs | DHT + content-addressing | Nix store paths |
-| Coordination | None (convergent) | Controllers | Gossip | `nix copy` |
-| Identity | Capability tokens | SPIFFE/mTLS | Public keys + web of trust | Derivation hashes |
-| Discovery | Distributed Erlang | DNS/service mesh | Kademlia DHT | Flake references |
-| Policy | Datalog | OPA/Rego YAML | Capability chains | Nix module system |
-| Failure mode | "Crash and restart" | "Retry with backoff" | "Route around damage" | "Build failed" |
-| Philosophy | Mathematical elegance | Enterprise pragmatism | Radical decentralization | Radical purity |
-| Overkill factor | 10x | 15x | 50x | ∞ |
-| Nerd appeal | Very high | Medium | Astronomical | Mass nix-brain |
+| Aspect | Host-Driven (Main) | Erlang | Kubernetes | P2P | Store-Passing |
+|--------|-------------------|--------|------------|-----|---------------|
+| State model | Nix manifests | CRDTs | etcd + CRDs | DHT | Nix store |
+| Who initiates | Host | N/A (converge) | Controller | Peers | Build system |
+| Provider role | Server | Peer | Operator | Peer | Cache |
+| Coordination | None (host knows) | None (convergent) | Controllers | Gossip | `nix copy` |
+| Failure mode | Retry with backoff | Crash and restart | Retry with backoff | Route around | Build failed |
+| Philosophy | Radical simplicity | Mathematical elegance | Enterprise pragmatism | Decentralization | Radical purity |
+| Overkill factor | 1x | 10x | 15x | 50x | ∞ |
 
 ---
 
 ## Which One Should We Build?
 
-None of them. We should build Model A from the main document.
+**The main design (host-driven).** It's the only one that isn't cosplaying.
+
+The host knows what it needs. The host fetches it. Providers serve. There's no coordination because Nix already did the coordination at eval time.
 
 But if the CTO forgets we're a cost center, it's Option B.
 If we're doing it for the love of the craft, it's Option A.
