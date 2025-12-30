@@ -1,4 +1,4 @@
-deploy_key := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.sshKey.privateKeyPath'`
+deploy_key := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.principals.admin.privateKeyPath'`
 domain := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.domain'`
 cluster := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).clusterName'`
 

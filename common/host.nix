@@ -12,12 +12,21 @@ args@{
 let
   cluster = import ../common/cluster-context.nix { };
   rootManifest = cluster.manifest;
+  settings = rootManifest.fortConfig.settings;
 
   hostManifest = import (hostDir + "/manifest.nix");
   deviceManifest = import (cluster.devicesDir + "/${hostManifest.device}/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
 
   flatMap = f: xs: builtins.concatLists (map f xs);
+
+  # Derive SSH keys for root access from principals with "root" role
+  # Only SSH keys work for authorized_keys (filter out age keys)
+  isSSHKey = k: builtins.substring 0 4 k == "ssh-";
+  principalsWithRoot = builtins.filter
+    (p: builtins.elem "root" (p.roles or [ ]))
+    (builtins.attrValues settings.principals);
+  rootAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithRoot);
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
   allAspects = hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
   allApps = hostManifest.apps ++ flatMap (r: r.apps or [ ]) roles;
@@ -91,7 +100,7 @@ in
         };
         age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
-        users.users.root.openssh.authorizedKeys.keys = rootManifest.fortConfig.settings.authorizedDeployKeys;
+        users.users.root.openssh.authorizedKeys.keys = rootAuthorizedKeys;
       }
       impermanence.nixosModules.impermanence
       rootManifest.module

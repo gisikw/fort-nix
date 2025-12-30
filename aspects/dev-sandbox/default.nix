@@ -2,12 +2,20 @@
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+  settings = rootManifest.fortConfig.settings;
   user = "dev";
   homeDir = "/home/${user}";
 
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
   beads = import ../../pkgs/beads { inherit pkgs; };
+
+  # Derive SSH keys for dev-sandbox access from principals
+  isSSHKey = k: builtins.substring 0 4 k == "ssh-";
+  principalsWithDevSandbox = builtins.filter
+    (p: builtins.elem "dev-sandbox" (p.roles or [ ]))
+    (builtins.attrValues settings.principals);
+  devAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithDevSandbox);
 
   # Core development tools
   devTools = with pkgs; [
@@ -51,9 +59,6 @@ let
     claude-code
     beads
   ];
-
-  # Public key for SSH access
-  devPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILjnWniCp8wmg2JzxbWDv5MLEZtdMJqqszZ0F3slNoAF dev@ratched.fort";
 in
 {
   # Create the dev user
@@ -62,17 +67,7 @@ in
     home = homeDir;
     shell = pkgs.zsh;
     extraGroups = [ "wheel" ];
-    openssh.authorizedKeys.keys = [
-      devPubKey
-    ] ++ rootManifest.fortConfig.settings.authorizedDeployKeys;
-  };
-
-  # SSH private key for the dev user (for git operations, etc.)
-  age.secrets.dev-ssh-key = {
-    file = ./dev-ssh-key.age;
-    owner = user;
-    mode = "0400";
-    path = "${homeDir}/.ssh/id_ed25519";
+    openssh.authorizedKeys.keys = devAuthorizedKeys;
   };
 
   # Install dev tools system-wide
@@ -108,28 +103,6 @@ in
     "d ${homeDir}/.ssh 0700 ${user} users -"
     "d ${homeDir}/Projects 0755 ${user} users -"
   ];
-
-  # Basic shell configuration for dev user
-  system.activationScripts.devUserConfig = ''
-    # Create .ssh/config if it doesn't exist
-    if [ ! -f ${homeDir}/.ssh/config ]; then
-      cat > ${homeDir}/.ssh/config << 'EOF'
-Host github.com
-  IdentityFile ~/.ssh/id_ed25519
-  User git
-
-Host *.fort.${domain}
-  IdentityFile ~/.ssh/id_ed25519
-EOF
-      chown ${user}:users ${homeDir}/.ssh/config
-      chmod 600 ${homeDir}/.ssh/config
-    fi
-
-    # Create public key file
-    echo "${devPubKey}" > ${homeDir}/.ssh/id_ed25519.pub
-    chown ${user}:users ${homeDir}/.ssh/id_ed25519.pub
-    chmod 644 ${homeDir}/.ssh/id_ed25519.pub
-  '';
 
   # Git credential helper for Forgejo access
   # Reads the token distributed by forgejo-deploy-token-sync

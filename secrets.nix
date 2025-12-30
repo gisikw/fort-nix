@@ -2,10 +2,11 @@ let
   cluster = import ./common/cluster-context.nix { };
   settings = cluster.manifest.fortConfig.settings;
 
-  deployKeys = settings.authorizedDeployKeys;
-  ciAgeKey = settings.ciAgeKey;
-  privilegedKeys = settings.privilegedKeys;
-  primaryKeys = [ ciAgeKey ] ++ privilegedKeys ++ deployKeys;
+  # Derive editor keys from principals with "secrets" role
+  principalsWithSecrets = builtins.filter
+    (p: builtins.elem "secrets" (p.roles or [ ]))
+    (builtins.attrValues settings.principals);
+  primaryKeys = map (p: p.publicKey) principalsWithSecrets;
 
   deviceDir = cluster.devicesDir;
   deviceEntries = builtins.readDir deviceDir;
@@ -32,7 +33,6 @@ in
   "./clusters/bedlam/hosts/minos/zwave-security-keys.json.age".publicKeys = activeKeys;
   "./apps/homeassistant/secrets.yaml.age".publicKeys = activeKeys;
   "./apps/fort-mcp/secrets.env.age".publicKeys = activeKeys;
-  "./aspects/dev-sandbox/dev-ssh-key.age".publicKeys = activeKeys;
   "./clusters/bedlam/github-mirror-token.age".publicKeys = activeKeys;
   "./apps/forgejo/runner-secret.age".publicKeys = activeKeys;
   "./apps/attic/attic-server-token.age".publicKeys = activeKeys;
