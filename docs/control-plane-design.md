@@ -167,6 +167,23 @@ location /agent/ {
 
 Handler scripts receive validated requests, return responses. The wrapper adds `X-Fort-Handle` if the handler provides one.
 
+## Design Decisions
+
+**Two god nodes, separated by concern:**
+- **Forge** (drhorrible): Identity & secrets - OIDC registration, SSL certs, git tokens
+- **Beacon** (raishan): Network edge - public proxy config, headscale coordination
+
+Beacon must exist as a separate node because it's the publicly addressable VPS. Headscale coordination requires a public IP. Can't collapse into forge without port-level forwarding complexity.
+
+**Deploy resilience:**
+Fulfillment is best-effort, not a deploy blocker. `fort-fulfill.service` succeeds even if some needs fail (logs warnings). Services start regardless. Timer retries failed needs. Apps either handle missing creds gracefully or fail to serve auth-gated requests until creds arrive. Non-local dependencies should never block a deploy.
+
+**Egress namespace is orthogonal:**
+`inEgressNamespace` is an eval-time concern (network sandboxing for privacy). Not a control plane concern - purely local to the host.
+
+**LDAP groups are app permissions:**
+Groups in `sso.groups` control who can access an app via oauth2-proxy, not infrastructure permissions. Orthogonal to control plane except for potential future pocket-id feature (OIDC client restrictions by group - see fort-0rj).
+
 ## Open Questions
 
 **Streaming:** For capabilities like journal tailing, what's the transport? Options:
