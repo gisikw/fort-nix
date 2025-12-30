@@ -9,7 +9,7 @@ in
       image = "containers.${fort.settings.domain}/ghcr.io/lukegus/termix:latest";
       ports = [ "8080:8080" ];
       volumes = [
-        "/var/lib/termix:/data"
+        "/var/lib/termix:/app/data"
       ];
     };
   };
