@@ -138,7 +138,7 @@ in
       sshUser = "root";
       sshOpts = [
         "-i"
-        rootManifest.fortConfig.settings.sshKey.privateKeyPath
+        settings.principals.admin.privateKeyPath
       ];
       path =
         deploy-rs.lib.${deviceProfileManifest.system}.activate.nixos
