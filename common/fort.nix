@@ -7,7 +7,6 @@
 }:
 let
   domain = rootManifest.fortConfig.settings.domain;
-  servicesJson = builtins.toFile "services.json" (builtins.toJSON config.fortCluster.exposedServices);
 in
 {
   options.fortCluster = lib.mkOption {
@@ -243,13 +242,7 @@ in
       ];
     })
 
-    {
-      system.activationScripts.fortServices.text = ''
-        install -Dm0640 ${servicesJson} /var/lib/fort/services.json
-      '';
-    }
-
-    # Write host manifest (apps, aspects, roles) for service discovery
+    # Write unified host manifest for service discovery
     {
       system.activationScripts.fortHostManifest.text = let
         # Extract aspect names (handle both string and {name=...} forms)
@@ -258,6 +251,7 @@ in
           apps = config.fort.host.apps or [];
           aspects = map aspectName (config.fort.host.aspects or []);
           roles = config.fort.host.roles or [];
+          exposedServices = config.fortCluster.exposedServices;
         });
       in ''
         install -Dm0644 ${hostManifestJson} /var/lib/fort/host-manifest.json

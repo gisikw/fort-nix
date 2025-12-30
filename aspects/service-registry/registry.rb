@@ -31,13 +31,15 @@ services = hosts.reduce([]) do |services, host|
   lines = ssh host, "
     (ip -4 -o addr show fortmesh0 2>/dev/null || echo 'NOFORT') | head -n1
     (ip -4 route get #{host_lan_ip} 2>/dev/null || echo 'NOROUTE') | head -n1
-    cat /var/lib/fort/services.json 2>/dev/null || echo '[]'
+    cat /var/lib/fort/host-manifest.json 2>/dev/null || echo '{}'
   "
 
   vpn_ip = lines[0].split(/\s+/)[3].split("/")[0] rescue 'NOFORT'
   lan_ip = lines[1].match(/src\s+(\S+)/)[1] rescue 'NOROUTE'
 
-  services | JSON.parse(lines[2]).each do |service|
+  manifest = JSON.parse(lines[2])
+  exposed_services = manifest["exposedServices"] || []
+  services | exposed_services.each do |service|
     service["hostname"] = "#{host}.fort.#{DOMAIN}"
     service["host"] = host
     service["vpn_ip"] = vpn_ip
