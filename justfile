@@ -172,6 +172,11 @@ assign device host:
 
 deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
+  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
+    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
+    exit 1
+  fi
+
   hosts_root="./hosts"
   devices_root="./devices"
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; devices_root="./clusters/{{cluster}}/devices"; fi
