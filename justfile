@@ -208,7 +208,19 @@ deploy host addr=(host + ".fort." + domain):
 
   trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
   KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
+
+  # Write deploy info for non-gitops hosts (status endpoint uses this as fallback)
+  deploy_commit=$(git rev-parse --short HEAD)
+  deploy_timestamp=$(date -Iseconds)
+  deploy_branch=$(git rev-parse --abbrev-ref HEAD)
+  deploy_info="{\"commit\":\"${deploy_commit}\",\"timestamp\":\"${deploy_timestamp}\",\"branch\":\"${deploy_branch}\"}"
+
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build "${host_dir}#{{host}}"
+
+  # Write deploy info to target host after successful deploy
+  echo "[Fort] Writing deploy info to {{addr}}"
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
+    "mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json"
 
 fmt:
   nix run .#nixfmt -- .

@@ -28,7 +28,9 @@ let
     (builtins.attrValues settings.principals);
   rootAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithRoot);
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
-  allAspects = hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
+  # Default aspects that every host gets
+  defaultAspects = [ "host-status" ];
+  allAspects = defaultAspects ++ hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
   allApps = hostManifest.apps ++ flatMap (r: r.apps or [ ]) roles;
 
   mkModule =

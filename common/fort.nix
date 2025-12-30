@@ -126,6 +126,16 @@ in
   };
 
   config = lib.mkMerge [
+    # VPN geo block - always defined so aspects (like host-status) can use it
+    {
+      services.nginx.commonHttpConfig = lib.mkBefore ''
+        geo $is_vpn {
+          default 0;
+          100.64.0.0/10 1;
+        }
+      '';
+    }
+
     (lib.mkIf (lib.length config.fortCluster.exposedServices >= 1) {
 
       systemd.services = lib.mkMerge (map (svc:
@@ -192,14 +202,6 @@ in
       services.nginx = {
         enable = true;
         recommendedProxySettings = true;
-
-        commonHttpConfig = ''
-          # Whitelist VPN addresses
-          geo $is_vpn {
-            default 0;
-            100.64.0.0/10 1;
-          }
-        '';
 
         virtualHosts = lib.listToAttrs (
           map (
