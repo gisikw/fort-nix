@@ -624,19 +624,297 @@ $ fort-peer publish-need --type oidc --service wiki
 
 ---
 
+## D. The Store-Passing Purist
+
+*"What if credentials were derivations?"*
+
+This engineer read the Nix thesis in one sitting, believes `nixpkgs` is humanity's greatest collaborative achievement, and gets genuinely upset when people use `writeFile` instead of `writeTextFile`. They've replaced their todo list with a flake.
+
+### Philosophy
+
+The entire cluster state is a Nix expression. Credentials aren't "delivered" - they're *built*. Runtime agents are just binary caches serving content-addressed blobs. Mutable files are a lie.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Nix Expression Layer                         │
+│  Cluster state IS a flake. Credentials ARE derivations.         │
+│  clusterState.ursula.credentials.outline → /nix/store/xyz...    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ nix build
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Content-Addressed Store                      │
+│  /nix/store/abc123-oidc-outline-ursula/client-id               │
+│  Immutable. Reproducible (mostly). Auditable.                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ nix copy
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Agent as Binary Cache                        │
+│  Agents don't "accept credentials" - they serve store paths     │
+│  nix copy --to ssh://ursula /nix/store/abc123-oidc-...         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ activation script
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Symlink Farm                                 │
+│  /var/lib/fort-auth/outline → /nix/store/abc123-oidc-.../      │
+│  "Mutable" paths are just symlinks to immutable store paths     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Credentials as Derivations
+
+```nix
+# lib/credentials.nix
+{ pkgs, domain }:
+
+{
+  mkOIDCCredential = { service, host }: pkgs.runCommand "oidc-${service}-${host}" {
+    nativeBuildInputs = [ pkgs.curl pkgs.jq ];
+
+    # Fixed-output derivation - we declare the hash, builder can be impure
+    outputHashMode = "recursive";
+    outputHashAlgo = "sha256";
+    outputHash = ""; # Computed after first build, pinned thereafter
+
+    # Inputs that affect the output
+    inherit service host;
+    pocketIdUrl = "https://id.${domain}";
+
+    # This is the controversial part
+    __impure = true; # Or use IFD, or accept the hash dance
+  } ''
+    mkdir -p $out
+
+    # Register client with pocket-id
+    response=$(curl -s -X POST "$pocketIdUrl/api/oidc/clients" \
+      -H "Authorization: Bearer $POCKET_ID_ADMIN_TOKEN" \
+      -d '{"name": "${service}.${host}"}')
+
+    echo "$response" | jq -r '.client_id' > $out/client-id
+    echo "$response" | jq -r '.client_secret' > $out/client-secret
+
+    # Include metadata for auditability
+    cat > $out/metadata.json <<EOF
+    {
+      "service": "${service}",
+      "host": "${host}",
+      "created": "$(date -Iseconds)",
+      "derivation": "$drv"
+    }
+    EOF
+  '';
+
+  mkSSLCert = { domain, hosts }: /* similar pattern */;
+
+  mkGitCredential = { host, scope }: /* similar pattern */;
+}
+```
+
+### Cluster State as a Flake
+
+```nix
+# flake.nix (or cluster-credentials.nix)
+{
+  outputs = { self, nixpkgs, ... }:
+  let
+    credentials = import ./lib/credentials.nix {
+      inherit (nixpkgs.legacyPackages.x86_64-linux) pkgs;
+      domain = "gisi.network";
+    };
+  in {
+    # The entire credential state, declaratively
+    clusterCredentials = {
+      ursula = {
+        oidc.outline = credentials.mkOIDCCredential {
+          service = "outline";
+          host = "ursula";
+        };
+        oidc.wiki = credentials.mkOIDCCredential {
+          service = "wiki";
+          host = "ursula";
+        };
+      };
+      minos = {
+        oidc.homeassistant = credentials.mkOIDCCredential {
+          service = "homeassistant";
+          host = "minos";
+        };
+      };
+      # Every credential in the cluster, all derivations
+    };
+
+    # Build all credentials for a host
+    packages.x86_64-linux = {
+      ursula-credentials = pkgs.symlinkJoin {
+        name = "ursula-credentials";
+        paths = builtins.attrValues self.clusterCredentials.ursula;
+      };
+    };
+  };
+}
+```
+
+### Deployment
+
+```bash
+# "Credential delivery" is just nix copy
+$ nix build .#ursula-credentials
+$ nix copy --to ssh://ursula.fort.gisi.network ./result
+
+# On ursula, activation script symlinks into place
+# /var/lib/fort-auth/outline → /nix/store/abc123-oidc-outline-ursula
+
+# Rollback? Just switch the symlink to the previous store path
+$ nix profile rollback
+
+# Audit? The store path IS the audit trail
+$ nix derivation show /nix/store/abc123-oidc-outline-ursula
+# Shows exactly what inputs produced this credential
+```
+
+### The Impurity Problem
+
+OIDC registration has side effects - it creates state in pocket-id. Three approaches:
+
+**1. Fixed-Output Derivations (FOD)**
+```nix
+# Declare the expected hash, let builder be impure
+outputHash = "sha256-abc123...";
+# First build computes hash, subsequent builds verify
+# Problem: hash changes if pocket-id returns different client_id
+```
+
+**2. Import From Derivation (IFD)**
+```nix
+# Build a "registration" derivation that outputs the hash
+# Then import that hash into the credential derivation
+# Problem: IFD is slow and controversial
+```
+
+**3. Two-Phase Reconciliation**
+```nix
+# Pure derivation describes INTENT
+credentialSpec = {
+  type = "oidc";
+  service = "outline";
+  host = "ursula";
+  provider = "pocket-id";
+};
+
+# Impure reconciler (separate from Nix) ensures pocket-id state matches
+# Then builds credential derivation with known values
+# This is basically what we're already doing, just more honest about it
+```
+
+**4. Embrace Impurity**
+```nix
+# Just mark it __impure and move on
+# "Reproducible where possible, honest where not"
+# The store path still gives you content-addressing and rollback
+```
+
+### The Manifesto
+
+> "You have `/var/lib/fort-auth/outline/client-secret`. What produced it? When? With what inputs? Can you rebuild it? Can you diff it against last week's version?
+>
+> You don't know. It's a file. Files lie.
+>
+> `/nix/store/abc123-oidc-outline-ursula` tells the truth. It was built by derivation `xyz`, with inputs `[pocket-id-url, service-name, ...]`, at time `T`. The hash proves integrity. The derivation proves provenance.
+>
+> 'But OIDC registration has side effects!' Yes. So does `fetchurl`. We handle it the same way: fixed-output derivations, content-addressing, and accepting that some things touch the network.
+>
+> 'But credentials rotate!' Yes. Rotation produces a new store path. The old one remains, immutable, for rollback. This isn't a bug, it's the entire point.
+>
+> Runtime coordination isn't 'delivering credentials.' It's ensuring the correct store paths are present on the correct hosts. `nix copy` is the delivery mechanism. The agent is a binary cache. The manifest is a flake.
+>
+> You're already doing this for packages. Why are credentials special?"
+
+### Key Properties
+
+- **Immutable** - Credentials are store paths, not mutable files
+- **Content-addressed** - The hash IS the identity
+- **Auditable** - `nix derivation show` gives full provenance
+- **Rollback-native** - Previous credentials are still in the store
+- **Reproducible** - Given the same inputs... okay, mostly reproducible
+- **Unified tooling** - `nix build`, `nix copy`, `nix profile` - no new verbs
+
+### Why It's Overkill
+
+You're encoding your secrets in the Nix store, which is world-readable by default. You'd need `nix-store --add-fixed` and careful permission management. You're fighting the tool - Nix wasn't designed for secrets management.
+
+Also, the impurity is real. OIDC registration can't be pure. You're either lying about it (FOD with unstable hashes) or doing the reconciliation dance anyway.
+
+### Why It's Beautiful
+
+The abstraction is honest. Instead of pretending credentials are "just files that get written," you're explicit: they're content-addressed artifacts with derivations that describe their provenance.
+
+And rollback! If a credential rotation breaks something, `nix profile rollback` and you're back. No "restore from backup," no "hope you kept the old file." The previous store path is right there.
+
+### Tech Stack
+
+- Nix (obviously)
+- Fixed-output derivations for impure builds
+- `nix copy` for distribution
+- Activation scripts for symlinking
+- Maybe `agenix` or `sops-nix` for the encryption layer (store paths are world-readable)
+
+### Sample Workflow
+
+```bash
+# Add new service needing OIDC
+$ cat >> cluster-credentials.nix <<EOF
+ursula.oidc.newservice = mkOIDCCredential {
+  service = "newservice";
+  host = "ursula";
+};
+EOF
+
+# Build (registers with pocket-id, outputs store path)
+$ nix build .#clusterCredentials.ursula.oidc.newservice
+/nix/store/def456-oidc-newservice-ursula
+
+# Deploy
+$ nix copy --to ssh://ursula ./result
+$ ssh ursula 'systemctl restart newservice'
+
+# Oh no, it broke something
+$ ssh ursula 'nix profile rollback'
+# Previous credential restored instantly
+
+# Audit trail
+$ nix derivation show /nix/store/def456-oidc-newservice-ursula
+{
+  "inputDrvs": { ... },
+  "env": {
+    "service": "newservice",
+    "host": "ursula",
+    "pocketIdUrl": "https://id.gisi.network"
+  }
+}
+```
+
+---
+
 ## Comparison Matrix
 
-| Aspect | Erlang Telephony | Kubernetes | P2P Anarchist |
-|--------|------------------|------------|---------------|
-| State model | CRDTs | etcd + CRDs | DHT + content-addressing |
-| Coordination | None (convergent) | Controllers | Gossip |
-| Identity | Capability tokens | SPIFFE/mTLS | Public keys + web of trust |
-| Discovery | Distributed Erlang | DNS/service mesh | Kademlia DHT |
-| Policy | Datalog | OPA/Rego YAML | Capability chains |
-| Failure mode | "Crash and restart" | "Retry with backoff" | "Route around damage" |
-| Philosophy | Mathematical elegance | Enterprise pragmatism | Radical decentralization |
-| Overkill factor | 10x | 15x | 50x |
-| Mass nerd appeal | Very high | Medium | Astronomical |
+| Aspect | Erlang Telephony | Kubernetes | P2P Anarchist | Store-Passing Purist |
+|--------|------------------|------------|---------------|----------------------|
+| State model | CRDTs | etcd + CRDs | DHT + content-addressing | Nix store paths |
+| Coordination | None (convergent) | Controllers | Gossip | `nix copy` |
+| Identity | Capability tokens | SPIFFE/mTLS | Public keys + web of trust | Derivation hashes |
+| Discovery | Distributed Erlang | DNS/service mesh | Kademlia DHT | Flake references |
+| Policy | Datalog | OPA/Rego YAML | Capability chains | Nix module system |
+| Failure mode | "Crash and restart" | "Retry with backoff" | "Route around damage" | "Build failed" |
+| Philosophy | Mathematical elegance | Enterprise pragmatism | Radical decentralization | Radical purity |
+| Overkill factor | 10x | 15x | 50x | ∞ |
+| Nerd appeal | Very high | Medium | Astronomical | Mass nix-brain |
 
 ---
 
@@ -647,5 +925,6 @@ None of them. We should build Model A from the main document.
 But if the CTO forgets we're a cost center, it's Option B.
 If we're doing it for the love of the craft, it's Option A.
 If we want to prefigure the post-capitalist internet, it's Option C.
+If we want to disappear so far up our own abstractions that we achieve enlightenment, it's Option D.
 
 Or we could just keep using SSH. It works. It's fine. It's *fine*.
