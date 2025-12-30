@@ -27,7 +27,7 @@ common/
   fort.nix                   # Service exposure, nginx, oauth2-proxy (~240 lines, important)
   cluster-context.nix        # Entry point for locating manifests
 clusters/<cluster>/
-  manifest.nix               # Cluster settings (domain, SSH keys)
+  manifest.nix               # Cluster settings (domain, principals)
   hosts/<name>/manifest.nix  # Host config: roles, apps, aspects
   devices/<uuid>/            # Auto-generated device bindings
 pkgs/<name>/default.nix      # Custom derivations for external projects
@@ -279,6 +279,49 @@ git push  # Credential helper reads token automatically
 ```
 
 If rebuilding the dev-sandbox environment, wait for the next token sync (~10 min) or manually trigger it on the forge host: `systemctl start forgejo-deploy-token-sync`
+
+## Access Control (Principals)
+
+Access is managed through **principals** defined in `clusters/<cluster>/manifest.nix`. Each principal has a public key and roles determining what they can access:
+
+```nix
+principals = {
+  admin = {
+    description = "Admin user - full access";
+    publicKey = "ssh-ed25519 AAAA... fort";
+    privateKeyPath = "~/.ssh/fort";  # Only for principals that run deploy-rs
+    roles = [ "root" "dev-sandbox" "secrets" ];
+  };
+  forge = {
+    description = "Forge host (drhorrible) - credential distribution";
+    publicKey = "ssh-ed25519 AAAA... fort-deployer";
+    roles = [ "root" ];
+  };
+  ratched = {
+    description = "Dev sandbox / LLM agents";
+    publicKey = "age1...";  # age keys work for secrets, not SSH
+    roles = [ "secrets" ];
+  };
+  ci = {
+    description = "Forgejo CI";
+    publicKey = "age1...";
+    roles = [ "secrets" ];
+  };
+};
+```
+
+**Roles:**
+| Role | Grants |
+|------|--------|
+| `root` | SSH as root to all hosts (key added to root's authorized_keys) |
+| `dev-sandbox` | SSH as dev user on hosts with dev-sandbox aspect |
+| `secrets` | Can decrypt secrets on main branch (key included in agenix recipients) |
+
+**Key types:**
+- SSH keys (`ssh-ed25519 ...`) work for both SSH access and secret decryption
+- Age keys (`age1...`) work only for secret decryption
+
+The consuming code (`host.nix`, `secrets.nix`, `dev-sandbox`) derives the appropriate key lists from principals based on their roles.
 
 ## Secrets
 
