@@ -300,6 +300,59 @@ vs. today's model:
   Host is passive target
 ```
 
+## Credential Cleanup (Garbage Collection)
+
+The host-driven model handles creation well, but what about cleanup? When a service is removed or a host decommissioned, credentials linger in pocket-id.
+
+**Solution: Mark-and-sweep GC**
+
+Hosts expose what they're using. Providers periodically sweep unclaimed credentials.
+
+**Mark phase (host endpoint):**
+```
+GET ursula:agent/credentials/in-use
+→ ["outline.ursula", "wiki.ursula"]
+```
+
+**Sweep phase (provider cron):**
+```bash
+# On forge, periodically
+all_clients=$(pocket-id-admin list-clients)
+in_use=()
+
+for host in $ALL_HOSTS; do
+  in_use+=($(curl -s "$host:agent/credentials/in-use"))
+done
+
+for client in $all_clients; do
+  if ! contains "$in_use" "$client"; then
+    echo "Deleting orphaned client: $client"
+    pocket-id-admin delete-client "$client"
+  fi
+done
+```
+
+**Why this is fine:**
+
+- It's *cleanup*, not delivery - low frequency, no latency requirements
+- Provider-initiated polling is okay here because we're not blocking on it
+- Hosts are still the authority - they report what they claim
+- Idempotent - safe to run repeatedly
+
+**Identifier options:**
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| `service.host` naming | Simple, human-readable, already unique | Tied to naming convention |
+| Hash of `(host, service, type)` | Deterministic, both sides compute | Less readable in pocket-id UI |
+| UUID assigned at creation | Globally unique | Host needs to store/remember it |
+
+The simplest: just use `service.host` as the client name in pocket-id. Both sides know it, no extra state.
+
+**Frequency:**
+
+Daily is probably fine. Orphaned credentials aren't hurting anything - this is housekeeping, not security-critical.
+
 ## Migration Path
 
 1. **Add provider endpoints to forge** - `/oidc/register`, `/ssl/cert`, `/git/token`
