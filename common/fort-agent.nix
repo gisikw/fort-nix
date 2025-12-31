@@ -98,8 +98,9 @@ let
     ttl = cfg.ttl;
   }) config.fort.capabilities;
 
-  # All hosts allowed to call mandatory endpoints
-  allHosts = builtins.attrNames allHostManifests;
+  # All hosts AND principals with agentKeys allowed to call mandatory endpoints
+  principalNames = builtins.attrNames (lib.filterAttrs (name: cfg: cfg ? agentKey) principals);
+  allHosts = builtins.attrNames allHostManifests ++ principalNames;
 
   # Derive RBAC from cluster topology
   # For each capability this host exposes, determine which hosts can call it
