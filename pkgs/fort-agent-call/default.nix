@@ -1,4 +1,4 @@
-{ pkgs }:
+{ pkgs, domain }:
 
 let
   script = pkgs.writeShellScript "fort-agent-call" ''
@@ -6,11 +6,19 @@ let
 
     # Usage: fort-agent-call <host> <capability> [request-json]
     # Exit codes: 0=success, 1=http error, 2=auth error
+    #
+    # Output (stdout): JSON envelope with body, handle, ttl, status
+    # {
+    #   "body": <response body as JSON or string>,
+    #   "handle": "sha256:..." or null,
+    #   "ttl": 86400 or null,
+    #   "status": 200
+    # }
 
     usage() {
       echo "Usage: fort-agent-call <host> <capability> [request-json]" >&2
-      echo "  host: target hostname (e.g., drhorrible)" >&2
-      echo "  capability: agent endpoint (e.g., oidc-register)" >&2
+      echo "  host: target hostname" >&2
+      echo "  capability: agent endpoint (e.g., status, ssl-cert)" >&2
       echo "  request-json: optional JSON body (default: {})" >&2
       exit 1
     }
@@ -21,8 +29,10 @@ let
     CAPABILITY="$2"
     BODY="''${3:-{}}"
 
-    # Configuration
-    DOMAIN="''${FORT_DOMAIN:-gisi.network}"
+    # Domain injected at build time
+    DOMAIN="${domain}"
+
+    # Configuration (can override via env for testing)
     SSH_KEY="''${FORT_SSH_KEY:-/etc/ssh/ssh_host_ed25519_key}"
     ORIGIN="''${FORT_ORIGIN:-$(hostname -s)}"
 
@@ -60,6 +70,7 @@ let
     trap "rm -f '$HEADER_FILE' '$BODY_FILE'" EXIT
 
     HTTP_CODE="$(curl -s -w '%{http_code}' -o "$BODY_FILE" \
+      --max-time 30 \
       -X POST \
       -H "Content-Type: application/json" \
       -H "X-Fort-Origin: $ORIGIN" \
@@ -78,29 +89,47 @@ let
     FORT_HANDLE="$(grep -i '^X-Fort-Handle:' "$HEADER_FILE" | sed 's/^[^:]*: *//' | tr -d '\r' || true)"
     FORT_TTL="$(grep -i '^X-Fort-TTL:' "$HEADER_FILE" | sed 's/^[^:]*: *//' | tr -d '\r' || true)"
 
+    # Build JSON envelope output
+    output_json() {
+      local status="$1"
+      local body="$2"
+      local handle="$3"
+      local ttl="$4"
+
+      # Try to parse body as JSON, fall back to string
+      if echo "$body" | jq -e . >/dev/null 2>&1; then
+        body_json="$body"
+      else
+        body_json="$(echo "$body" | jq -Rs .)"
+      fi
+
+      jq -n \
+        --argjson body "$body_json" \
+        --argjson status "$status" \
+        --arg handle "$handle" \
+        --arg ttl "$ttl" \
+        '{
+          body: $body,
+          status: $status,
+          handle: (if $handle == "" then null else $handle end),
+          ttl: (if $ttl == "" then null else ($ttl | tonumber) end)
+        }'
+    }
+
     # Check HTTP status
     case "$HTTP_CODE" in
       2*)
-        # Success - output response body
-        echo "$RESPONSE_BODY"
-
-        # Output handle info as markers (can be parsed by caller)
-        if [ -n "$FORT_HANDLE" ]; then
-          echo "FORT_HANDLE=$FORT_HANDLE" >&2
-        fi
-        if [ -n "$FORT_TTL" ]; then
-          echo "FORT_TTL=$FORT_TTL" >&2
-        fi
+        output_json "$HTTP_CODE" "$RESPONSE_BODY" "$FORT_HANDLE" "$FORT_TTL"
         exit 0
         ;;
       401|403)
         echo "Error: Authentication/authorization failed ($HTTP_CODE)" >&2
-        echo "$RESPONSE_BODY" >&2
+        output_json "$HTTP_CODE" "$RESPONSE_BODY" "" ""
         exit 2
         ;;
       *)
         echo "Error: HTTP $HTTP_CODE" >&2
-        echo "$RESPONSE_BODY" >&2
+        output_json "$HTTP_CODE" "$RESPONSE_BODY" "" ""
         exit 1
         ;;
     esac
@@ -120,6 +149,7 @@ pkgs.stdenv.mkDerivation {
     pkgs.openssh
     pkgs.gnugrep
     pkgs.gnused
+    pkgs.jq
   ];
 
   installPhase = ''
@@ -131,6 +161,7 @@ pkgs.stdenv.mkDerivation {
         pkgs.openssh
         pkgs.gnugrep
         pkgs.gnused
+        pkgs.jq
       ]}
   '';
 

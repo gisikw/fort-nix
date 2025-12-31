@@ -44,26 +44,13 @@ let
 
   fcgiSocket = "/run/fort-agent/fcgi.sock";
 
-  # Capability type to need type mapping
-  # Used for RBAC derivation from topology
-  capabilityToNeedType = {
-    "oidc-register" = "oidc";
-    "ssl-cert" = "ssl";
-    "git-token" = "git";
-    "proxy-configure" = "proxy";
-    "attic-token" = "attic";
-  };
-
   # Derive RBAC from cluster topology
   # For each capability this host exposes, determine which hosts can call it
   deriveRbac = capabilities:
     lib.mapAttrs (capName: capCfg:
-      let
-        needType = capabilityToNeedType.${capName} or capName;
-      in
       # For now, allow all cluster hosts to call any capability
-      # This will be refined when we have actual fort.needs declarations to inspect
-      # A more sophisticated version would evaluate each host's config
+      # A more sophisticated version could use capCfg.satisfies to find
+      # hosts that declare matching fort.needs.<satisfies>.* entries
       builtins.attrNames allHostManifests
     ) capabilities;
 
@@ -110,6 +97,20 @@ let
       description = "Whether this capability needs garbage collection (adds handle wrapper)";
     };
 
+    satisfies = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        The need type this capability satisfies. Used for documentation and
+        potentially for RBAC derivation (finding hosts that declare matching needs).
+        If null, defaults to the capability name itself.
+
+        Example: capability "oidc-register" might set satisfies = "oidc" to match
+        fort.needs.oidc.* declarations.
+      '';
+      example = "oidc";
+    };
+
     description = lib.mkOption {
       type = lib.types.str;
       default = "";
@@ -118,13 +119,16 @@ let
   };
 
   # Generate needs.json from all fort.needs declarations
+  #
+  # Structure: fort.needs.<capability>.<name> = { providers, request, store, restart }
+  # The first key IS the capability name - no magic transformation.
+  # Example: fort.needs.ssl-cert.wildcard calls the "ssl-cert" capability
   needsJson = let
-    # Flatten all needs into a list
     flattenNeeds = needs:
-      lib.concatLists (lib.mapAttrsToList (needType:
+      lib.concatLists (lib.mapAttrsToList (capability:
         lib.mapAttrsToList (name: cfg: {
-          id = "${needType}-${name}";
-          capability = "${needType}-register";
+          id = "${capability}-${name}";
+          inherit capability;
           inherit (cfg) providers request restart;
           store = cfg.store;
         })
@@ -146,10 +150,23 @@ in
       default = { };
       description = ''
         Declares what this host needs from capability providers.
-        Structure: fort.needs.<type>.<name> = { providers, request, store, restart }
+        Structure: fort.needs.<capability>.<id> = { providers, request, store, restart }
 
-        Example:
-          fort.needs.oidc.outline = {
+        The first key is the capability to call. The second key is an arbitrary
+        identifier for disambiguation - use "default" for singletons, or a
+        descriptive id when you have multiple needs of the same capability.
+        All actual parameters go in the request field.
+
+        Examples:
+          # Singleton - just use "default"
+          fort.needs.ssl-cert.default = {
+            providers = [ "drhorrible" ];
+            store = "/var/lib/fort/ssl";
+            restart = [ "nginx.service" ];
+          };
+
+          # Multiple of same capability - use descriptive ids
+          fort.needs.oidc-register.outline = {
             providers = [ "drhorrible" ];
             request = { service = "outline"; };
             store = "/var/lib/fort/oidc/outline";
@@ -157,11 +174,11 @@ in
           };
       '';
       example = {
-        oidc.outline = {
+        ssl-cert.default = {
           providers = [ "drhorrible" ];
-          request = { service = "outline"; };
-          store = "/var/lib/fort/oidc/outline";
-          restart = [ "outline.service" ];
+          request = { };
+          store = "/var/lib/fort/ssl";
+          restart = [ "nginx.service" ];
         };
       };
     };
@@ -173,18 +190,22 @@ in
         Declares what capabilities this host exposes via the agent API.
         RBAC rules are derived automatically from cluster topology.
 
-        Example:
+        Examples:
+          fort.capabilities.ssl-cert = {
+            handler = ./handlers/ssl-cert;
+            description = "Return cluster SSL certificates";
+          };
+
           fort.capabilities.oidc-register = {
             handler = ./handlers/oidc-register;
-            needsGC = true;
+            needsGC = true;  # Creates GC-able state
             description = "Register OIDC client in pocket-id";
           };
       '';
       example = {
-        "oidc-register" = {
-          handler = ./handlers/oidc-register;
-          needsGC = true;
-          description = "Register OIDC client";
+        ssl-cert = {
+          handler = ./handlers/ssl-cert;
+          description = "Return cluster SSL certificates";
         };
       };
     };
