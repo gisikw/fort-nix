@@ -5,6 +5,35 @@
 { config, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+
+  # Handler for ssl-cert capability
+  # Reads ACME-managed certs and returns them as base64-encoded JSON
+  sslCertHandler = pkgs.writeShellScript "handler-ssl-cert" ''
+    set -euo pipefail
+
+    # Parse optional domain from request, default to cluster domain
+    request_domain=$(echo "$1" | ${pkgs.jq}/bin/jq -r '.domain // empty')
+    cert_domain="''${request_domain:-${domain}}"
+
+    cert_dir="/var/lib/acme/$cert_domain"
+
+    if [ ! -d "$cert_dir" ]; then
+      echo '{"error": "certificate not found for domain"}' >&2
+      exit 1
+    fi
+
+    # Read and base64-encode the cert files
+    cert=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/fullchain.pem")
+    key=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/key.pem")
+    chain=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/chain.pem")
+
+    ${pkgs.jq}/bin/jq -n \
+      --arg cert "$cert" \
+      --arg key "$key" \
+      --arg chain "$chain" \
+      --arg domain "$cert_domain" \
+      '{domain: $domain, cert: $cert, key: $key, chain: $chain}'
+  '';
 in
 {
   age.secrets.dns-provider-env = {
@@ -28,6 +57,13 @@ in
       dnsProvider = rootManifest.fortConfig.settings.dnsProvider;
       environmentFile = config.age.secrets.dns-provider-env.path;
     };
+  };
+
+  # Expose ssl-cert capability via agent API
+  fort.capabilities.ssl-cert = {
+    handler = sslCertHandler;
+    needsGC = false;  # Certs are idempotent, no GC needed
+    description = "Return cluster SSL certificates (ACME-managed)";
   };
 
   systemd.timers."acme-sync" = {
