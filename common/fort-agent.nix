@@ -115,11 +115,13 @@ let
     '';
 
     # Restart a systemd unit (debug capability)
+    # Optional delay parameter schedules restart in the future (useful for restarting nginx/fort-agent)
     restart = pkgs.writeShellScript "handler-restart" ''
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+      delay=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.delay // 0')
 
       if [ -z "$unit" ]; then
         echo '{"error": "unit parameter required"}'
@@ -132,12 +134,32 @@ let
         exit 1
       fi
 
-      if output=$(${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
-        ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "restarted", "unit": $unit}'
-      else
-        ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
-          '{"error": "restart failed", "unit": $unit, "details": $error}'
+      # Validate delay is a number
+      if ! echo "$delay" | ${pkgs.gnugrep}/bin/grep -qE '^[0-9]+$'; then
+        echo '{"error": "delay must be a non-negative integer (seconds)"}'
         exit 1
+      fi
+
+      if [ "$delay" -gt 0 ]; then
+        # Schedule restart in the future - allows response to complete first
+        if output=$(${pkgs.systemd}/bin/systemd-run --on-active="''${delay}s" \
+            ${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
+          ${pkgs.jq}/bin/jq -n --arg unit "$unit" --argjson delay "$delay" \
+            '{"status": "scheduled", "unit": $unit, "delay_seconds": $delay}'
+        else
+          ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
+            '{"error": "schedule failed", "unit": $unit, "details": $error}'
+          exit 1
+        fi
+      else
+        # Immediate restart
+        if output=$(${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
+          ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "restarted", "unit": $unit}'
+        else
+          ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
+            '{"error": "restart failed", "unit": $unit, "details": $error}'
+          exit 1
+        fi
       fi
     '';
   };
