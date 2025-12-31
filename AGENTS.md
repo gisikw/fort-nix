@@ -418,15 +418,18 @@ fort-agent-call drhorrible deploy '{"sha": "5563ac2"}'
 fort-agent-call joker journal '{"unit": "nginx", "lines": 50}'
 fort-agent-call joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
 
-# Restart a service
+# Restart a service (immediate)
 fort-agent-call joker restart '{"unit": "nginx"}'
+
+# Restart with delay (for nginx/fort-agent - avoids killing response)
+fort-agent-call joker restart '{"unit": "nginx", "delay": 2}'
 ```
 
 | Capability | Request | Notes |
 |------------|---------|-------|
 | `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
 | `journal` | `{unit, lines?, since?}` | Returns journalctl output |
-| `restart` | `{unit}` | Restarts systemd unit |
+| `restart` | `{unit, delay?}` | Restarts systemd unit; delay (seconds) schedules future restart |
 
 **Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
 
