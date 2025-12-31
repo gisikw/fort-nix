@@ -6,7 +6,17 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "mesh" "observable" "dev-sandbox" "gitops" ];
+  aspects = [
+    "mesh"
+    "observable"
+    {
+      name = "dev-sandbox";
+      accessKeys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGBsPj4lG8wP2gfgU5akZ05GrMy55syzvI0MEpiNFQ8t dev-sandbox-ssh"
+      ];
+    }
+    "gitops"
+  ];
 
   module =
     { config, ... }:

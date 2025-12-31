@@ -1,4 +1,4 @@
-{ rootManifest, extraInputs ? {}, ... }:
+{ rootManifest, extraInputs ? {}, accessKeys ? [], ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -96,7 +96,7 @@ in
     home = homeDir;
     shell = pkgs.zsh;
     extraGroups = [ "wheel" ];
-    openssh.authorizedKeys.keys = devAuthorizedKeys;
+    openssh.authorizedKeys.keys = devAuthorizedKeys ++ accessKeys;
   };
 
   # Install dev tools system-wide

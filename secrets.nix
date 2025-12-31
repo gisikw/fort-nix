@@ -37,4 +37,5 @@ in
   "./apps/forgejo/runner-secret.age".publicKeys = activeKeys;
   "./apps/attic/attic-server-token.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/agent-key.age".publicKeys = activeKeys;
+  "./clusters/bedlam/hosts/ratched/ssh-key.age".publicKeys = activeKeys;
 }
