@@ -2,6 +2,8 @@
   rootManifest,
   hostManifest,
   cluster,
+  # If true, deployments require manual confirmation via agent API
+  manualDeploy ? false,
   ...
 }:
 { config, lib, pkgs, ... }:
@@ -17,6 +19,57 @@ let
   cacheUrl = "https://cache.${domain}";
   cacheName = "fort";
   pushTokenFile = "/var/lib/fort/nix/attic-push-token";
+
+  # Comin binary for CLI commands
+  cominBin = config.services.comin.package;
+
+  # Deploy handler - verifies SHA then confirms deployment
+  deployHandler = pkgs.writeShellScript "handler-deploy" ''
+    set -euo pipefail
+    export PATH="${lib.makeBinPath [ pkgs.git pkgs.jq pkgs.coreutils cominBin ]}:$PATH"
+
+    # Read expected SHA from request
+    input=$(cat)
+    expected_sha=$(echo "$input" | jq -r '.sha // empty')
+
+    if [ -z "$expected_sha" ]; then
+      echo '{"error": "sha parameter required"}'
+      exit 1
+    fi
+
+    COMIN_REPO="/var/lib/comin/repository"
+
+    # Get release branch HEAD commit message
+    # Format: "release: 5563ac2 - 2025-12-31T19:44:27+00:00"
+    if ! release_msg=$(git -C "$COMIN_REPO" log -1 --format=%s HEAD 2>&1); then
+      jq -n --arg err "$release_msg" '{"error": "failed to read release HEAD", "details": $err}'
+      exit 1
+    fi
+
+    # Parse the main SHA from the commit message
+    pending_sha=$(echo "$release_msg" | sed -n 's/^release: \([a-f0-9]*\) -.*/\1/p')
+
+    if [ -z "$pending_sha" ]; then
+      jq -n --arg msg "$release_msg" '{"error": "could not parse SHA from release commit", "commit_message": $msg}'
+      exit 1
+    fi
+
+    # Verify SHA matches (allow prefix match for short SHAs)
+    if [[ ! "$pending_sha" == "$expected_sha"* ]] && [[ ! "$expected_sha" == "$pending_sha"* ]]; then
+      jq -n --arg expected "$expected_sha" --arg pending "$pending_sha" \
+        '{"error": "sha_mismatch", "expected": $expected, "pending": $pending}'
+      exit 1
+    fi
+
+    # SHA matches - trigger confirmation
+    if output=$(comin confirmation accept 2>&1); then
+      jq -n --arg sha "$pending_sha" --arg output "$output" \
+        '{"status": "deployed", "sha": $sha, "output": $output}'
+    else
+      jq -n --arg sha "$pending_sha" --arg output "$output" \
+        '{"status": "confirmed", "sha": $sha, "note": "no confirmation was pending (may have auto-deployed)", "output": $output}'
+    fi
+  '';
 
   # Post-deployment script to push built system to cache
   postDeployScript = pkgs.writeShellScript "comin-post-deploy-cache-push" ''
@@ -88,6 +141,17 @@ in
 
     # Push built system to Attic cache after successful deployment
     postDeploymentCommand = postDeployScript;
+
+    # Manual deploy mode: build automatically, but require explicit confirmation to switch
+    # Triggered via fort-agent-call <host> deploy '{"sha": "..."}'
+    deployConfirmer.mode = if manualDeploy then "manual" else "without";
+  };
+
+  # Expose deploy capability for on-demand deployments
+  fort.capabilities.deploy = {
+    handler = deployHandler;
+    description = "Trigger deployment after verifying expected SHA";
+    allowed = [ "dev-sandbox" ];
   };
 
   # Comin needs git in PATH for fetching

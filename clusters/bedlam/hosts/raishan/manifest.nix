@@ -6,7 +6,10 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "observable" ];
+  aspects = [
+    "observable"
+    { name = "gitops"; manualDeploy = true; }
+  ];
 
   module =
     { config, pkgs, ... }:

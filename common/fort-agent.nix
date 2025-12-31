@@ -108,10 +108,12 @@ let
   # For each capability this host exposes, determine which hosts can call it
   deriveRbac = capabilities:
     lib.mapAttrs (capName: capCfg:
-      # For now, allow all cluster hosts and principals to call any capability
-      # A more sophisticated version could use capCfg.satisfies to find
-      # hosts that declare matching fort.needs.<satisfies>.* entries
-      allHosts
+      if capCfg ? allowed && capCfg.allowed != null then
+        # Restricted capability: only specified principals allowed
+        capCfg.allowed
+      else
+        # Open capability: all cluster hosts and principals can call
+        allHosts
     ) capabilities;
 
   # Need option type
@@ -183,6 +185,17 @@ let
       default = "";
       description = "Human-readable description of the capability";
     };
+
+    allowed = lib.mkOption {
+      type = lib.types.nullOr (lib.types.listOf lib.types.str);
+      default = null;
+      description = ''
+        List of principal names allowed to call this capability.
+        If null (default), all hosts and principals can call it.
+        If specified, only the listed principals are allowed (not hosts).
+      '';
+      example = [ "dev-sandbox" ];
+    };
   };
 
   # Generate needs.json from all fort.needs declarations
@@ -202,8 +215,8 @@ let
       ) needs);
   in builtins.toJSON (flattenNeeds config.fort.needs);
 
-  # RBAC for mandatory endpoints (all hosts can call)
-  mandatoryRbac = lib.mapAttrs (name: _: allHosts) mandatoryCapabilities;
+  # RBAC for mandatory endpoints (respects allowed if specified)
+  mandatoryRbac = deriveRbac mandatoryCapabilities;
 
   # Generate rbac.json from capabilities and topology (includes mandatory)
   rbacJson = builtins.toJSON (mandatoryRbac // deriveRbac config.fort.capabilities);
