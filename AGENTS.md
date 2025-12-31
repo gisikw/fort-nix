@@ -443,6 +443,7 @@ Before closing a ticket:
    - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
    - **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated?
    - **Pattern extraction**: Did the code changes reveal a pattern worth generalizing? A new SSO mode, a reusable derivation structure, a common module shape?
+   - **Skill candidates**: Did you repeatedly reference a specific AGENTS.md section, or wish you had step-by-step guidance for a workflow? Consider whether it should be a skill (loaded on-demand) rather than always-present context.
    - **Discovered work**: Did you uncover related issues while working?
 
    For each item surfaced: **ticket it, document it, address it now, or explicitly discard it**. Don't just note friction and move on - that's venting, not improving. Quick triage with the user ensures nothing gets lost.
