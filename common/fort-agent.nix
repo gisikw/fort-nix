@@ -339,6 +339,7 @@ in
           ExecStart = "${fortAgentWrapper}/bin/fort-agent-wrapper";
           StandardInput = "socket";
           StandardOutput = "socket";
+          StandardError = "journal";
         };
       };
 
