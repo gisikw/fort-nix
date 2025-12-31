@@ -34,7 +34,7 @@ let
 
     # Configuration (can override via env for testing)
     SSH_KEY="''${FORT_SSH_KEY:-/etc/ssh/ssh_host_ed25519_key}"
-    ORIGIN="''${FORT_ORIGIN:-$(hostname -s)}"
+    ORIGIN="''${FORT_ORIGIN:-$(${pkgs.nettools}/bin/hostname -s)}"
 
     # Validate SSH key exists
     if [ ! -f "$SSH_KEY" ]; then
@@ -44,32 +44,32 @@ let
 
     # Build request components
     METHOD="POST"
-    PATH="/agent/$CAPABILITY"
-    TIMESTAMP="$(date +%s)"
-    BODY_HASH="$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)"
+    REQ_PATH="/agent/$CAPABILITY"
+    TIMESTAMP="$(${pkgs.coreutils}/bin/date +%s)"
+    BODY_HASH="$(echo -n "$BODY" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)"
 
     # Build canonical string for signing (newline-separated)
-    CANONICAL="$(printf '%s\n%s\n%s\n%s' "$METHOD" "$PATH" "$TIMESTAMP" "$BODY_HASH")"
+    CANONICAL="$(printf '%s\n%s\n%s\n%s' "$METHOD" "$REQ_PATH" "$TIMESTAMP" "$BODY_HASH")"
 
     # Sign with SSH key
     # ssh-keygen -Y sign outputs armored signature to stdout
-    SIGNATURE="$(printf '%s' "$CANONICAL" | ssh-keygen -Y sign -f "$SSH_KEY" -n fort-agent -q 2>/dev/null)" || {
+    SIGNATURE="$(printf '%s' "$CANONICAL" | ${pkgs.openssh}/bin/ssh-keygen -Y sign -f "$SSH_KEY" -n fort-agent -q 2>/dev/null)" || {
       echo "Error: Failed to sign request" >&2
       exit 2
     }
 
     # Base64 encode signature (remove armor, join lines)
-    SIG_B64="$(echo "$SIGNATURE" | grep -v '^-----' | tr -d '\n')"
+    SIG_B64="$(echo "$SIGNATURE" | ${pkgs.gnugrep}/bin/grep -v '^-----' | ${pkgs.coreutils}/bin/tr -d '\n')"
 
     # Build URL
-    URL="https://''${HOST}.fort.''${DOMAIN}''${PATH}"
+    URL="https://''${HOST}.fort.''${DOMAIN}''${REQ_PATH}"
 
     # Make request, capture response headers and body separately
-    HEADER_FILE="$(mktemp)"
-    BODY_FILE="$(mktemp)"
-    trap "rm -f '$HEADER_FILE' '$BODY_FILE'" EXIT
+    HEADER_FILE="$(${pkgs.coreutils}/bin/mktemp)"
+    BODY_FILE="$(${pkgs.coreutils}/bin/mktemp)"
+    trap "${pkgs.coreutils}/bin/rm -f '$HEADER_FILE' '$BODY_FILE'" EXIT
 
-    HTTP_CODE="$(curl -s -w '%{http_code}' -o "$BODY_FILE" \
+    HTTP_CODE="$(${pkgs.curl}/bin/curl -s -w '%{http_code}' -o "$BODY_FILE" \
       --max-time 30 \
       -X POST \
       -H "Content-Type: application/json" \
@@ -83,11 +83,11 @@ let
       exit 1
     }
 
-    RESPONSE_BODY="$(cat "$BODY_FILE")"
+    RESPONSE_BODY="$(${pkgs.coreutils}/bin/cat "$BODY_FILE")"
 
     # Parse response headers for handle and TTL
-    FORT_HANDLE="$(grep -i '^X-Fort-Handle:' "$HEADER_FILE" | sed 's/^[^:]*: *//' | tr -d '\r' || true)"
-    FORT_TTL="$(grep -i '^X-Fort-TTL:' "$HEADER_FILE" | sed 's/^[^:]*: *//' | tr -d '\r' || true)"
+    FORT_HANDLE="$(${pkgs.gnugrep}/bin/grep -i '^X-Fort-Handle:' "$HEADER_FILE" | ${pkgs.gnused}/bin/sed 's/^[^:]*: *//' | ${pkgs.coreutils}/bin/tr -d '\r' || true)"
+    FORT_TTL="$(${pkgs.gnugrep}/bin/grep -i '^X-Fort-TTL:' "$HEADER_FILE" | ${pkgs.gnused}/bin/sed 's/^[^:]*: *//' | ${pkgs.coreutils}/bin/tr -d '\r' || true)"
 
     # Build JSON envelope output
     output_json() {
@@ -97,13 +97,13 @@ let
       local ttl="$4"
 
       # Try to parse body as JSON, fall back to string
-      if echo "$body" | jq -e . >/dev/null 2>&1; then
+      if echo "$body" | ${pkgs.jq}/bin/jq -e . >/dev/null 2>&1; then
         body_json="$body"
       else
-        body_json="$(echo "$body" | jq -Rs .)"
+        body_json="$(echo "$body" | ${pkgs.jq}/bin/jq -Rs .)"
       fi
 
-      jq -n \
+      ${pkgs.jq}/bin/jq -n \
         --argjson body "$body_json" \
         --argjson status "$status" \
         --arg handle "$handle" \
@@ -150,6 +150,7 @@ pkgs.stdenv.mkDerivation {
     pkgs.gnugrep
     pkgs.gnused
     pkgs.jq
+    pkgs.nettools
   ];
 
   installPhase = ''
@@ -162,6 +163,7 @@ pkgs.stdenv.mkDerivation {
         pkgs.gnugrep
         pkgs.gnused
         pkgs.jq
+        pkgs.nettools
       ]}
   '';
 
