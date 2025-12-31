@@ -85,6 +85,61 @@ let
         echo '{"handles":[]}'
       fi
     '';
+
+    # Fetch journalctl output for a unit (debug capability)
+    journal = pkgs.writeShellScript "handler-journal" ''
+      set -euo pipefail
+
+      input=$(${pkgs.coreutils}/bin/cat)
+      unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+      lines=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 100')
+      since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
+
+      if [ -z "$unit" ]; then
+        echo '{"error": "unit parameter required"}'
+        exit 1
+      fi
+
+      # Build journalctl command
+      args=("-u" "$unit" "-n" "$lines" "--no-pager" "-o" "short-iso")
+      if [ -n "$since" ]; then
+        args+=("--since" "$since")
+      fi
+
+      if output=$(${pkgs.systemd}/bin/journalctl "''${args[@]}" 2>&1); then
+        ${pkgs.jq}/bin/jq -n --arg output "$output" '{"output": $output}'
+      else
+        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "journalctl failed", "details": $error}'
+        exit 1
+      fi
+    '';
+
+    # Restart a systemd unit (debug capability)
+    restart = pkgs.writeShellScript "handler-restart" ''
+      set -euo pipefail
+
+      input=$(${pkgs.coreutils}/bin/cat)
+      unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+
+      if [ -z "$unit" ]; then
+        echo '{"error": "unit parameter required"}'
+        exit 1
+      fi
+
+      # Basic validation: unit name should be reasonable
+      if ! echo "$unit" | ${pkgs.gnugrep}/bin/grep -qE '^[a-zA-Z0-9@_.-]+$'; then
+        echo '{"error": "invalid unit name"}'
+        exit 1
+      fi
+
+      if output=$(${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
+        ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "restarted", "unit": $unit}'
+      else
+        ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
+          '{"error": "restart failed", "unit": $unit, "details": $error}'
+        exit 1
+      fi
+    '';
   };
 
   # Mandatory capabilities config (no GC needed for these)
@@ -92,6 +147,9 @@ let
     status = { needsGC = false; ttl = 0; };
     manifest = { needsGC = false; ttl = 0; };
     holdings = { needsGC = false; ttl = 0; };
+    # Debug capabilities - restricted to dev-sandbox principal
+    journal = { needsGC = false; ttl = 0; allowed = [ "dev-sandbox" ]; };
+    restart = { needsGC = false; ttl = 0; allowed = [ "dev-sandbox" ]; };
   };
 
   # All capabilities = mandatory + user-defined
@@ -315,6 +373,8 @@ in
           install -Dm0755 ${mandatoryHandlers.status} /etc/fort-agent/handlers/status
           install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort-agent/handlers/manifest
           install -Dm0755 ${mandatoryHandlers.holdings} /etc/fort-agent/handlers/holdings
+          install -Dm0755 ${mandatoryHandlers.journal} /etc/fort-agent/handlers/journal
+          install -Dm0755 ${mandatoryHandlers.restart} /etc/fort-agent/handlers/restart
 
           # Install RBAC and capabilities config (includes mandatory endpoints)
           install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort-agent/rbac.json
