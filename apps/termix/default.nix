@@ -15,7 +15,7 @@ in
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/termix 0755 root root -"
+    "d /var/lib/termix 0777 root root -"
   ];
 
   fortCluster.exposedServices = [
