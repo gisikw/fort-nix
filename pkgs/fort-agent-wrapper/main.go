@@ -122,6 +122,18 @@ func NewAgentHandler() (*AgentHandler, error) {
 }
 
 func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Debug: log all headers received
+	fmt.Fprintf(os.Stderr, "=== Request received ===\n")
+	fmt.Fprintf(os.Stderr, "URL: %s\n", r.URL.String())
+	fmt.Fprintf(os.Stderr, "Method: %s\n", r.Method)
+	fmt.Fprintf(os.Stderr, "Headers:\n")
+	for name, values := range r.Header {
+		for _, v := range values {
+			fmt.Fprintf(os.Stderr, "  %s: %s\n", name, v)
+		}
+	}
+	fmt.Fprintf(os.Stderr, "========================\n")
+
 	// Extract capability from path: /agent/<capability>
 	path := r.URL.Path
 	if !strings.HasPrefix(path, "/agent/") {
