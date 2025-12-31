@@ -375,6 +375,29 @@ Common issues:
 - **Port conflict**: Another service on the same port
 - **Missing state directory**: Check `systemd.tmpfiles.rules` or `StateDirectory`
 
+## Inter-Host Agent Calls
+
+Agents in the dev-sandbox can query other hosts using `fort-agent-call`. This is useful for debugging, checking deployment status, and understanding cluster state.
+
+```bash
+# Check a host's status (uptime, failed units, deploy info)
+fort-agent-call drhorrible status '{}'
+
+# Get a host's manifest (apps, aspects, roles, exposed services)
+fort-agent-call joker manifest '{}'
+
+# List GC handles held by a host
+fort-agent-call ursula holdings '{}'
+```
+
+**Output format**: JSON envelope with `body`, `status`, `handle`, `ttl` fields.
+
+**Available on all hosts**: `status`, `manifest`, `holdings`
+
+**Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
+
+For detailed guidance on adding capabilities, writing handlers, and the GC protocol, see the `agent-api-guide` skill.
+
 ## Impermanence
 
 Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Services needing persistent data should use `/var/lib` (which is persisted).
