@@ -27,7 +27,7 @@ let
 
     HOST="$1"
     CAPABILITY="$2"
-    BODY="''${3:-{}}"
+    BODY="''${3:-"{}"}"
 
     # Domain injected at build time
     DOMAIN="${domain}"
