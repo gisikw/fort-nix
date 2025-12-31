@@ -97,6 +97,13 @@ let
       description = "Whether this capability needs garbage collection (adds handle wrapper)";
     };
 
+    ttl = lib.mkOption {
+      type = lib.types.int;
+      default = 86400;
+      description = "Time-to-live in seconds for GC-able responses (only used if needsGC = true)";
+      example = 3600;
+    };
+
     satisfies = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -137,6 +144,15 @@ let
 
   # Generate rbac.json from capabilities and topology
   rbacJson = builtins.toJSON (deriveRbac config.fort.capabilities);
+
+  # Generate capabilities.json with needsGC and ttl settings
+  capabilitiesJson = builtins.toJSON (lib.mapAttrs (name: cfg: {
+    needsGC = cfg.needsGC;
+    ttl = cfg.ttl;
+  }) config.fort.capabilities);
+
+  # Import the agent wrapper
+  fortAgentWrapper = import ../pkgs/fort-agent-wrapper { inherit pkgs; };
 
   # Check if we have any needs or capabilities defined
   hasNeeds = config.fort.needs != { };
@@ -224,9 +240,11 @@ in
         '';
       };
 
-      # Runtime directory for socket
+      # Runtime directory for socket and persistent handles storage
       systemd.tmpfiles.rules = [
         "d /run/fort-agent 0755 root root -"
+        "d /var/lib/fort-agent 0700 root root -"
+        "d /var/lib/fort-agent/handles 0700 root root -"
       ];
 
       # Socket activation for the FastCGI wrapper
@@ -242,7 +260,6 @@ in
       };
 
       # The actual service (activated by socket)
-      # Placeholder until fort-89e.2 implements the Go wrapper
       systemd.services.fort-agent = {
         description = "Fort Agent FastCGI Wrapper";
         requires = [ "fort-agent.socket" ];
@@ -250,13 +267,7 @@ in
 
         serviceConfig = {
           Type = "simple";
-          # Placeholder: returns 501 Not Implemented for all requests
-          ExecStart = pkgs.writeShellScript "fort-agent-placeholder" ''
-            echo "Content-Type: application/json"
-            echo "Status: 501 Not Implemented"
-            echo ""
-            echo '{"error": "fort-agent wrapper not yet implemented"}'
-          '';
+          ExecStart = "${fortAgentWrapper}/bin/fort-agent-wrapper";
           StandardInput = "socket";
           StandardOutput = "socket";
         };
@@ -300,13 +311,16 @@ in
       };
     })
 
-    # Generate rbac.json and install handlers if capabilities are declared
+    # Generate rbac.json, capabilities.json, and install handlers if capabilities are declared
     (lib.mkIf hasCapabilities {
       system.activationScripts.fortAgentConfig = {
         deps = [ "fortAgentHosts" ];
         text = ''
           # Install RBAC config
           install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort-agent/rbac.json
+
+          # Install capabilities config (needsGC, ttl)
+          install -Dm0644 ${pkgs.writeText "capabilities.json" capabilitiesJson} /etc/fort-agent/capabilities.json
 
           # Install handler scripts
           ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: cfg: ''
