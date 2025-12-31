@@ -79,6 +79,7 @@ in
   home-manager = lib.mkIf hasHomeConfig {
     useGlobalPkgs = true;
     useUserPackages = true;
+    backupFileExtension = "bak";
     extraSpecialArgs = {
       isDarwin = false;
       isLinux = true;
@@ -86,8 +87,6 @@ in
     users.${user} = {
       imports = [ home-config.homeManagerModules.default ];
       home.stateVersion = "25.11";
-      # Resolve conflict between home-manager's common.nix and home-config module
-      nix.package = lib.mkForce pkgs.nix;
     };
   };
 
