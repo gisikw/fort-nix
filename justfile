@@ -56,21 +56,21 @@ _scaffold-device-flake profile uuid keydir:
   cat > "${devices_root}/{{uuid}}/flake.nix" <<-'EOF'
   {
     inputs = {
-      root.url = "path:../../";
-      nixpkgs.follows = "root/nixpkgs";
-      disko.follows = "root/disko";
-      impermanence.follows = "root/impermanence";
+      cluster.url = "path:../..";
+      nixpkgs.follows = "cluster/nixpkgs";
+      disko.follows = "cluster/disko";
+      impermanence.follows = "cluster/impermanence";
     };
-  
+
     outputs =
       {
-        self, 
-        nixpkgs, 
-        disko, 
+        self,
+        nixpkgs,
+        disko,
         impermanence,
         ...
       }:
-      import ../../common/device.nix {
+      import ../../../../common/device.nix {
         inherit self nixpkgs disko impermanence;
         deviceDir = ./.;
       };
@@ -112,13 +112,13 @@ assign device host:
   cat > "${hosts_root}/{{host}}/flake.nix" <<-EOF
   {
     inputs = {
-      root.url = "path:../..";
-      nixpkgs.follows = "root/nixpkgs";
-      disko.follows = "root/disko";
-      impermanence.follows = "root/impermanence";
-      deploy-rs.follows = "root/deploy-rs";
-      agenix.follows = "root/agenix";
-      attic.follows = "root/attic";
+      cluster.url = "path:../..";
+      nixpkgs.follows = "cluster/nixpkgs";
+      disko.follows = "cluster/disko";
+      impermanence.follows = "cluster/impermanence";
+      deploy-rs.follows = "cluster/deploy-rs";
+      agenix.follows = "cluster/agenix";
+      comin.follows = "cluster/comin";
     };
 
     outputs =
@@ -129,10 +129,10 @@ assign device host:
         impermanence,
         deploy-rs,
         agenix,
-        attic,
+        comin,
         ...
       }:
-      import ../../common/host.nix {
+      import ../../../../common/host.nix {
         inherit
           self
           nixpkgs
@@ -140,7 +140,7 @@ assign device host:
           impermanence
           deploy-rs
           agenix
-          attic
+          comin
           ;
         hostDir = ./.;
       };

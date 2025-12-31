@@ -7,6 +7,8 @@ args@{
   hostDir,
   agenix,
   comin,
+  # Cluster-specific inputs (optional)
+  home-config ? null,
   ...
 }:
 let
@@ -33,6 +35,11 @@ let
   allAspects = defaultAspects ++ hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
   allApps = hostManifest.apps ++ flatMap (r: r.apps or [ ]) roles;
 
+  # Extra inputs to pass through to apps/aspects
+  extraInputs = {
+    inherit home-config;
+  };
+
   mkModule =
     type: mod:
     if builtins.isString mod then
@@ -43,6 +50,7 @@ let
           deviceManifest
           deviceProfileManifest
           cluster
+          extraInputs
           ;
       }
 
@@ -54,6 +62,7 @@ let
           deviceManifest
           deviceProfileManifest
           cluster
+          extraInputs
           ;
       }
 
@@ -66,6 +75,7 @@ let
             deviceManifest
             deviceProfileManifest
             cluster
+            extraInputs
             ;
         }
         // (builtins.removeAttrs mod [ "name" ])

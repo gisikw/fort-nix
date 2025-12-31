@@ -1,9 +1,12 @@
-{ rootManifest, ... }:
+{ rootManifest, extraInputs ? {}, ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
   settings = rootManifest.fortConfig.settings;
   user = "dev";
+
+  # Cluster-specific inputs (available when passed from host flake)
+  home-config = extraInputs.home-config or null;
   homeDir = "/home/${user}";
   agentKeyPath = "/var/lib/fort/dev-sandbox/agent-key";
 

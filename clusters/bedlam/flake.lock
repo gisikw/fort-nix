@@ -21,56 +21,10 @@
         "type": "github"
       }
     },
-    "cluster": {
-      "inputs": {
-        "agenix": [
-          "cluster",
-          "root",
-          "agenix"
-        ],
-        "comin": [
-          "cluster",
-          "root",
-          "comin"
-        ],
-        "deploy-rs": [
-          "cluster",
-          "root",
-          "deploy-rs"
-        ],
-        "disko": [
-          "cluster",
-          "root",
-          "disko"
-        ],
-        "home-config": "home-config",
-        "impermanence": [
-          "cluster",
-          "root",
-          "impermanence"
-        ],
-        "nixpkgs": [
-          "cluster",
-          "root",
-          "nixpkgs"
-        ],
-        "root": "root_2"
-      },
-      "locked": {
-        "path": "../..",
-        "type": "path"
-      },
-      "original": {
-        "path": "../..",
-        "type": "path"
-      },
-      "parent": []
-    },
     "comin": {
       "inputs": {
         "flake-compat": "flake-compat",
         "nixpkgs": [
-          "cluster",
           "root",
           "nixpkgs"
         ]
@@ -92,7 +46,6 @@
     "darwin": {
       "inputs": {
         "nixpkgs": [
-          "cluster",
           "root",
           "agenix",
           "nixpkgs"
@@ -154,7 +107,6 @@
     "disko_2": {
       "inputs": {
         "nixpkgs": [
-          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -210,7 +162,6 @@
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
-          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -252,7 +203,6 @@
     "home-manager": {
       "inputs": {
         "nixpkgs": [
-          "cluster",
           "home-config",
           "nixpkgs"
         ]
@@ -275,7 +225,6 @@
     "home-manager_2": {
       "inputs": {
         "nixpkgs": [
-          "cluster",
           "root",
           "agenix",
           "nixpkgs"
@@ -313,7 +262,6 @@
     "nix-vm-test": {
       "inputs": {
         "nixpkgs": [
-          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -360,13 +308,11 @@
     "nixos-images": {
       "inputs": {
         "nixos-stable": [
-          "cluster",
           "root",
           "nixos-anywhere",
           "nixos-stable"
         ],
         "nixos-unstable": [
-          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -500,19 +446,32 @@
     },
     "root": {
       "inputs": {
-        "cluster": "cluster",
+        "agenix": [
+          "root",
+          "agenix"
+        ],
+        "comin": [
+          "root",
+          "comin"
+        ],
+        "deploy-rs": [
+          "root",
+          "deploy-rs"
+        ],
         "disko": [
-          "cluster",
+          "root",
           "disko"
         ],
+        "home-config": "home-config",
         "impermanence": [
-          "cluster",
+          "root",
           "impermanence"
         ],
         "nixpkgs": [
-          "cluster",
+          "root",
           "nixpkgs"
-        ]
+        ],
+        "root": "root_2"
       }
     },
     "root_2": {
@@ -533,9 +492,7 @@
         "path": "./../..",
         "type": "path"
       },
-      "parent": [
-        "cluster"
-      ]
+      "parent": []
     },
     "systems": {
       "locked": {
@@ -570,7 +527,6 @@
     "treefmt-nix": {
       "inputs": {
         "nixpkgs": [
-          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
