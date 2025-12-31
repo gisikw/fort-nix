@@ -58,7 +58,7 @@ let
     if [[ ! "$pending_sha" == "$expected_sha"* ]] && [[ ! "$expected_sha" == "$pending_sha"* ]]; then
       jq -n --arg expected "$expected_sha" --arg pending "$pending_sha" \
         '{"error": "sha_mismatch", "expected": $expected, "pending": $pending}'
-      exit 1
+      exit 0  # Exit 0 so wrapper returns our JSON, not a 500
     fi
 
     # SHA matches - trigger confirmation
