@@ -9,6 +9,7 @@ let
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
   beads = import ../../pkgs/beads { inherit pkgs; };
+  fort-agent-call = import ../../pkgs/fort-agent-call { inherit pkgs domain; };
 
   # Derive SSH keys for dev-sandbox access from principals
   isSSHKey = k: builtins.substring 0 4 k == "ssh-";
@@ -58,6 +59,9 @@ let
     # Claude/AI tools
     claude-code
     beads
+
+    # Fort control plane
+    fort-agent-call
   ];
 in
 {
