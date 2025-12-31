@@ -325,7 +325,9 @@ For hosts with the `gitops` aspect, deployment is automatic:
 
 **Do NOT run `just deploy` for these hosts** - just commit and push.
 
-**GitOps hosts**: joker, lordhenry, minos, q, ratched, ursula
+**Auto-deploy hosts**: joker, lordhenry, minos, q, ratched, ursula
+
+**Manual-confirmation hosts**: drhorrible, raishan (see below)
 
 ### Testing Changes Safely (Test Branches)
 
@@ -348,15 +350,25 @@ Comin on the target host picks up the testing branch and deploys with `switch-to
 
 **To abandon**: Delete the `<hostname>-test` branch. Comin will revert to `release` on next poll.
 
-### Non-GitOps Hosts (Forge/Beacon)
+### Manual-Confirmation Hosts (Forge/Beacon)
 
-The forge (drhorrible) and beacon (raishan) require manual deployment. After committing and pushing, **ask the user** to deploy:
+The forge (drhorrible) and beacon (raishan) use GitOps but with **manual confirmation** - they pull and build automatically, but won't switch until explicitly triggered. This prevents surprise deploys on critical infrastructure.
 
+**For initial deployment** (or if the agent API isn't responding), ask the user:
 ```
 User, please deploy drhorrible: `just deploy drhorrible`
 ```
 
-Agents cannot run `just deploy` directly - it requires SSH access that agents don't have.
+**For subsequent deploys**, agents can trigger directly via the agent API:
+```bash
+# Get the current commit SHA from main
+sha=$(git rev-parse --short HEAD)
+
+# Trigger deploy (verifies SHA matches what's pending)
+fort-agent-call drhorrible deploy "{\"sha\": \"$sha\"}"
+```
+
+The deploy capability verifies the SHA matches what comin has built, preventing accidental deploys of the wrong version.
 
 ## Debugging Deployment Failures
 
@@ -377,7 +389,7 @@ Common issues:
 
 ## Inter-Host Agent Calls
 
-Agents in the dev-sandbox can query other hosts using `fort-agent-call`. This is useful for debugging, checking deployment status, and understanding cluster state.
+Agents in the dev-sandbox can query and control other hosts using `fort-agent-call`. This enables debugging, deployment, and cluster management without SSH access.
 
 ```bash
 # Check a host's status (uptime, failed units, deploy info)
@@ -393,6 +405,28 @@ fort-agent-call ursula holdings '{}'
 **Output format**: JSON envelope with `body`, `status`, `handle`, `ttl` fields.
 
 **Available on all hosts**: `status`, `manifest`, `holdings`
+
+### Debug Capabilities
+
+These capabilities are restricted to the `dev-sandbox` principal for operational safety:
+
+```bash
+# Trigger deployment on manual-confirmation hosts (forge/beacon)
+fort-agent-call drhorrible deploy '{"sha": "5563ac2"}'
+
+# Fetch journal logs for a service
+fort-agent-call joker journal '{"unit": "nginx", "lines": 50}'
+fort-agent-call joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
+
+# Restart a service
+fort-agent-call joker restart '{"unit": "nginx"}'
+```
+
+| Capability | Request | Notes |
+|------------|---------|-------|
+| `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
+| `journal` | `{unit, lines?, since?}` | Returns journalctl output |
+| `restart` | `{unit}` | Restarts systemd unit |
 
 **Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
 
