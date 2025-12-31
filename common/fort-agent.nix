@@ -106,10 +106,10 @@ let
   # For each capability this host exposes, determine which hosts can call it
   deriveRbac = capabilities:
     lib.mapAttrs (capName: capCfg:
-      # For now, allow all cluster hosts to call any capability
+      # For now, allow all cluster hosts and principals to call any capability
       # A more sophisticated version could use capCfg.satisfies to find
       # hosts that declare matching fort.needs.<satisfies>.* entries
-      builtins.attrNames allHostManifests
+      allHosts
     ) capabilities;
 
   # Need option type
