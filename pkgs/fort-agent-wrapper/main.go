@@ -141,6 +141,9 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Debug: log body details
+	fmt.Fprintf(os.Stderr, "[fort-agent] body len=%d hex=%x str=%q\n", len(body), body, string(body))
+
 	// Extract auth headers
 	origin := r.Header.Get("X-Fort-Origin")
 	timestampStr := r.Header.Get("X-Fort-Timestamp")
