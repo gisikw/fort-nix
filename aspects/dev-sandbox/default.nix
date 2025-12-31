@@ -5,6 +5,7 @@ let
   settings = rootManifest.fortConfig.settings;
   user = "dev";
   homeDir = "/home/${user}";
+  agentKeyPath = "/var/lib/fort/dev-sandbox/agent-key";
 
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
@@ -87,6 +88,10 @@ in
         # Attach to any existing session if one exists
         tmux attach-session 2>/dev/null || true
       fi
+
+      # Fort agent configuration for dev-sandbox identity
+      export FORT_SSH_KEY="${agentKeyPath}"
+      export FORT_ORIGIN="dev-sandbox"
     '';
   };
 
@@ -106,7 +111,17 @@ in
     "d ${homeDir} 0700 ${user} users -"
     "d ${homeDir}/.ssh 0700 ${user} users -"
     "d ${homeDir}/Projects 0755 ${user} users -"
+    "d /var/lib/fort/dev-sandbox 0755 ${user} users -"
   ];
+
+  # Agent key for fort-agent-call signing (readable by dev user)
+  age.secrets.dev-sandbox-agent-key = {
+    file = ./agent-key.age;
+    path = agentKeyPath;
+    owner = user;
+    group = "users";
+    mode = "0600";
+  };
 
   # Git credential helper for Forgejo access
   # Reads the token distributed by forgejo-deploy-token-sync

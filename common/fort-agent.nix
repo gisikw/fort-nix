@@ -37,10 +37,19 @@ let
     };
 
   # Build hosts.json structure: { "hostname": { "pubkey": "ssh-ed25519 ..." }, ... }
-  hostsJson = builtins.listToAttrs (map (h:
+  # Includes both hosts (from device manifests) and principals with agentKeys
+  hostEntries = map (h:
     let info = getHostPubkey h;
     in { name = info.name; value = { pubkey = info.pubkey; }; }
-  ) (builtins.attrNames allHostManifests));
+  ) (builtins.attrNames allHostManifests);
+
+  # Extract principals with agentKey for agent authentication
+  principals = rootManifest.fortConfig.settings.principals or {};
+  principalEntries = lib.mapAttrsToList (name: cfg:
+    { inherit name; value = { pubkey = cfg.agentKey; }; }
+  ) (lib.filterAttrs (name: cfg: cfg ? agentKey) principals);
+
+  hostsJson = builtins.listToAttrs (hostEntries ++ principalEntries);
 
   fcgiSocket = "/run/fort-agent/fcgi.sock";
 

@@ -65,49 +65,17 @@ Then add it to a host's `manifest.nix`:
 
 ### SSO Modes
 
+Services can use SSO via `fortCluster.exposedServices`:
+
 | Mode | Use When |
 |------|----------|
 | `none` | Service handles its own auth, or no auth needed |
-| `oidc` | Service supports OIDC natively (credentials delivered to `/var/lib/fort-auth/<svc>/`) |
-| `headers` | Service can consume `X-Auth-*` headers from oauth2-proxy |
-| `basicauth` | Service only supports HTTP Basic Auth (proxy translates) |
+| `oidc` | Service supports OIDC natively |
+| `headers` | Service can consume `X-Auth-*` headers |
+| `basicauth` | Service only supports HTTP Basic Auth |
 | `gatekeeper` | Login required but no identity passed to backend |
 
-#### OIDC Credential Delivery
-
-When using `sso.mode = "oidc"`, the `service-registry` aspect (running on the forge host) automatically:
-
-1. Registers an OIDC client in pocket-id using the service's FQDN as the client name
-2. SSHs credentials to the target host at `/var/lib/fort-auth/<service-name>/`:
-   - `client-id` - the OIDC client ID
-   - `client-secret` - the OIDC client secret
-3. Restarts the service specified in `sso.restart` (defaults to `oauth2-proxy-<name>`)
-
-**App responsibilities** when using `oidc` mode:
-
-```nix
-# 1. Declare the exposure with restart target
-fortCluster.exposedServices = [{
-  name = "myapp";
-  port = 8080;
-  sso = {
-    mode = "oidc";
-    restart = "myapp.service";  # Service to restart after creds delivered
-  };
-}];
-
-# 2. Create tmpfiles for credential directory
-systemd.tmpfiles.rules = [
-  "d /var/lib/fort-auth/myapp 0700 myapp myapp -"
-];
-
-# 3. Configure the app to read credentials and use pocket-id endpoints:
-#    - Issuer/Auth URL: https://id.${domain}/authorize
-#    - Token URL: https://id.${domain}/api/oidc/token
-#    - Userinfo URL: https://id.${domain}/api/oidc/userinfo
-```
-
-See `apps/outline/default.nix` for a complete example using `wrapProgram` to inject credentials at runtime.
+For detailed implementation guidance, mode-specific patterns, and troubleshooting, see the `sso-guide` skill (`.claude/skills/sso-guide/`). Working examples: `apps/outline/` (oidc), `apps/fort-observability/` (headers).
 
 ### Custom Derivations
 

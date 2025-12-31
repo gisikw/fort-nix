@@ -24,9 +24,10 @@ rec {
           # Private key managed by deployer aspect on drhorrible
           roles = [ "root" ];
         };
-        ratched = {
+        dev-sandbox = {
           description = "Dev sandbox / LLM agents";
           publicKey = "age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m";
+          agentKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPntyQRxy6bGXLSQY1/jjHwpNhSP5mpHFc4JKUpRVQCR dev-sandbox-agent";
           roles = [ "secrets" ];
         };
         ci = {

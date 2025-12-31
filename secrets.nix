@@ -36,4 +36,5 @@ in
   "./clusters/bedlam/github-mirror-token.age".publicKeys = activeKeys;
   "./apps/forgejo/runner-secret.age".publicKeys = activeKeys;
   "./apps/attic/attic-server-token.age".publicKeys = activeKeys;
+  "./aspects/dev-sandbox/agent-key.age".publicKeys = activeKeys;
 }
