@@ -8,11 +8,12 @@ let
 
   # Handler for ssl-cert capability
   # Reads ACME-managed certs and returns them as base64-encoded JSON
+  # Request JSON comes via stdin, not $1
   sslCertHandler = pkgs.writeShellScript "handler-ssl-cert" ''
     set -euo pipefail
 
-    # Parse optional domain from request, default to cluster domain
-    request_domain=$(echo "$1" | ${pkgs.jq}/bin/jq -r '.domain // empty')
+    # Parse optional domain from request (stdin), default to cluster domain
+    request_domain=$(${pkgs.jq}/bin/jq -r '.domain // empty')
     cert_domain="''${request_domain:-${domain}}"
 
     cert_dir="/var/lib/acme/$cert_domain"
