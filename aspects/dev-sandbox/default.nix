@@ -7,6 +7,7 @@ let
 
   # Cluster-specific inputs (available when passed from host flake)
   home-config = extraInputs.home-config or null;
+  hasHomeConfig = home-config != null;
   homeDir = "/home/${user}";
   agentKeyPath = "/var/lib/fort/dev-sandbox/agent-key";
 
@@ -69,6 +70,27 @@ let
   ];
 in
 {
+  # Import home-manager NixOS module when home-config is available
+  imports = lib.optionals hasHomeConfig [
+    home-config.inputs.home-manager.nixosModules.home-manager
+  ];
+
+  # Home-manager configuration for the dev user
+  home-manager = lib.mkIf hasHomeConfig {
+    useGlobalPkgs = true;
+    useUserPackages = true;
+    extraSpecialArgs = {
+      isDarwin = false;
+      isLinux = true;
+    };
+    users.${user} = {
+      imports = [ home-config.homeManagerModules.default ];
+      home.stateVersion = "25.11";
+      # Resolve conflict between home-manager's common.nix and home-config module
+      nix.package = lib.mkForce pkgs.nix;
+    };
+  };
+
   # Create the dev user
   users.users.${user} = {
     isNormalUser = true;
