@@ -70,9 +70,11 @@ let
       fi
     '';
 
-    # Return host manifest (apps, aspects, roles, exposedServices)
+    # Return host manifest (apps, aspects, roles, exposedServices, capabilities)
     manifest = pkgs.writeShellScript "handler-manifest" ''
-      ${pkgs.coreutils}/bin/cat /var/lib/fort/host-manifest.json
+      ${pkgs.jq}/bin/jq -s '.[0] + {capabilities: .[1]}' \
+        /var/lib/fort/host-manifest.json \
+        /etc/fort-agent/capabilities.json
     '';
 
     # Return holdings (handles this host is actively using)
