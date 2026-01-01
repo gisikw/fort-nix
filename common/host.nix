@@ -91,9 +91,10 @@ in
       {
         nix.settings.experimental-features = [ "nix-command" "flakes" ];
         # Include attic cache config if it exists (delivered by attic-key-sync)
-        nix.extraOptions = ''
-          !include /var/lib/fort/nix/attic-cache.conf
-        '';
+        # TODO: Re-enable once attic is resilient to network loss
+        # nix.extraOptions = ''
+        #   !include /var/lib/fort/nix/attic-cache.conf
+        # '';
         nixpkgs.config.allowUnfree = true;
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;

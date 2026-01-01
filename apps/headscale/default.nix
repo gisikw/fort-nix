@@ -76,11 +76,7 @@ in
         locations."/" = {
           proxyPass = "http://127.0.0.1:9080";
           proxyWebsockets = true;
-          extraConfig = ''
-            proxy_set_header Host $host;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-          '';
+          # NixOS nginx includes recommended proxy headers by default
         };
         locations."/headscale.v1.HeadscaleService/" = {
           extraConfig = ''
