@@ -16,6 +16,7 @@ rec {
     "outline"
     "super-productivity"
     "termix"
+    "silverbullet"
   ];
 
   aspects = [
