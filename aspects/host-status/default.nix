@@ -16,8 +16,6 @@ let
   cominStore = "/var/lib/comin/store.json";
   deployRsInfo = "/var/lib/fort/deploy-info.json";
 
-  cominRepo = "/var/lib/comin/repository";
-
   statusScript = pkgs.writeShellScript "generate-host-status" ''
     set -euo pipefail
 
@@ -42,15 +40,6 @@ let
           source: "comin"
         }
       ' "${cominStore}" 2>/dev/null || echo '{"commit":"unknown","branch":"unknown","source":"comin"}')
-
-      # Get pending SHA from comin repository HEAD (what's been fetched but maybe not deployed)
-      if [ -d "${cominRepo}" ]; then
-        pending_msg=$(${pkgs.git}/bin/git -C "${cominRepo}" log -1 --format=%s HEAD 2>/dev/null || echo "")
-        pending_sha=$(echo "$pending_msg" | sed -n 's/^release: \([a-f0-9]*\) -.*/\1/p')
-        if [ -n "$pending_sha" ]; then
-          deploy_info=$(echo "$deploy_info" | ${pkgs.jq}/bin/jq --arg pending "$pending_sha" '. + {pending: $pending}')
-        fi
-      fi
     elif [ -f "${deployRsInfo}" ]; then
       # Non-gitops host - use deploy-rs written file
       deploy_info=$(${pkgs.jq}/bin/jq -c '. + {source: "deploy-rs"}' "${deployRsInfo}" 2>/dev/null || echo '{"commit":"unknown","branch":"unknown","source":"deploy-rs"}')

@@ -246,81 +246,71 @@ _deploy-gitops host addr:
   target_sha=$(git rev-parse --short HEAD)
   echo "[Fort] GitOps deploy {{host}} -> ${target_sha}"
 
-  # Poll until comin has fetched and built the target SHA
-  echo "[Fort] Waiting for {{host}} to fetch ${target_sha}..."
-  max_attempts=60  # 5 minutes at 5s intervals
+  max_attempts=90  # 7.5 minutes at 5s intervals
   attempt=0
+
+  # First, try the deploy capability (for manual-confirm hosts like forge/beacon)
+  # If it doesn't exist, fall back to polling status (for auto-deploy hosts)
+  has_deploy_capability=true
 
   while true; do
     ((attempt++)) || true
     if [[ $attempt -gt $max_attempts ]]; then
-      echo "[Fort] ERROR: Timed out waiting for {{host}} to fetch ${target_sha}" >&2
+      echo "[Fort] ERROR: Timed out waiting for {{host}} to deploy ${target_sha}" >&2
       exit 1
     fi
 
-    status_json=$(fort-agent-call {{host}} status '{}' 2>/dev/null | jq -r '.body') || {
+    # Check current status first
+    if status_json=$(fort-agent-call {{host}} status '{}' 2>/dev/null | jq -r '.body'); then
+      current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
+
+      # Already deployed?
+      if [[ "$current" == "$target_sha"* ]] || [[ "$target_sha" == "$current"* ]]; then
+        echo "[Fort] {{host}} deployed ${target_sha} successfully"
+        exit 0
+      fi
+    else
       echo "[Fort] Waiting for {{host}} to become reachable... (attempt $attempt)"
       sleep 5
       continue
-    }
-
-    current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
-    pending=$(echo "$status_json" | jq -r '.deploy.pending // empty')
-
-    # Already deployed?
-    if [[ "$current" == "$target_sha"* ]] || [[ "$target_sha" == "$current"* ]]; then
-      echo "[Fort] {{host}} already at ${target_sha}"
-      exit 0
     fi
 
-    # Pending matches - ready to deploy
-    if [[ -n "$pending" ]] && { [[ "$pending" == "$target_sha"* ]] || [[ "$target_sha" == "$pending"* ]]; }; then
-      echo "[Fort] {{host}} has ${target_sha} pending"
-      break
-    fi
+    # Try deploy capability if available
+    if [[ "$has_deploy_capability" == "true" ]]; then
+      if deploy_response=$(fort-agent-call {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>&1); then
+        deploy_body=$(echo "$deploy_response" | jq -r '.body')
+        deploy_status=$(echo "$deploy_body" | jq -r '.status // .error // empty')
 
-    echo "[Fort] Waiting... current=${current:-unknown} pending=${pending:-unknown} (attempt $attempt)"
-    sleep 5
-  done
-
-  # Trigger deploy (works for manual-confirm hosts, no-op if already auto-deployed)
-  echo "[Fort] Triggering deploy on {{host}}..."
-  deploy_result=$(fort-agent-call {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>/dev/null | jq -r '.body') || {
-    # Deploy capability might not exist (auto-deploy host) - that's fine, just wait
-    echo "[Fort] No deploy capability (auto-deploy host), waiting for activation..."
-  }
-
-  if [[ -n "$deploy_result" ]]; then
-    deploy_status=$(echo "$deploy_result" | jq -r '.status // .error // empty')
-    echo "[Fort] Deploy response: ${deploy_status}"
-  fi
-
-  # Wait for activation
-  echo "[Fort] Waiting for {{host}} to activate ${target_sha}..."
-  attempt=0
-  max_attempts=30  # 2.5 minutes for activation
-
-  while true; do
-    ((attempt++)) || true
-    if [[ $attempt -gt $max_attempts ]]; then
-      echo "[Fort] ERROR: Timed out waiting for {{host}} to activate ${target_sha}" >&2
-      exit 1
-    fi
-
-    status_json=$(fort-agent-call {{host}} status '{}' 2>/dev/null | jq -r '.body') || {
+        case "$deploy_status" in
+          deployed|confirmed)
+            echo "[Fort] Deploy triggered, waiting for activation..."
+            ;;
+          sha_mismatch)
+            pending=$(echo "$deploy_body" | jq -r '.pending // empty')
+            echo "[Fort] Waiting for comin to fetch... current=${current:-unknown} pending=${pending:-unknown} (attempt $attempt)"
+            sleep 5
+            continue
+            ;;
+          *)
+            echo "[Fort] Deploy response: ${deploy_status}"
+            ;;
+        esac
+      else
+        # Check if it's a 404 (no deploy capability) vs other error
+        if echo "$deploy_response" | grep -q "404\|not found\|unknown capability"; then
+          echo "[Fort] No deploy capability (auto-deploy host), polling status..."
+          has_deploy_capability=false
+        else
+          echo "[Fort] Deploy call failed, retrying... (attempt $attempt)"
+          sleep 5
+          continue
+        fi
+      fi
+    else
+      # Auto-deploy host: just wait for status to show the commit
+      echo "[Fort] Waiting for auto-deploy... current=${current:-unknown} (attempt $attempt)"
       sleep 5
-      continue
-    }
-
-    current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
-
-    if [[ "$current" == "$target_sha"* ]] || [[ "$target_sha" == "$current"* ]]; then
-      echo "[Fort] {{host}} deployed ${target_sha} successfully"
-      exit 0
     fi
-
-    echo "[Fort] Waiting for activation... current=${current:-unknown} (attempt $attempt)"
-    sleep 5
   done
 
 fmt:
