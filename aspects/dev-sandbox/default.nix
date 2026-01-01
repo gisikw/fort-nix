@@ -109,8 +109,11 @@ in
       # Auto-attach to tmux on SSH connection
       # Skip if: already in tmux, not interactive, not SSH session
       if [[ -z "$TMUX" && -n "$SSH_CONNECTION" && $- == *i* ]]; then
-        # Attach to any existing session if one exists
-        tmux attach-session 2>/dev/null || true
+        # Attach to the most recently used session (by last_attached timestamp)
+        LAST_SESSION=$(tmux list-sessions -F '#{session_last_attached} #{session_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+        if [[ -n "$LAST_SESSION" ]]; then
+          exec tmux attach-session -t "$LAST_SESSION"
+        fi
       fi
 
       # Fort agent configuration for dev-sandbox identity
