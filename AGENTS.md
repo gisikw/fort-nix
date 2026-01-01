@@ -63,6 +63,15 @@ Then add it to a host's `manifest.nix`:
 { apps = [ "myapp" ]; ... }
 ```
 
+After deploying a new app with a subdomain, refresh the service registry so DNS picks it up immediately:
+
+```bash
+just deploy <host>                                           # Wait for host deploy
+fort-agent-call drhorrible restart '{"unit": "fort-service-registry"}'  # Refresh DNS
+```
+
+Use restart **without** delay unless the service would kill the response (nginx, fort-agent, tailscale).
+
 ### SSO Modes
 
 Services can use SSO via `fortCluster.exposedServices`:
@@ -405,10 +414,10 @@ fort-agent-call drhorrible deploy '{"sha": "5563ac2"}'
 fort-agent-call joker journal '{"unit": "nginx", "lines": 50}'
 fort-agent-call joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
 
-# Restart a service (immediate)
-fort-agent-call joker restart '{"unit": "nginx"}'
+# Restart a service (immediate - preferred, fails if restart fails)
+fort-agent-call joker restart '{"unit": "fort-service-registry"}'
 
-# Restart with delay (for nginx/fort-agent - avoids killing response)
+# Restart with delay (only for nginx/fort-agent/tailscale - avoids killing response)
 fort-agent-call joker restart '{"unit": "nginx", "delay": 2}'
 ```
 
@@ -416,7 +425,7 @@ fort-agent-call joker restart '{"unit": "nginx", "delay": 2}'
 |------------|---------|-------|
 | `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
 | `journal` | `{unit, lines?, since?}` | Returns journalctl output |
-| `restart` | `{unit, delay?}` | Restarts systemd unit; delay (seconds) schedules future restart |
+| `restart` | `{unit, delay?}` | Restarts systemd unit; use delay only for nginx/fort-agent/tailscale |
 
 **Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
 
@@ -450,7 +459,7 @@ Before closing a ticket:
 
 2. **Commit and push**: This triggers GitOps for most hosts.
 
-3. **Request manual deploy if needed**: If the change affects drhorrible (forge) or raishan (beacon), ask the user to deploy those hosts manually.
+3. **Wait for deploy**: Run `just deploy <host>` even for auto-deploy hosts. This ensures the deploy completes before closing the ticket.
 
 4. **Close the ticket**: `bd close <id>`
 
