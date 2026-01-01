@@ -172,6 +172,21 @@ assign device host:
 
 deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
+  set -euo pipefail
+
+  # Expand ~ in deploy key path
+  deploy_key_expanded="${deploy_key/#\~/$HOME}"
+
+  # Check if master key exists - determines deploy mode
+  if [[ -f "$deploy_key_expanded" ]]; then
+    just _deploy-direct {{host}} {{addr}}
+  else
+    just _deploy-gitops {{host}} {{addr}}
+  fi
+
+# Direct deploy via deploy-rs (requires master key)
+_deploy-direct host addr:
+  #!/usr/bin/env bash
   if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
     echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
     exit 1
@@ -221,6 +236,91 @@ deploy host addr=(host + ".fort." + domain):
   echo "[Fort] Writing deploy info to {{addr}}"
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
     "mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json"
+
+# GitOps deploy via fort-agent-call (no master key needed)
+_deploy-gitops host addr:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  target_sha=$(git rev-parse --short HEAD)
+  echo "[Fort] GitOps deploy {{host}} -> ${target_sha}"
+
+  # Poll until comin has fetched and built the target SHA
+  echo "[Fort] Waiting for {{host}} to fetch ${target_sha}..."
+  max_attempts=60  # 5 minutes at 5s intervals
+  attempt=0
+
+  while true; do
+    ((attempt++)) || true
+    if [[ $attempt -gt $max_attempts ]]; then
+      echo "[Fort] ERROR: Timed out waiting for {{host}} to fetch ${target_sha}" >&2
+      exit 1
+    fi
+
+    status_json=$(fort-agent-call {{host}} status '{}' 2>/dev/null | jq -r '.body') || {
+      echo "[Fort] Waiting for {{host}} to become reachable... (attempt $attempt)"
+      sleep 5
+      continue
+    }
+
+    current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
+    pending=$(echo "$status_json" | jq -r '.deploy.pending // empty')
+
+    # Already deployed?
+    if [[ "$current" == "$target_sha"* ]] || [[ "$target_sha" == "$current"* ]]; then
+      echo "[Fort] {{host}} already at ${target_sha}"
+      exit 0
+    fi
+
+    # Pending matches - ready to deploy
+    if [[ -n "$pending" ]] && { [[ "$pending" == "$target_sha"* ]] || [[ "$target_sha" == "$pending"* ]]; }; then
+      echo "[Fort] {{host}} has ${target_sha} pending"
+      break
+    fi
+
+    echo "[Fort] Waiting... current=${current:-unknown} pending=${pending:-unknown} (attempt $attempt)"
+    sleep 5
+  done
+
+  # Trigger deploy (works for manual-confirm hosts, no-op if already auto-deployed)
+  echo "[Fort] Triggering deploy on {{host}}..."
+  deploy_result=$(fort-agent-call {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>/dev/null | jq -r '.body') || {
+    # Deploy capability might not exist (auto-deploy host) - that's fine, just wait
+    echo "[Fort] No deploy capability (auto-deploy host), waiting for activation..."
+  }
+
+  if [[ -n "$deploy_result" ]]; then
+    deploy_status=$(echo "$deploy_result" | jq -r '.status // .error // empty')
+    echo "[Fort] Deploy response: ${deploy_status}"
+  fi
+
+  # Wait for activation
+  echo "[Fort] Waiting for {{host}} to activate ${target_sha}..."
+  attempt=0
+  max_attempts=30  # 2.5 minutes for activation
+
+  while true; do
+    ((attempt++)) || true
+    if [[ $attempt -gt $max_attempts ]]; then
+      echo "[Fort] ERROR: Timed out waiting for {{host}} to activate ${target_sha}" >&2
+      exit 1
+    fi
+
+    status_json=$(fort-agent-call {{host}} status '{}' 2>/dev/null | jq -r '.body') || {
+      sleep 5
+      continue
+    }
+
+    current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
+
+    if [[ "$current" == "$target_sha"* ]] || [[ "$target_sha" == "$current"* ]]; then
+      echo "[Fort] {{host}} deployed ${target_sha} successfully"
+      exit 0
+    fi
+
+    echo "[Fort] Waiting for activation... current=${current:-unknown} (attempt $attempt)"
+    sleep 5
+  done
 
 fmt:
   nix run .#nixfmt -- .
