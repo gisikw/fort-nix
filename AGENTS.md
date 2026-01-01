@@ -317,17 +317,18 @@ just test                    # Flake check on all hosts/devices
 
 ### GitOps Hosts (Most Hosts)
 
-For hosts with the `gitops` aspect, deployment is automatic:
+For hosts with the `gitops` aspect:
 
 1. Commit and push to `main`
-2. CI validates and updates `release` branch
-3. Hosts auto-pull and deploy (~5 min total)
+2. Run `just deploy <host>` to wait for deployment
 
-**Do NOT run `just deploy` for these hosts** - just commit and push.
+The command auto-detects the right method and blocks until the host is running your commit:
+- **With master key**: deploy-rs direct push
+- **Without master key**: Polls GitOps status, triggers deploy if needed, waits for activation
 
 **Auto-deploy hosts**: joker, lordhenry, minos, q, ratched, ursula
 
-**Manual-confirmation hosts**: drhorrible, raishan (see below)
+**Manual-confirmation hosts**: drhorrible, raishan (build automatically, but `just deploy` triggers the switch)
 
 ### Testing Changes Safely (Test Branches)
 
@@ -354,21 +355,7 @@ Comin on the target host picks up the testing branch and deploys with `switch-to
 
 The forge (drhorrible) and beacon (raishan) use GitOps but with **manual confirmation** - they pull and build automatically, but won't switch until explicitly triggered. This prevents surprise deploys on critical infrastructure.
 
-**For initial deployment** (or if the agent API isn't responding), ask the user:
-```
-User, please deploy drhorrible: `just deploy drhorrible`
-```
-
-**For subsequent deploys**, agents can trigger directly via the agent API:
-```bash
-# Get the current commit SHA from main
-sha=$(git rev-parse --short HEAD)
-
-# Trigger deploy (verifies SHA matches what's pending)
-fort-agent-call drhorrible deploy "{\"sha\": \"$sha\"}"
-```
-
-The deploy capability verifies the SHA matches what comin has built, preventing accidental deploys of the wrong version.
+Use `just deploy <host>` like any other host - it handles the confirmation automatically. If the agent API isn't responding, ask the user to run the command instead.
 
 ## Debugging Deployment Failures
 

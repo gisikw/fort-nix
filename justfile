@@ -252,6 +252,7 @@ _deploy-gitops host addr:
   # First, try the deploy capability (for manual-confirm hosts like forge/beacon)
   # If it doesn't exist, fall back to polling status (for auto-deploy hosts)
   has_deploy_capability=true
+  deploy_triggered=false
 
   while true; do
     ((attempt++)) || true
@@ -283,7 +284,10 @@ _deploy-gitops host addr:
 
         case "$deploy_status" in
           deployed|confirmed)
-            echo "[Fort] Deploy triggered, waiting for activation..."
+            if [[ "$deploy_triggered" == "false" ]]; then
+              echo "[Fort] Deploy triggered, waiting for activation..."
+              deploy_triggered=true
+            fi
             ;;
           sha_mismatch)
             pending=$(echo "$deploy_body" | jq -r '.pending // empty')
