@@ -175,7 +175,8 @@ deploy host addr=(host + ".fort." + domain):
   set -euo pipefail
 
   # Expand ~ in deploy key path
-  deploy_key_expanded="${deploy_key/#\~/$HOME}"
+  deploy_key_expanded="{{deploy_key}}"
+  deploy_key_expanded="${deploy_key_expanded/#\~/$HOME}"
 
   # Check if master key exists - determines deploy mode
   if [[ -f "$deploy_key_expanded" ]]; then
