@@ -276,43 +276,41 @@ _deploy-gitops host addr:
       continue
     fi
 
-    # Try deploy capability if available
-    if [[ "$has_deploy_capability" == "true" ]]; then
+    # Try deploy capability if available (only until first success)
+    if [[ "$has_deploy_capability" == "true" ]] && [[ "$deploy_triggered" == "false" ]]; then
       if deploy_response=$(fort-agent-call {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>&1); then
         deploy_body=$(echo "$deploy_response" | jq -r '.body')
         deploy_status=$(echo "$deploy_body" | jq -r '.status // .error // empty')
 
         case "$deploy_status" in
           deployed|confirmed)
-            if [[ "$deploy_triggered" == "false" ]]; then
-              echo "[Fort] Deploy triggered, waiting for activation..."
-              deploy_triggered=true
-            fi
+            echo "[Fort] Deploy triggered, waiting for activation..."
+            deploy_triggered=true
+            sleep 5
             ;;
           sha_mismatch)
             pending=$(echo "$deploy_body" | jq -r '.pending // empty')
-            echo "[Fort] Waiting for comin to fetch... current=${current:-unknown} pending=${pending:-unknown} (attempt $attempt)"
+            echo "[Fort] Waiting for comin to fetch... current=${current:-unknown} comin=${pending:-unknown} (attempt $attempt)"
             sleep 5
-            continue
             ;;
           *)
             echo "[Fort] Deploy response: ${deploy_status}"
+            sleep 5
             ;;
         esac
       else
         # Check if it's a 404 (no deploy capability) vs other error
         if echo "$deploy_response" | grep -q "404\|not found\|unknown capability"; then
-          echo "[Fort] No deploy capability (auto-deploy host), polling status..."
+          echo "[Fort] No deploy capability, polling status..."
           has_deploy_capability=false
         else
           echo "[Fort] Deploy call failed, retrying... (attempt $attempt)"
           sleep 5
-          continue
         fi
       fi
     else
-      # Auto-deploy host: just wait for status to show the commit
-      echo "[Fort] Waiting for auto-deploy... current=${current:-unknown} (attempt $attempt)"
+      # Waiting for activation (after deploy triggered or no deploy capability)
+      echo "[Fort] Waiting for activation... current=${current:-unknown} (attempt $attempt)"
       sleep 5
     fi
   done
