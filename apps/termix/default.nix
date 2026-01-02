@@ -6,7 +6,7 @@ in
 {
   virtualisation.oci-containers = {
     containers.termix = {
-      image = "containers.${fort.settings.domain}/ghcr.io/lukegus/termix:1.10.0";
+      image = "containers.${fort.settings.domain}/ghcr.io/lukegus/termix:release-1.10.0";
       ports = [ "8080:8080" ];
       volumes = [
         "/var/lib/termix:/app/data"
