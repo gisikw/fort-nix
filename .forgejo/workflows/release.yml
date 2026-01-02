@@ -124,15 +124,20 @@ jobs:
         run: |
           # Compare maps and output list of secrets that need re-keying
           # Re-key if: recipients changed OR content SHA changed (secret file was modified)
+          # Also handles migration from old format (array) to new format (object)
           jq -n --slurpfile current /tmp/release-work/recipients-map.json \
                 --slurpfile previous /tmp/release-work/previous-map.json '
             ($current[0] | keys) as $all_secrets |
             $all_secrets | map(
+              . as $path |
+              $previous[0][$path] as $prev |
               select(
-                # Check if recipients changed
-                ($current[0][.].recipients | tojson) != ($previous[0][.].recipients // [] | tojson)
+                # Old format was array, new is object - detect and handle migration
+                ($prev | type) != "object"
+                # OR check if recipients changed
+                or ($current[0][$path].recipients | tojson) != ($prev.recipients // [] | tojson)
                 # OR check if content SHA changed (secret file was modified on main)
-                or ($current[0][.].contentSha) != ($previous[0][.].contentSha // "")
+                or ($current[0][$path].contentSha) != ($prev.contentSha // "")
               )
             )
           ' > /tmp/release-work/secrets-to-rekey.json
