@@ -41,6 +41,20 @@ let
       battery = "sensor.${name}_battery";
     };
   };
+
+  mkAqaraAlarm = name: {
+    ${name} = {
+      switch = "switch.${name}";
+      melody = "select.${name}_melody";
+      volume = "select.${name}_volume";
+    };
+  };
+
+  mkNotify = name: {
+    ${name} = {
+      service = "notify.${name}";
+    };
+  };
 in
   mkHueLight "bedroom_2__light__ne" //
   mkHueLight "bedroom_2__light__sw" //
@@ -58,4 +72,8 @@ in
   mkAqaraContactSensor "mudroom__door__grg" //
 
   mkAqaraTemperatureSensor "boiler__temp_sensor" //
-  mkThirdRealityOutlet "boiler__dehumidifier"
+  mkThirdRealityOutlet "boiler__dehumidifier" //
+
+  mkAqaraAlarm "bedroom_4__alarm" //
+
+  mkNotify "notify__adult_1"
