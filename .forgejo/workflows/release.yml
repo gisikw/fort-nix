@@ -53,7 +53,7 @@ jobs:
         run: |
           mkdir -p /tmp/release-work
 
-          # Will hold: { "path/to/secret.age": ["key1", "key2", ...], ... }
+          # Will hold: { "path/to/secret.age": { "recipients": ["key1", ...], "contentSha": "abc123" }, ... }
           echo '{}' > /tmp/release-work/recipients-map.json
 
           for host_dir in ./clusters/bedlam/hosts/*/; do
@@ -88,9 +88,15 @@ jobs:
               secret_path=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
               echo "  Secret: $secret_path"
 
-              # Add key to this secret's recipient list in the map
-              jq --arg path "$secret_path" --arg key "$device_key" \
-                '.[$path] = ((.[$path] // []) + [$key] | unique | sort)' \
+              # Get the SHA of the last commit that changed this secret file
+              content_sha=$(git log -1 --format=%H -- "$secret_path" 2>/dev/null || echo "unknown")
+
+              # Add/update this secret in the map with recipient and content SHA
+              jq --arg path "$secret_path" --arg key "$device_key" --arg sha "$content_sha" \
+                '.[$path] = {
+                  recipients: ((.[$path].recipients // []) + [$key] | unique | sort),
+                  contentSha: $sha
+                }' \
                 /tmp/release-work/recipients-map.json > /tmp/release-work/recipients-map.json.tmp
               mv /tmp/release-work/recipients-map.json.tmp /tmp/release-work/recipients-map.json
             done
@@ -117,12 +123,16 @@ jobs:
       - name: Determine secrets to re-key
         run: |
           # Compare maps and output list of secrets that need re-keying
+          # Re-key if: recipients changed OR content SHA changed (secret file was modified)
           jq -n --slurpfile current /tmp/release-work/recipients-map.json \
                 --slurpfile previous /tmp/release-work/previous-map.json '
             ($current[0] | keys) as $all_secrets |
             $all_secrets | map(
               select(
-                ($current[0][.] | tojson) != ($previous[0][.] // [] | tojson)
+                # Check if recipients changed
+                ($current[0][.].recipients | tojson) != ($previous[0][.].recipients // [] | tojson)
+                # OR check if content SHA changed (secret file was modified on main)
+                or ($current[0][.].contentSha) != ($previous[0][.].contentSha // "")
               )
             )
           ' > /tmp/release-work/secrets-to-rekey.json
@@ -136,8 +146,8 @@ jobs:
 
       - name: Copy unchanged secrets from release branch
         run: |
-          # For secrets with unchanged recipients, copy from release HEAD
-          # This preserves stable ciphertext and avoids spurious changes
+          # For secrets with unchanged recipients AND content, copy from release HEAD
+          # This preserves stable ciphertext and avoids spurious deploy triggers
           jq -r 'keys[]' /tmp/release-work/recipients-map.json | while read -r secret_path; do
             # Skip if this secret needs re-keying
             if jq -e --arg p "$secret_path" 'index($p)' /tmp/release-work/secrets-to-rekey.json >/dev/null 2>&1; then
@@ -169,8 +179,8 @@ jobs:
 
             echo "::group::Re-keying: $secret_path"
 
-            # Get recipients for this secret
-            jq -r --arg path "$secret_path" '.[$path][]' /tmp/release-work/recipients-map.json > /tmp/recipients.txt
+            # Get recipients for this secret (now under .recipients key)
+            jq -r --arg path "$secret_path" '.[$path].recipients[]' /tmp/release-work/recipients-map.json > /tmp/recipients.txt
 
             echo "Recipients: $(wc -l < /tmp/recipients.txt | tr -d ' ') keys"
 
