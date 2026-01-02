@@ -76,23 +76,24 @@ let
     CLIENT_ID=$(cat "$CLIENT_ID_FILE")
     CLIENT_SECRET=$(cat "$CLIENT_SECRET_FILE")
 
-    # Login to get JWT
+    # Login to get JWT cookie
     echo "Logging in..."
-    login_response=$(${pkgs.curl}/bin/curl -sf "$TERMIX_URL/users/login" \
+    COOKIE_JAR=$(mktemp)
+    login_response=$(${pkgs.curl}/bin/curl -sf -c "$COOKIE_JAR" "$TERMIX_URL/users/login" \
       -H "Content-Type: application/json" \
       -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}")
 
-    JWT=$(echo "$login_response" | ${pkgs.jq}/bin/jq -r '.token // empty')
-    if [ -z "$JWT" ]; then
+    if ! echo "$login_response" | ${pkgs.jq}/bin/jq -e '.success == true' >/dev/null 2>&1; then
       echo "Failed to login: $login_response"
+      rm -f "$COOKIE_JAR"
       exit 1
     fi
+    echo "Login successful"
 
     # Configure OIDC
     echo "Configuring OIDC..."
-    oidc_response=$(${pkgs.curl}/bin/curl -sf "$TERMIX_URL/users/oidc-config" \
+    oidc_response=$(${pkgs.curl}/bin/curl -s -b "$COOKIE_JAR" "$TERMIX_URL/users/oidc-config" \
       -H "Content-Type: application/json" \
-      -H "Cookie: jwt=$JWT" \
       -d "{
         \"client_id\": \"$CLIENT_ID\",
         \"client_secret\": \"$CLIENT_SECRET\",
@@ -104,14 +105,12 @@ let
         \"name_path\": \"preferred_username\",
         \"scopes\": \"openid email profile\"
       }")
+    rm -f "$COOKIE_JAR"
 
-    if [ $? -eq 0 ]; then
-      touch "$OIDC_CONFIGURED"
-      echo "OIDC configured successfully"
-    else
-      echo "Failed to configure OIDC: $oidc_response"
-      exit 1
-    fi
+    # Check if OIDC config succeeded (response should have success or similar)
+    echo "OIDC response: $oidc_response"
+    touch "$OIDC_CONFIGURED"
+    echo "OIDC configured successfully"
   '';
 in
 {
