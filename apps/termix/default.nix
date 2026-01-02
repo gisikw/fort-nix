@@ -37,13 +37,15 @@ let
         -H "Content-Type: application/json" \
         -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}")
 
-      if echo "$response" | ${pkgs.jq}/bin/jq -e '.id' >/dev/null 2>&1; then
+      # Check if user was created and is admin
+      is_admin=$(echo "$response" | ${pkgs.jq}/bin/jq -r '.is_admin // false')
+      if [ "$is_admin" = "true" ]; then
         echo "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}" > "$ADMIN_CREDS"
         chmod 600 "$ADMIN_CREDS"
         echo "Admin user created successfully"
       else
-        echo "Failed to create admin user: $response"
-        echo "Database may already have users - manual intervention required"
+        echo "User created but is_admin=$is_admin - database may already have users"
+        echo "Response: $response"
         exit 1
       fi
     fi
@@ -124,7 +126,7 @@ in
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/termix 0755 root root -"
+    "d /var/lib/termix 0777 root root -"
     "d /var/lib/fort-auth/termix 0755 root root -"
   ];
 
