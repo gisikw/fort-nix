@@ -41,6 +41,10 @@ in
       name = "silverbullet";
       subdomain = "notes";
       port = 3033;
+      visibility = "public";
+      sso = {
+        mode = "gatekeeper";
+      };
     }
   ];
 }

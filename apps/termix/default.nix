@@ -149,6 +149,7 @@ in
     {
       name = "termix";
       port = 8080;
+      visibility = "public";
       sso = {
         mode = "oidc";
         restart = "termix-oidc-bootstrap.service";
