@@ -87,7 +87,7 @@ in
       {
         action = "timer.start";
         target.entity_id = "timer.egress_alert";
-        data.duration = "00:00:30";
+        data.duration = "00:02:30";
       }
       {
         action = devices.notify__adult_1.service;

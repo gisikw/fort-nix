@@ -42,7 +42,7 @@ let
     };
   };
 
-  mkAqaraAlarm = name: {
+  mkSenckitSiren = name: {
     ${name} = {
       switch = "switch.${name}_alarm";
       melody = "select.${name}_melody";
@@ -74,6 +74,6 @@ in
   mkAqaraTemperatureSensor "boiler__temp_sensor" //
   mkThirdRealityOutlet "boiler__dehumidifier" //
 
-  mkAqaraAlarm "bedroom_4__alarm" //
+  mkSenckitSiren "bedroom_4__alarm" //
 
   mkNotify "notify__adult_1"
