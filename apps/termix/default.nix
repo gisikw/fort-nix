@@ -105,10 +105,21 @@ let
         \"name_path\": \"preferred_username\",
         \"scopes\": \"openid email profile\"
       }")
-    rm -f "$COOKIE_JAR"
-
-    # Check if OIDC config succeeded (response should have success or similar)
     echo "OIDC response: $oidc_response"
+
+    # Disable password login (OIDC only)
+    echo "Disabling password login..."
+    ${pkgs.curl}/bin/curl -s -X PATCH -b "$COOKIE_JAR" "$TERMIX_URL/users/password-login-allowed" \
+      -H "Content-Type: application/json" \
+      -d '{"allowed":false}'
+
+    # Disable new user registration
+    echo "Disabling registration..."
+    ${pkgs.curl}/bin/curl -s -X PATCH -b "$COOKIE_JAR" "$TERMIX_URL/users/registration-allowed" \
+      -H "Content-Type: application/json" \
+      -d '{"allowed":false}'
+
+    rm -f "$COOKIE_JAR"
     touch "$OIDC_CONFIGURED"
     echo "OIDC configured successfully"
   '';
