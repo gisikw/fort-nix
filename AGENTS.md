@@ -441,6 +441,7 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 - Don't hardcode IPs or hostnames - use `${domain}` from cluster manifest
 - Don't add nginx virtual hosts manually - use `fortCluster.exposedServices`
 - Don't commit unencrypted secrets
+- Don't use `:latest` container tags - pin to explicit versions (e.g., `:1.10.0`) for reproducible deploys
 
 ## Working on Tickets
 
