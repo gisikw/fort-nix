@@ -113,12 +113,6 @@ let
       -H "Content-Type: application/json" \
       -d '{"allowed":false}'
 
-    # Disable new user registration
-    echo "Disabling registration..."
-    ${pkgs.curl}/bin/curl -s -X PATCH -b "$COOKIE_JAR" "$TERMIX_URL/users/registration-allowed" \
-      -H "Content-Type: application/json" \
-      -d '{"allowed":false}'
-
     rm -f "$COOKIE_JAR"
     touch "$OIDC_CONFIGURED"
     echo "OIDC configured successfully"
