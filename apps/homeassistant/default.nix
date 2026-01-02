@@ -7,6 +7,7 @@ let
   lightsFile = yamlFormat.generate "hass-lights.yaml" (import declarative.lights);
   scenesFile = yamlFormat.generate "hass-scenes.yaml" (import declarative.scenes);
   scriptsFile = yamlFormat.generate "hass-scripts.yaml" (import declarative.scripts);
+  helpers = if declarative ? helpers then import declarative.helpers else {};
 in
 {
   age.secrets.${mqttPasswordSecretName} = {
@@ -57,7 +58,7 @@ in
         use_x_forwarded_for = true;
         trusted_proxies = [ "127.0.0.1" ];
       };
-    };
+    } // helpers;
   };
 
   systemd.services.home-assistant.restartTriggers = [

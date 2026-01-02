@@ -13,6 +13,7 @@ rec {
       declarative.lights = ./lights.nix;
       declarative.scenes = ./scenes.nix;
       declarative.scripts = ./scripts.nix;
+      declarative.helpers = ./helpers.nix;
     }
   ];
 
