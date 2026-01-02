@@ -44,7 +44,7 @@ let
 
   mkAqaraAlarm = name: {
     ${name} = {
-      switch = "switch.${name}";
+      switch = "switch.${name}_alarm";
       melody = "select.${name}_melody";
       volume = "select.${name}_volume";
     };

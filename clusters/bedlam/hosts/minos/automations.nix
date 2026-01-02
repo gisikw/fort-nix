@@ -69,7 +69,7 @@ in
     alias = "!automation__egress_door_opened";
     mode = "single";
     triggers = [
-      { platform = "state"; entity_id = egress_doors; to = "off"; }
+      { platform = "state"; entity_id = egress_doors; to = "on"; }
     ];
     conditions = [
       {
@@ -93,7 +93,7 @@ in
         action = devices.notify__adult_1.service;
         data = {
           title = "Exterior Door Opened";
-          message = "Dismiss the alert if this is expected";
+          message = "Open app to dismiss if expected";
         };
       }
     ];
