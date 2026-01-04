@@ -49,7 +49,34 @@ Design options for cluster-wide backup following 3-2-1 principles.
 
 ---
 
-## 3. Backup Tool Comparison
+## 3. Encryption Model
+
+Restic encrypts **all data client-side** before it leaves the host. This is a core design principle - storage backends are always assumed untrusted.
+
+**What's encrypted:**
+- File contents (AES-256-CTR)
+- File metadata (names, sizes, timestamps)
+- Directory structure
+- All repository metadata
+
+**Key derivation:**
+- Repository password → scrypt → encryption keys
+- Each repository has a unique master key, encrypted with the password
+
+**Implications:**
+- Cloud providers (B2, S3, R2) only see opaque encrypted blobs
+- Cannot comply with disclosure requests in any meaningful way (encrypted gibberish)
+- Cannot scan content for copyright or other purposes
+- Loss of repository password = permanent data loss (no recovery)
+
+**Password management:**
+- Store in agenix as `restic-password.age`
+- Consider paper backup in secure location (safe deposit box)
+- All hosts sharing a repo use the same password
+
+---
+
+## 4. Backup Tool Comparison
 
 ### Option A: Restic
 
@@ -114,7 +141,7 @@ Design options for cluster-wide backup following 3-2-1 principles.
 
 ---
 
-## 4. Architecture Options
+## 5. Architecture Options
 
 ### Option 1: Centralized Hub (Recommended)
 
@@ -212,9 +239,9 @@ Design options for cluster-wide backup following 3-2-1 principles.
 
 ---
 
-## 5. Offsite Destinations
+## 6. Offsite Destinations
 
-### 5.1 Cloud (Backup of Last Resort)
+### 6.1 Cloud (Backup of Last Resort)
 
 | Provider | Cost (20GB) | Notes |
 |----------|-------------|-------|
@@ -226,9 +253,9 @@ Design options for cluster-wide backup following 3-2-1 principles.
 
 All cloud storage receives already-encrypted restic repo data. Even if provider is compromised, data is unreadable without the repo password.
 
-### 5.2 Peer Exchange (Brother's Server)
+### 6.2 Peer Exchange
 
-**Concept**: Mutual backup arrangement where you each host encrypted backups for the other.
+**Concept**: Mutual backup arrangement with friends/family - you each host encrypted backups for the other. Provides geographic redundancy without cloud costs.
 
 **Implementation options:**
 
@@ -253,13 +280,15 @@ All cloud storage receives already-encrypted restic repo data. Even if provider 
 - In append-only mode, cannot delete your backups
 - You should verify periodically that backups exist
 
+**Peer requirements**: Any Linux box with storage. REST server can run via Docker on Ubuntu/Debian, or native package. Connected via WireGuard/Tailscale tunnel for secure transport.
+
 **Recommendation**: REST server over WireGuard/Tailscale tunnel. Simple, secure, append-only.
 
 ---
 
-## 6. Integration with Fort Architecture
+## 7. Integration with Fort Architecture
 
-### 6.1 New Aspect: `backup-client`
+### 7.1 New Aspect: `backup-client`
 
 ```nix
 # aspects/backup-client/default.nix
@@ -297,7 +326,7 @@ All cloud storage receives already-encrypted restic repo data. Even if provider 
 }
 ```
 
-### 6.2 New Role or App: `backup-hub`
+### 7.2 New Role or App: `backup-hub`
 
 For the host that receives and syncs backups:
 
@@ -347,7 +376,7 @@ For the host that receives and syncs backups:
 }
 ```
 
-### 6.3 Agent Capabilities (Optional Enhancement)
+### 7.3 Agent Capabilities (Optional Enhancement)
 
 For visibility/control via agent API:
 
@@ -361,7 +390,7 @@ These could live on the backup hub and be called from dev-sandbox for operationa
 
 ---
 
-## 7. Monitoring & Alerting
+## 8. Monitoring & Alerting
 
 ### Backup Health Checks
 
@@ -392,7 +421,7 @@ systemd.timers.backup-monitor = {
 
 ---
 
-## 8. Recovery Procedures
+## 9. Recovery Procedures
 
 ### Full Host Recovery
 
@@ -432,7 +461,7 @@ Automated monthly test restore to a staging VM:
 
 ---
 
-## 9. Implementation Plan
+## 10. Implementation Plan
 
 ### Phase 1: Foundation
 - [ ] Set up restic REST server on ursula
@@ -447,25 +476,25 @@ Automated monthly test restore to a staging VM:
 - [ ] Configure nightly cloud sync
 - [ ] Verify cloud backup integrity
 
-### Phase 3: Offsite - Peer
-- [ ] Coordinate with brother on setup
-- [ ] Either: they run REST server, or we push via rclone
-- [ ] Set up WireGuard tunnel if needed
-- [ ] Configure peer sync
-
-### Phase 4: Monitoring
+### Phase 3: Monitoring
 - [ ] Add backup metrics to observability stack
 - [ ] Create AlertManager rules
 - [ ] Document recovery procedures
 
-### Phase 5: Hardening
+### Phase 4: Hardening
 - [ ] Implement backup verification tests
 - [ ] Add agent capabilities for visibility
 - [ ] Consider automated recovery testing
 
+### Phase 5: Offsite - Peer
+- [ ] Coordinate with peer on setup
+- [ ] Deploy REST server on peer's Linux box (Docker or native)
+- [ ] Set up WireGuard/Tailscale tunnel
+- [ ] Configure peer sync from backup hub
+
 ---
 
-## 10. Design Decisions
+## 12. Design Decisions
 
 1. **Hub location**: ursula (has ZFS). Slightly brittle (backs up to itself) but a dedicated NAS box isn't justified yet. Cloud + peer provide offsite redundancy.
 
@@ -475,9 +504,9 @@ Automated monthly test restore to a staging VM:
 
 4. **PostgreSQL strategy**: Daily pg_dump. WAL archiving is overkill unless we need point-in-time recovery or zero-downtime snapshots.
 
-5. **Peer server**: Brother runs Ubuntu. We'll need to package/deploy REST server there - could be a simple docker-compose or a lightweight NixOS container.
+5. **Peer deployment**: REST server via Docker or native package on peer's Linux box. Connected over WireGuard/Tailscale.
 
-## 10.1 Data Tiers
+### 12.1 Data Tiers
 
 | Tier | Examples | Backup? |
 |------|----------|---------|
@@ -489,7 +518,7 @@ Media backup may become relevant for hard-to-replace content (rare albums, perso
 
 ---
 
-## 11. Cost Estimate
+## 13. Cost Estimate
 
 | Item | Monthly Cost |
 |------|--------------|
