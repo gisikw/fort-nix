@@ -4,7 +4,13 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [
+    {
+      name = "silverbullet";
+      subdomain = "exocortex";
+      dataDir = "/home/dev/Projects/exocortex";
+    }
+  ];
 
   aspects = [
     "mesh"
@@ -19,8 +25,42 @@ rec {
   ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
+
+      # Add dev user to silverbullet group for shared file access
+      config.users.users.dev.extraGroups = [ "silverbullet" ];
+
+      # Set up exocortex directory with proper permissions (setgid for group inheritance)
+      config.systemd.tmpfiles.rules = [
+        "d /home/dev/Projects/exocortex 2775 dev silverbullet -"
+      ];
+
+      # One-time ACL setup service - ensures default ACLs for new files
+      config.systemd.services.exocortex-acl-setup = {
+        description = "Set default ACLs on exocortex directory";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "silverbullet.service" ];
+        path = [ pkgs.acl ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          # Ensure directory exists with correct ownership
+          mkdir -p /home/dev/Projects/exocortex
+          chown dev:silverbullet /home/dev/Projects/exocortex
+          chmod 2775 /home/dev/Projects/exocortex
+
+          # Allow silverbullet to traverse parent directories (execute only, no read)
+          setfacl -m u:silverbullet:x /home/dev
+          setfacl -m u:silverbullet:x /home/dev/Projects
+
+          # Set default ACLs - new files inherit group write permission
+          setfacl -R -d -m g:silverbullet:rwX /home/dev/Projects/exocortex
+          setfacl -R -m g:silverbullet:rwX /home/dev/Projects/exocortex
+        '';
+      };
     };
 }

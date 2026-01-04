@@ -1,7 +1,9 @@
-{ subdomain ? "notes", ... }:
+{ subdomain ? "notes", dataDir ? null, ... }:
 { lib, pkgs, ... }:
 let
-  stateDir = "/var/lib/silverbullet";
+  defaultStateDir = "/var/lib/silverbullet";
+  effectiveDataDir = if dataDir != null then dataDir else defaultStateDir;
+  useDefaultDir = dataDir == null;
 in
 {
   users.groups.silverbullet = { };
@@ -9,11 +11,12 @@ in
   users.users.silverbullet = {
     isSystemUser = true;
     group = "silverbullet";
-    home = stateDir;
+    home = defaultStateDir;
   };
 
-  systemd.tmpfiles.rules = [
-    "d ${stateDir} 0750 silverbullet silverbullet -"
+  # Only create default state directory if no custom dataDir specified
+  systemd.tmpfiles.rules = lib.optionals useDefaultDir [
+    "d ${defaultStateDir} 0750 silverbullet silverbullet -"
   ];
 
   systemd.services.silverbullet = {
@@ -24,12 +27,13 @@ in
     serviceConfig = {
       User = "silverbullet";
       Group = "silverbullet";
-      WorkingDirectory = stateDir;
+      WorkingDirectory = effectiveDataDir;
+      UMask = "0002";  # Group-writable files for shared access
       Restart = "on-failure";
       RestartSec = 10;
       ExecStart = "${lib.getExe pkgs.silverbullet}";
       Environment = [
-        "SB_FOLDER=${stateDir}"
+        "SB_FOLDER=${effectiveDataDir}"
         "SB_HOSTNAME=127.0.0.1"
         "SB_PORT=3033"
       ];
