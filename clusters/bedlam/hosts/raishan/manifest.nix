@@ -4,7 +4,9 @@ rec {
 
   roles = [ "beacon" ];
 
-  apps = [ ];
+  apps = [
+    { name = "hugo-blog"; domain = "catdevurandom.com"; contentDir = ./catdevurandom.com; }
+  ];
 
   aspects = [
     "observable"
