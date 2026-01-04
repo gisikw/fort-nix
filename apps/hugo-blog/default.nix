@@ -18,28 +18,34 @@ let
     hash = "sha256-tQrs4asWNf13nO+3ms0+11w8WoLNK9aKGZcw79eEUCQ=";
   };
 
-  # Light mode CSS override
+  # Light mode CSS - colors from hugo-bearblog
   lightModeCss = pkgs.writeText "light.css" ''
     :root {
-      --background: #ffffff;
-      --text: #1a1a1a;
-      --link: #0066cc;
-      --visited: #551a8b;
-      --code-background: #f5f5f5;
-      --border: #e0e0e0;
+      --background-color: #fff;
+      --heading-color: #222;
+      --text-color: #444;
+      --link-color: #3273dc;
+      --visited-color: #8b6fcb;
+      --blockquote-color: #222;
     }
     body {
-      background: var(--background);
-      color: var(--text);
+      background-color: var(--background-color);
+      color: var(--text-color);
     }
-    a { color: var(--link); }
-    a:visited { color: var(--visited); }
-    code, pre {
-      background: var(--code-background);
+    h1, h2, h3, h4, h5, h6, strong, b {
+      color: var(--heading-color);
     }
-    hr, .post-date {
-      border-color: var(--border);
-      color: #666;
+    a { color: var(--link-color); }
+    a:visited { color: var(--visited-color); }
+    blockquote {
+      color: var(--blockquote-color);
+      border-left-color: #999;
+    }
+    code {
+      background-color: #f5f5f5;
+    }
+    pre {
+      background-color: #f5f5f5;
     }
   '';
 
@@ -60,6 +66,7 @@ let
     [params]
       description = "${description}"
       dateFormat = "2006-01-02"
+      madeWith = "Made with [Bear Cub](https://github.com/clente/hugo-bearcub)"
   '';
 
   site = pkgs.stdenv.mkDerivation {
