@@ -1,4 +1,4 @@
-{ ... }@args:
+{ subdomain ? null, ... }@args:
 { pkgs, ... }:
 {
   users.groups.qbittorrent = {};
@@ -29,6 +29,7 @@
   fortCluster.exposedServices = [
     {
       name = "qbittorrent";
+      subdomain = subdomain;
       port = 8080;
       inEgressNamespace = true;
     }

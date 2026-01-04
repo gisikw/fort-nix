@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.jellyfin.enable = true;
@@ -7,6 +7,7 @@
   fortCluster.exposedServices = [
     {
       name = "jellyfin";
+      subdomain = subdomain;
       port = 8096;
       visibility = "local";
     }

@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? null, rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -442,6 +442,7 @@ TOKEN
   fortCluster.exposedServices = [
     {
       name = "git";
+      subdomain = subdomain;
       port = 3001;
       visibility = "vpn";
       sso = {

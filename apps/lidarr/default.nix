@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.lidarr.enable = true;
@@ -9,6 +9,7 @@
   fortCluster.exposedServices = [
     {
       name = "lidarr";
+      subdomain = subdomain;
       port = 8686;
       inEgressNamespace = true;
     }

@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? "id", rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
   pocket-id = import ../../pkgs/pocket-id { inherit pkgs; };
@@ -158,7 +158,7 @@ in
   fortCluster.exposedServices = [
     {
       name = "pocket-id";
-      subdomain = "id";
+      subdomain = subdomain;
       port = 1411;
       visibility = "public";
     }

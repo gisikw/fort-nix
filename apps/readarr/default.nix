@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.readarr.enable = true;
@@ -9,6 +9,7 @@
   fortCluster.exposedServices = [
     {
       name = "readarr";
+      subdomain = subdomain;
       port = 8787;
       inEgressNamespace = true;
     }

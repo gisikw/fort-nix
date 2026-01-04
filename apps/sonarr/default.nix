@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.sonarr.enable = true;
@@ -9,6 +9,7 @@
   fortCluster.exposedServices = [
     {
       name = "sonarr";
+      subdomain = subdomain;
       port = 8989;
       inEgressNamespace = true;
     }

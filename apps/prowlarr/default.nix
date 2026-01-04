@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.prowlarr.enable = true;
@@ -13,6 +13,7 @@
   fortCluster.exposedServices = [
     {
       name = "prowlarr";
+      subdomain = subdomain;
       port = 9696;
       inEgressNamespace = true;
     }

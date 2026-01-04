@@ -1,4 +1,4 @@
-{ hostManifest, rootManifest, cluster, ... }:
+{ subdomain ? null, hostManifest, rootManifest, cluster, ... }:
 {
   config,
   pkgs,
@@ -91,6 +91,7 @@ in
   fortCluster.exposedServices = [
     {
       name = "monitor";
+      subdomain = subdomain;
       port = 3000;
       sso.mode = "headers";
     }

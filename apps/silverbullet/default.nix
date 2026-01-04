@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? "notes", ... }:
 { lib, pkgs, ... }:
 let
   stateDir = "/var/lib/silverbullet";
@@ -39,7 +39,7 @@ in
   fortCluster.exposedServices = [
     {
       name = "silverbullet";
-      subdomain = "notes";
+      subdomain = subdomain;
       port = 3033;
       visibility = "public";
       sso = {

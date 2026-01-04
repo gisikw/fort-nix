@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? "cache", rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -285,7 +285,7 @@ TOKEN
   fortCluster.exposedServices = [
     {
       name = "attic";
-      subdomain = "cache";
+      subdomain = subdomain;
       port = 8080;
       visibility = "vpn"; # Cache access is token-based, VPN-only for now
       maxBodySize = "2G"; # Large uploads for binary cache (kernel, initrd, etc.)

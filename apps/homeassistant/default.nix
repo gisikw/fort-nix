@@ -1,4 +1,4 @@
-{ mqttPasswordFile, mqttPasswordSecretName, rootManifest, declarative, ... }:
+{ subdomain ? "house", mqttPasswordFile, mqttPasswordSecretName, rootManifest, declarative, ... }:
 { config, pkgs, lib, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -105,7 +105,7 @@ in
   fortCluster.exposedServices = [
     {
       name = "homeassistant";
-      subdomain = "house";
+      subdomain = subdomain;
       visibility = "local";
       port = 8123;
     }

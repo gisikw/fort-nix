@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { config, ... }:
 {
   services.audiobookshelf = {
@@ -13,6 +13,7 @@
   fortCluster.exposedServices = [
     {
       name = "audiobookshelf";
+      subdomain = subdomain;
       port = 13378;
     }
   ];

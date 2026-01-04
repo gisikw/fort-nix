@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? null, rootManifest, ... }:
 { pkgs, ... }:
 let
   fort = rootManifest.fortConfig;
@@ -148,6 +148,7 @@ in
   fortCluster.exposedServices = [
     {
       name = "termix";
+      subdomain = subdomain;
       port = 8080;
       visibility = "public";
       sso = {

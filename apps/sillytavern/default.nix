@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? null, rootManifest, ... }:
 { pkgs, ... }:
 let
   fort = rootManifest.fortConfig;
@@ -192,6 +192,7 @@ in
   fortCluster.exposedServices = [
     {
       name = "sillytavern";
+      subdomain = subdomain;
       port = 8000;
     }
   ];
