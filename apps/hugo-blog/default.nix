@@ -48,6 +48,23 @@ let
       padding: 0.1em 0.3em;
       border-radius: 3px;
     }
+    /* Hide skip-link until focused (accessibility feature) */
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      top: auto;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+    .skip-link:focus {
+      position: static;
+      width: auto;
+      height: auto;
+      background: var(--background-color);
+      color: var(--link-color);
+      padding: 0.5em;
+    }
   '';
 
   hugoConfig = pkgs.writeText "hugo.toml" ''
