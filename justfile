@@ -249,10 +249,9 @@ _deploy-gitops host addr:
   max_attempts=90  # 7.5 minutes at 5s intervals
   attempt=0
 
-  # First, try the deploy capability (for manual-confirm hosts like forge/beacon)
-  # If it doesn't exist, fall back to polling status (for auto-deploy hosts)
+  # For manual-confirm hosts, keep calling deploy until target SHA is active
+  # For auto-deploy hosts (no deploy capability), just poll status
   has_deploy_capability=true
-  deploy_triggered=false
 
   while true; do
     ((attempt++)) || true
@@ -276,16 +275,16 @@ _deploy-gitops host addr:
       continue
     fi
 
-    # Try deploy capability if available (only until first success)
-    if [[ "$has_deploy_capability" == "true" ]] && [[ "$deploy_triggered" == "false" ]]; then
+    # Keep trying deploy capability until we reach target SHA
+    # (Even after "deployed" response, the wrong generation might have been confirmed)
+    if [[ "$has_deploy_capability" == "true" ]]; then
       if deploy_response=$(fort-agent-call {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>&1); then
         deploy_body=$(echo "$deploy_response" | jq -r '.body')
         deploy_status=$(echo "$deploy_body" | jq -r '.status // .error // empty')
 
         case "$deploy_status" in
           deployed|confirmed)
-            echo "[Fort] Deploy triggered, waiting for activation..."
-            deploy_triggered=true
+            echo "[Fort] Confirmation accepted, waiting for switch... (attempt $attempt)"
             sleep 5
             ;;
           sha_mismatch)
@@ -298,7 +297,7 @@ _deploy-gitops host addr:
             sleep 5
             ;;
           *)
-            echo "[Fort] Deploy response: ${deploy_status}"
+            echo "[Fort] Deploy response: ${deploy_status} (attempt $attempt)"
             sleep 5
             ;;
         esac
@@ -313,7 +312,7 @@ _deploy-gitops host addr:
         fi
       fi
     else
-      # Waiting for activation (after deploy triggered or no deploy capability)
+      # No deploy capability - just poll status
       echo "[Fort] Waiting for activation... current=${current:-unknown} (attempt $attempt)"
       sleep 5
     fi
