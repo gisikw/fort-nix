@@ -112,8 +112,10 @@ let
       # Set up Hugo structure in temp build dir
       mkdir -p build/content build/themes/hugo-bearcub build/static build/layouts/partials build/layouts/_default
 
-      # Copy user content (from src root) to content/
-      cp -r ./* build/content/ || true
+      # Copy user content (from src root) to content/, excluding build dir
+      for f in *; do
+        [ "$f" != "build" ] && cp -r "$f" build/content/
+      done
 
       # Theme
       cp -r ${bearcub}/* build/themes/hugo-bearcub/
