@@ -41,6 +41,13 @@ let
       color: var(--blockquote-color);
       border-left-color: #999;
     }
+    /* Softer background for inline code (not code blocks) */
+    code:not(pre code) {
+      background-color: #e8e8e8;
+      color: var(--text-color);
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
+    }
   '';
 
   hugoConfig = pkgs.writeText "hugo.toml" ''
@@ -69,9 +76,9 @@ let
     {{ .Content }}
     <h2>Recent Posts</h2>
     <ul>
-    {{ range first 10 (where .Site.RegularPages "Section" "!=" "") }}
+    {{ range first 10 .Site.RegularPages.ByDate.Reverse }}
       <li>
-        <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+        <a href="{{ .Permalink }}">{{ .Title }}</a>
         <time datetime="{{ .Date.Format "2006-01-02" }}"> — {{ .Date.Format "Jan 2, 2006" }}</time>
         {{ if .Params.summary }}<br><small>{{ .Params.summary }}</small>{{ end }}
       </li>

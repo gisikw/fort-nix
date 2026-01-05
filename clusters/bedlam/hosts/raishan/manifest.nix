@@ -9,7 +9,7 @@ rec {
       name = "hugo-blog";
       domain = "catdevurandom.com";
       contentDir = ./catdevurandom.com;
-      title = "^•ω•^ cat /dev/urandom";
+      title = "$ cat /dev/urandom";
       description = "Random thoughts from a random cat";
     }
   ];
