@@ -41,12 +41,6 @@ let
       color: var(--blockquote-color);
       border-left-color: #999;
     }
-    code {
-      background-color: #f5f5f5;
-    }
-    pre {
-      background-color: #f5f5f5;
-    }
   '';
 
   hugoConfig = pkgs.writeText "hugo.toml" ''
@@ -69,13 +63,30 @@ let
       madeWith = "Made with [Bear Cub](https://github.com/clente/hugo-bearcub)"
   '';
 
+  # Custom index layout that shows recent posts
+  indexLayout = pkgs.writeText "index.html" ''
+    {{ define "main" }}
+    {{ .Content }}
+    <h2>Recent Posts</h2>
+    <ul>
+    {{ range first 10 (where .Site.RegularPages "Section" "!=" "") }}
+      <li>
+        <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+        <time datetime="{{ .Date.Format "2006-01-02" }}"> — {{ .Date.Format "Jan 2, 2006" }}</time>
+        {{ if .Params.summary }}<br><small>{{ .Params.summary }}</small>{{ end }}
+      </li>
+    {{ end }}
+    </ul>
+    {{ end }}
+  '';
+
   site = pkgs.stdenv.mkDerivation {
     name = "hugo-site-${domain}";
     src = contentDir;
     nativeBuildInputs = [ pkgs.hugo ];
     buildPhase = ''
       # Set up Hugo structure in temp build dir
-      mkdir -p build/content build/themes/hugo-bearcub build/static build/layouts/partials
+      mkdir -p build/content build/themes/hugo-bearcub build/static build/layouts/partials build/layouts/_default
 
       # Copy user content (from src root) to content/
       cp -r ./* build/content/ || true
@@ -91,6 +102,9 @@ let
 
       # Custom head to include light mode CSS
       echo '<link rel="stylesheet" href="/light.css">' > build/layouts/partials/custom_head.html
+
+      # Custom index to show recent posts
+      cp ${indexLayout} build/layouts/index.html
 
       cd build
       hugo --minify

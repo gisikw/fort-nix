@@ -63,8 +63,15 @@ let
 
     # SHA matches - trigger confirmation
     if output=$(comin confirmation accept 2>&1); then
-      jq -n --arg sha "$pending_sha" --arg output "$output" \
-        '{"status": "deployed", "sha": $sha, "output": $output}'
+      # Check if confirmation was actually accepted (not just command success)
+      if echo "$output" | grep -q "accepted for deploying"; then
+        jq -n --arg sha "$pending_sha" --arg output "$output" \
+          '{"status": "deployed", "sha": $sha, "output": $output}'
+      else
+        # Command succeeded but nothing was accepted (generation still building?)
+        jq -n --arg sha "$pending_sha" --arg output "$output" \
+          '{"error": "building", "sha": $sha, "note": "generation not ready for confirmation yet", "output": $output}'
+      fi
     else
       jq -n --arg sha "$pending_sha" --arg output "$output" \
         '{"status": "confirmed", "sha": $sha, "note": "no confirmation was pending (may have auto-deployed)", "output": $output}'

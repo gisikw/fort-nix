@@ -98,18 +98,18 @@ The only tricky bit here is that most Regexp implementations, even when using a 
 
 I will admit that I was a bit irked to struggle with this on the first day, especially given that we didn't run into adversarial examples in the test input. But it was good to learn about that regexp behavior at least!
 
-**Day 1, Part 1:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/01/spl/solution.spl)
-**Day 2, Part 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/01/ruby/solution.rb)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 1, Part 1:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/01/spl/solution.spl)  
+**Day 2, Part 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/01/ruby/solution.rb)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Shakespeare Programming Language
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Ruby
-**Language Experience:** High
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** High    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Two: A Series of Cubes
 
@@ -123,13 +123,13 @@ This is where leveraging ChatGPT was actually quite helpful for me. I avoided us
 
 Over the course of Advent of Code, variations on this prompt were incredibly helpful for identifying language features and design patterns specific to the language that I was working with. But staying away from any AI solutions until I'd solved things myself meant that I was able to understand any suggestions made, since I already had wrapped my head around the particular problem domain.
 
-**Day 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/02/racket/solution.rkt)
-**Problem Difficulty:** ⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/02/racket/solution.rkt)  
+**Problem Difficulty:** ⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Racket
-**Language Experience:** Minimal
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️
+**Language Experience:** Minimal    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️  
 
 ## Day Three: Grinding My Gears
 
@@ -139,13 +139,13 @@ In this particular case, I needed a matrix, a set, and an array. Figuring out th
 
 In all fairness, my pain points could likely have been abstracted away by encapsulating these data structures into modules with well-named methods. And Lua is deliberately sparse. But all in all, just a subjectively unpleasant experience.
 
-**Day 3:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/03/lua/solution.lua)
-**Problem Difficulty:** ⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️
+**Day 3:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/03/lua/solution.lua)  
+**Problem Difficulty:** ⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️  
 #### Lua
-**Language Experience:** Minimal
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️
+**Language Experience:** Minimal    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️  
 
 ## Day Four: A Headscratcher
 
@@ -157,13 +157,13 @@ Contrast this with Prolog. If I write `square(2, x)`, I don't get a return value
 
 Our job then is to express enough constraints around our answer that it resolves into just one option. We start off with an initial focus on parsing the inputfile and using `assertz` to populate facts into our world. It's easier to reason about our program if we weren't dependent on `assertz` side-effects, and I was tempted to just transform the input file into rules, but it felt cleaner to do the parsing and population of rules dynamically. A really pleasant problem once you're in the right headspace.
 
-**Day 4:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/04/prolog/solution.pl)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 4:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/04/prolog/solution.pl)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Prolog
-**Language Experience:** Minimal
-**Language Difficulty:** ⭐️⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** Minimal    
+**Language Difficulty:** ⭐️⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Five: A Haskell for Great Good
 
@@ -175,26 +175,26 @@ The real joy though came from after I had a solution (albeit one that took about
 
 I'm painfully aware that solving a single Advent of Code problem is going to mostly give me a sense for language flavor and won't truly give me a sense of what it's like to live in a language day-to-day. But of the functional languages I explored this year, Haskell was perhaps my favorite.
 
-**Day 5:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/05/haskell/solution.hs)
-**Problem Difficulty:** ⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 5:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/05/haskell/solution.hs)  
+**Problem Difficulty:** ⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Haskell
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 ## Day Six: The Great Race!
 
 Day six is a straightforward math problem, and it was time for me to depart from the land of functional languages to spend some time with C. Honestly, not a ton to share here. My background with C doesn't extend much beyond a data structures class from forever ago, but this problem was simple enough that I wasn't able to get caught up in segfaults and memory leaks.
 
 The biggest challenge was just a lack of easy parsing tools (without linking in anything externally). But even reading character-by-character to get our integers wasn't anything to write home about. A nice easy day.
 
-**Day 6:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/06/c/solution.c)
-**Problem Difficulty:** ⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️
+**Day 6:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/06/c/solution.c)  
+**Problem Difficulty:** ⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️  
 #### C
-**Language Experience:** Minimal
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️
+**Language Experience:** Minimal    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️  
 
 ## Day Seven: Joker's Wild
 
@@ -202,13 +202,13 @@ I spend a bit of time trying to tackle day seven - a poker-hand-sorting puzzle -
 
 I'd revisit SQL later, but after banging my head against a wall, I threw some JavaScript together, loaded up with lazy regex, and called it a day.
 
-**Day 7:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/07/node/solution.js)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 7:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/07/node/solution.js)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### JavaScript
-**Language Experience:** High
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** High    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Eight: Ghost Cycles
 
@@ -218,13 +218,13 @@ As far as my language of choice, we went back to functional programming - this t
 
 One headache I did run into: if you run your Erlang code with `escript`, there isn't a clean global namespace for your functions to sit in. So `do_a_thing(data, fun my_helper_function/1)` will stubbornly insist that `my_helper_function/1` doesn't exist. This isn't a function hoisting issue, just something unique to the interpreter. So, opt to compile your Erlang and save yourself a headache.
 
-**Day 8:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/08/erlang/solution.erl)
-**Problem Difficulty:** ⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 8:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/08/erlang/solution.erl)  
+**Problem Difficulty:** ⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Erlang
-**Language Experience:** None
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️  
 
 ## Day Nine: Oh Camels!
 
@@ -232,13 +232,13 @@ Given that the storyline for day nine involves camels, it felt appropriate to re
 
 As far as syntactic goodies go, OCaml is a winner for sure. Today's problem was straightforward enough though that I can't honestly say we put it through its paces. Still, definitely something to revisit!
 
-**Day 9:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/09/ocaml/solution.ml)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 9:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/09/ocaml/solution.ml)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### OCaml
-**Language Experience:** None
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Ten: Feeling Rusty
 
@@ -246,13 +246,13 @@ Back to systems languages, and it's time to look at Rust. I knew going into it t
 
 Rust feels like one of those languages I *ought* to learn, and to be fair the compiler was very friendly in how it eviscerated my code. But I can't say I'm looking forward to revisiting it. Perhaps dedicating a full AoC year, from easy problems up to hard ones, would make for a good rampup.
 
-**Day 10:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/10/rust/src/solution.rs)
-**Problem Difficulty:** ⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️
+**Day 10:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/10/rust/src/solution.rs)  
+**Problem Difficulty:** ⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️  
 #### Rust
-**Language Experience:** Minimal
-**Language Difficulty:** ⭐️⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️
+**Language Experience:** Minimal    
+**Language Difficulty:** ⭐️⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️  
 
 ## Day Eleven: Never Go Full Dijkstra
 
@@ -268,13 +268,13 @@ Did a rewrite without Dijkstra, which was faster. Interestingly, something about
 
 Overall, consider me whelmed. Even on the host machine it wasn't so blazing fast as to impress, so I'm not sure where the happy medium lies of problems that are too slow in Ruby, but don't need to be too speedy either.
 
-**Day 11:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/11/crystal/solution.cr)
-**Problem Difficulty:** ⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 11:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/11/crystal/solution.cr)  
+**Problem Difficulty:** ⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Crystal
-**Language Experience:** Minimal
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️
+**Language Experience:** Minimal    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️  
 ## Day Twelve: Speaking of Ruby...
 
 On the subject of Ruby, but X...how about Ruby, but a Lisp? It was time to reach for Elixir, which I think does have a reputation as being pretty friendly as functional languages go. Built on top of Erlang, but sporting our friend the `|>` pipeline operator. Easy process spawning, guard clauses, all the comforts you might want from your functional language. I'm a big fan of the function overloading with pattern-matching:
@@ -295,25 +295,25 @@ It feels easier to reason about the different cases as separate functions, rathe
 
 Day twelve was a dynamic programming problem, and I'll admit I spent way too much time thinking "these two branches of the search space are the same. How can I collapse them and multiply the value by the number of duplicates". When memoization finally raised its head, it was embarrassing how effective it was.
 
-**Day 12:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/12/elixir/solution.exs)
-**Problem Difficulty:** ⭐️⭐️⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 12:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/12/elixir/solution.exs)  
+**Problem Difficulty:** ⭐️⭐️⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### Elixir
-**Language Experience:** Modest
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** Modest    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Thirteen: Tiny Cool Language
 
 This was a fun problem, and I decided to use Tcl to solve it. There are some particulars about Tcl, but I'd be thrilled to see Tcl take over Lua as the "tiny little embeddable" niche language. It also also made me wonder why we have Bash scripts. Just one of those languages that's been sitting there and I haven't taken the time to look at. Good to check it off my list.
 
-**Day 13:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/13/tcl/solution.tcl)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 13:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/13/tcl/solution.tcl)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### Tcl
-**Language Experience:** None
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Fourteen: SQL and R
 
@@ -323,18 +323,18 @@ When we got to part two, the prompt asked us "do this for 1000000000 cycles". An
 
 R, for its part was pleasant enough. Using `<-` for assignment feels unwieldy to me, but I suppose it's important to avoid scaring away the mathematicians. Joking aside, I suspect there would have been better days to leverage R for, and manipulating matrices of ASCII characters just isn't the puzzle to let this language shine.
 
-**Day 14, Part 1:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/14/sql/solution.sql)
-**Day 14, Part 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/14/r/solution.R)
-**Problem Difficulty:** ⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 14, Part 1:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/14/sql/solution.sql)  
+**Day 14, Part 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/14/r/solution.R)  
+**Problem Difficulty:** ⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### SQL
-**Language Experience:** Medium
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️
+**Language Experience:** Medium    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️  
 #### R
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️  
 
 ## Day Fifteen: Back to BASICs
 
@@ -344,13 +344,13 @@ To my surprise, there's been some evolution of BASIC syntax since my childhood. 
 
 Can't really say this is a language has too much to recommend it these days, but it was so much fun to revisit, thinking back to being eight years old and typing in rudimentary implementations of hangman.
 
-**Day 15:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/15/qbasic/solution.bas)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 15:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/15/qbasic/solution.bas)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### QBASIC
-**Language Experience:** Childhood
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Language Experience:** Childhood    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 
 ## Day Sixteen: Let's Go
 
@@ -360,26 +360,26 @@ Day sixteen wasn't particularly challenging, provided you had a strategy for man
 
 I'm going to go on record and say this is developer-hostile design. Perhaps you write your code so perfectly as to never need to comment things out for testing. But the friction introduced by having to track which of your variables you happen not to use at the moment, and either comment them out or "pretend" to use them (`_ = iWillUseThisLater`) is frustrating - and it's friction that tends to arise when you're already dealing with debugging. Why kick me when I'm down, Go?
 
-**Day 16:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/16/go/solution.go)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 16:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/16/go/solution.go)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### Go
-**Language Experience:** Minor
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️
+**Language Experience:** Minor    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️  
 ## Day Seventeen: Full Dijkstra
 
 Alrighty, it's proper pathfinding time! Moreover, it's pathfinding-with-a-twist time! I've been waiting for this, and saving an "easy" language for today. Best of all, Python has a priority queue implementation I can have, so I needn't build one like back when I was trying to solve day eleven in Crystal with Dijkstra.
 
 The puzzle was straightforward enough once you baked the additional constraints into the landscape, though it took me a little bit of time to recognize that strategy - I think we're technically navigating four-dimensional space. I struggle sometimes with Python just because it's very similar to Ruby, which I learned first. Shout-out to the `partial` function, which made switching between parts 1 and 2 super trivial!
 
-**Day 17:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/17/python/solution.py)
-**Problem Difficulty:** ⭐️⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 17:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/17/python/solution.py)  
+**Problem Difficulty:** ⭐️⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### Python
-**Language Experience:** Minor
-**Language Difficulty:** ⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️
+**Language Experience:** Minor    
+**Language Difficulty:** ⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️  
 
 ## Day Eighteen: Tying the Shoes
 
@@ -389,13 +389,13 @@ But I was still trying to brute force-things initially, and just trying to add `
 
 I do like these puzzles that throw back to prior days - it's a really good way to reward folks who review their solution after-the-fact. You may be able to brute-force the simpler problems, but if you take the time to go back and refactor after that, it'll be fresh in your mind should the approach resurface.
 
-**Day 18:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/18/d/solution.d)
-**Problem Difficulty:** ⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 18:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/18/d/solution.d)  
+**Problem Difficulty:** ⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### D
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️  
 ## Day Nineteen: Parts and Perls
 
 Perl has a bit of a "here by dragons!" reputation, and I've been curious whether that stems from the emphasis on regex (which I personally love, but I know many find unpleasant), or some other features of the language. My takeaway after today: it's not just the regexes.
@@ -404,13 +404,13 @@ I do suspect I could grow to enjoy writing Perl, but the need to extract args in
 
 This may have been the wrong day to mess around with Perl though - looking through the problem, I had feared we were dealing with overlapping ranges, and was fully down the rabbit hole of looking at whitepapers with names like "on calculating the measure of a union of hyperrectangles". I eventually got a hint from the subreddit that I'd gone off the deep end, and that just by looking at the problem, we could rule out such complicated math. I blame the eggnog.
 
-**Day 19:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/19/perl/solution.pl)
-**Problem Difficulty:** ⭐️⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️
+**Day 19:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/19/perl/solution.pl)  
+**Problem Difficulty:** ⭐️⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️  
 #### Perl
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️  
 
 ## Day Twenty: VM on the JVM
 
@@ -418,26 +418,26 @@ I love these types of puzzles. "Here's the definition for a pretend computer. Pl
 
 Java is Latin for "boilerplate", so there's a bunch there, but solving part one was quite fun. Part two though managed to spoil my excitement - the solution here depends on finding loops in parts of the input that are specific to the problem, and I'm not sure of a way to identify that structure automatically. It seems that many folks used visualization tools - for my part, I was doing manual tracing in the input file. And the result was a solution that did cycle detection based on that manual detective work. So, it wouldn't work for any general input, which feels unsatisfying. Ah well!
 
-**Day 20:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/20/java/Main.java)
-**Problem Difficulty:** ⭐️⭐️⭐
-**Problem Enjoyment:** ⭐️⭐️⭐️
+**Day 20:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/20/java/Main.java)  
+**Problem Difficulty:** ⭐️⭐️⭐  
+**Problem Enjoyment:** ⭐️⭐️⭐️  
 #### Java
-**Language Experience:** Minor
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️
+**Language Experience:** Minor    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️  
 ## Day Twenty-One: Infinite Gardens
 
 Today's another day which is heavily informed by the input - and this time the example input *isn't* solvable by the same strategy. I'll admit that this is one I relied heavily on the subreddit for help with after spending a bunch of time both at- and away-from-keyboard trying to come up with a solution. I had identified some of the patterns in the input, and had made some attempts to capitalize on them, but it was subreddit visualizations that finally made things click. Still don't feel like I really solved this one fair-and-square.
 
 Julia was a nice enough language. In particular when inviting ChatGPT to make refactoring suggestions, it was nice to be able to trivially do matrix division to solve a pair of quadratic equations. First time learning about Cramer's rule, so nice to learn some math facts, and nice to learn it in the course of using a math-friendly language.
 
-**Day 21:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/21/julia/solution.jl)
-**Problem Difficulty:** ⭐️⭐️⭐⭐⭐
-**Problem Enjoyment:** ⭐️⭐️
+**Day 21:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/21/julia/solution.jl)  
+**Problem Difficulty:** ⭐️⭐️⭐⭐⭐  
+**Problem Enjoyment:** ⭐️⭐️  
 #### Julia
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐  
 
 ## Day Twenty-Two: Jenga!
 
@@ -447,13 +447,13 @@ What a pleasant language! You've got C-style pointers *and* stack-scoped pointer
 
 Let me be clear: I'm the wrong person to be evaluating systems languages. But this was a language that asked me whether I wanted to *opt in* to memory management hell, with a full recognition that it's not the general case. I'm a fan.
 
-**Day 22:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/22/nim/solution.nim)
-**Problem Difficulty:** ⭐️⭐⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️
+**Day 22:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/22/nim/solution.nim)  
+**Problem Difficulty:** ⭐️⭐⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️⭐️  
 #### Nim
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐️⭐️⭐️⭐  
 
 ## Day Twenty-Three: Dijkstra-Destroyer
 
@@ -461,13 +461,13 @@ Just to be clear: you can't do longest path with Dijkstra. But as long as you do
 
 I learned the a bit late, and had to do a fair bit of refactoring, but eventually got it done. Not sure "it runs on the JVM" is a selling point for me, so probably put this beneath most of the functional languages I've messed with.
 
-**Day 23:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/23/clojure/solution.clj)
-**Problem Difficulty:** ⭐️⭐⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️⭐️
+**Day 23:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/23/clojure/solution.clj)  
+**Problem Difficulty:** ⭐️⭐⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️⭐️  
 #### Clojure
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️⭐️
-**Language Enjoyment:** ⭐️⭐
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐️⭐  
 ## Day Twenty-Four: Linear Algebra Ruins My Life
 
 This was days and days of work. Part 1 was straightforward enough - had actually encountered matrix division as a mechanism for solving linear equations on day twenty-one! Part two though…
@@ -496,13 +496,13 @@ Speaking of pointers, now we need to start passing allocators around because the
 
 Get the answer back, and it’s wrong. It’s close, don’t get me wrong, but it’s also wrong. It also appears that their implementation of a Rational struct just ignores the fact that a denominator is negative. So (-1 / -1) when pulled back into a float or an int is -1. Charming. And if we look at the reduction/simplification for the same inputs in Ruby, Zig is slightly off. Not wildly, but just enough to annoy someone who needs the precision enough to have reached for a Rational struct in the first place. But I give up. Search for inputs that give us a correct enough answer, adding in a `NEVER_TOUCHING_ZIG_AGAIN = -1` adjustment constant, and shipped it up!
 
-**Day 24:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/24/zig/solution.zig)
-**Problem Difficulty:** ⭐️⭐⭐️⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️
+**Day 24:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/24/zig/solution.zig)  
+**Problem Difficulty:** ⭐️⭐⭐️⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️  
 #### Zig
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️⭐️⭐️
-**Language Enjoyment:** ⭐
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️⭐️⭐️    
+**Language Enjoyment:** ⭐  
 
 ## Day Twenty-Five: The Final Network
 
@@ -514,13 +514,13 @@ Alright, let's see if we can get F# to tell us the answer we already know :) Sin
 
 Like Clojure, this feels like a language really focused on bringing functional programming to folks who still want to use their favorite libraries in the ecosystem they're already familiar with, but hey, whatever sparks joy!
 
-**Day 25:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/25/fsharp/solution.fsx)
-**Problem Difficulty:** ⭐️⭐️
-**Problem Enjoyment:** ⭐️⭐️⭐️
+**Day 25:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2023/25/fsharp/solution.fsx)  
+**Problem Difficulty:** ⭐️⭐️  
+**Problem Enjoyment:** ⭐️⭐️⭐️  
 #### F&#35;
-**Language Experience:** None
-**Language Difficulty:** ⭐️⭐️
-**Language Enjoyment:** ⭐⭐️⭐️
+**Language Experience:** None    
+**Language Difficulty:** ⭐️⭐️    
+**Language Enjoyment:** ⭐⭐️⭐️  
 # Subjective Comparison
 
 Time to bring down all the subjective language enjoyment scores and figure out what I liked best.

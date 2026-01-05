@@ -293,6 +293,10 @@ _deploy-gitops host addr:
             echo "[Fort] Waiting for comin to fetch... current=${current:-unknown} comin=${pending:-unknown} (attempt $attempt)"
             sleep 5
             ;;
+          building)
+            echo "[Fort] Waiting for build to complete... (attempt $attempt)"
+            sleep 5
+            ;;
           *)
             echo "[Fort] Deploy response: ${deploy_status}"
             sleep 5

@@ -30,9 +30,9 @@ The language isn't too bad. You get your basic C-style syntax, just written in a
 
 `KTHXBAI`
 
-**Day 1:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/01/lolcode/solution.lol)
-**Language:** [LOLCODE](http://www.lolcode.org/)
-**Frustration:** 😣
+**Day 1:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/01/lolcode/solution.lol)  
+**Language:** [LOLCODE](http://www.lolcode.org/)  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Two: ⊟↯⍜⧈!
@@ -50,9 +50,9 @@ Mercifully, Uiua doesn't force you to memorize all your vim digraphs - you can w
 
 My biggest struggle here was in trying to translate logic like `list.map(el => doSomething(el, foo))`. There were many cases where the order of the argument mattered, and when you're continually pushing items from a list onto the stack, you also need to duplicate those secondary arguments. Brutal, but we got there in the end. And honestly, had a ton of fun doing it.
 
-**Day 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/02/uiua/solution.ua)
-**Language:** [Uiua](https://www.uiua.org/)
-**Frustration:** 😣😣😣😣😣
+**Day 2:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/02/uiua/solution.ua)  
+**Language:** [Uiua](https://www.uiua.org/)  
+**Frustration:** 😣😣😣😣😣  
 **Fun:** 🥳🥳🥳🥳🥳
 
 ## Day Three: Embeddeds
@@ -63,9 +63,9 @@ We're still in the part of Advent of Code where the puzzles are pretty forgiving
 
 The one other gap is a lack of robust runtime error handling - which was needed for attempting to parse numbers. Wren's recommendation is to run runtime-unsafe code within a Fiber (Wren's coroutines), and to call `error = fiber.try()`. However, it wasn't immediately clear how we'd get both the happy path `value = fiber.call()` return value while also safely handling the runtime issue, so instead we rolled our own `DIGITS = "1234567890"` and used string comparison to make life easy.
 
-**Day 3:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/03/wren/solution.wren)
-**Language:** [Wren](https://wren.io/)
-**Frustration:** 😣😣
+**Day 3:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/03/wren/solution.wren)  
+**Language:** [Wren](https://wren.io/)  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Four: Blasts from the Past
@@ -76,54 +76,54 @@ Another thing that I found interesting about these older languages (and I'm kind
 
 It wasn't immediately intuitive how I might get at the command line arguments in COBOL. But it can read from standard in, so `(echo $input_file; echo $part) | ./solution` in our runner file solves for that challenge.
 
-**Day 4:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/04/cobol/solution.cob)
-**Language:** [COBOL](https://www.ibm.com/topics/cobol)
-**Frustration:** 😣😣
+**Day 4:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/04/cobol/solution.cob)  
+**Language:** [COBOL](https://www.ibm.com/topics/cobol)  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Five: Yet Another Scripting Language
 
 Today's puzzle was solved with yet another scripting language, fittingly called Yet Another Scripting Language. This one is C-style and very straighforward. There are always a few challenges with these smaller languages that can send you stumbling through docs - or at worst, the underlying source code. With YASL, learning that `args` was globally available I believe took some snooping at their test cases. But a clean language and clean puzzle.
 
-**Day 5:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/05/yasl/solution.yasl)
-**Language:** [YASL](https://yasl-lang.github.io/docs/)
-**Frustration:** 😣😣
+**Day 5:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/05/yasl/solution.yasl)  
+**Language:** [YASL](https://yasl-lang.github.io/docs/)  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳
 
 ## Day Six: But *which* Fortran?
 
 Boy, there are a lot of Fortrans. I opted to use Fortran 90, which being released in 1990 puts it roughly halfway between present day and 1957 when the language was created. I was delighted to find it a pretty pleasant experience - more friendly than COBOL for my use case at least. I had it in my head that the older languages would be easier with line-based processing, but had no issues with a grid problem here.
 
-**Day 6:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/06/fortran/solution.f90)
-**Language:** [Fortran](https://fortran-lang.org/)
-**Frustration:** 😣
+**Day 6:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/06/fortran/solution.f90)  
+**Language:** [Fortran](https://fortran-lang.org/)  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Seven: But *which* LISP?
 
 When many functional languages come up, I feel like I'm cheating. Haskell and Erlang have created their own cultures, but there are still a lot of languages that when you squint look straight out of [Structure and Interpretation of Computer Programs](https://en.wikipedia.org/wiki/Structure_and_Interpretation_of_Computer_Programs). Janet is one such example. So...wrote some LISP with a `.janet` file extension, and got this one wrapped up!
 
-**Day 7:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/07/janet/solution.janet)
-**Language:** [Janet]([https://janet-lang.org](https://janet-lang.org/))
-**Frustration:** 😣
+**Day 7:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/07/janet/solution.janet)  
+**Language:** [Janet]([https://janet-lang.org](https://janet-lang.org/))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Eight: Another Another Scripting Language
 
 Another delve into small embeddable languages - back to C-style here with MiniScript. Big shout out to them for creating a one-pager [QuickRef](https://miniscript.org/files/MiniScript-QuickRef.pdf) PDF. I leaned fairly heavily on https://learnxinyminutes.com/ for several languages, but this was an even better resource.
 
-**Day 8:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/08/miniscript/solution.ms)
-**Language:** [Miniscript]([https://miniscript.org](https://miniscript.org/))
-**Frustration:** 😣
+**Day 8:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/08/miniscript/solution.ms)  
+**Language:** [Miniscript]([https://miniscript.org](https://miniscript.org/))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Nine: The Language, not the Triangle
 
 This puzzle seemed pretty complex, but I found an approach that avoided doing any real shuffling, and just navigated a few pointers around. Pascal's rapidly approaching languages I'm more familiar with!
 
-**Day 9:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/09/pascal/solution.pas)
-**Language:** [Pascal](https://en.wikipedia.org/wiki/Pascal_(programming_language))
-**Frustration:** 😣
+**Day 9:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/09/pascal/solution.pas)  
+**Language:** [Pascal](https://en.wikipedia.org/wiki/Pascal_(programming_language))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Ten: I got a Roc
@@ -134,9 +134,9 @@ Definitely a language worth exploring again later, with more time. And being abl
 
 On the puzzle side, there's something really soothing about these "walk in the woods on a snowy evening" kinds of puzzles.
 
-**Day 10:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/10/roc/solution.roc)
-**Language:** [Roc]([https://www.roc-lang.org](https://www.roc-lang.org/))
-**Frustration:** 😣😣
+**Day 10:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/10/roc/solution.roc)  
+**Language:** [Roc]([https://www.roc-lang.org](https://www.roc-lang.org/))  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Eleven: Speaking of Elixir
@@ -149,9 +149,9 @@ I'm sensing a few themes with these "carrying the baton" new languages (as disti
 
 I'm onboard with everything except the last one. I didn't immediately see a way to just have a Gleam script, as opposed to a project directory. And there wasn't a clean way to just read from a file, so I had to use a library. I would have thought `left-pad` had convinced new languages to just create robust standard libraries, but I guess other ecosystems don't have those same concerns. In all fairness, if I was fluent in Erlang, I'm sure I could have dropped down to that level and read the file that way. But I've got mixed feelings about "batteries-not-included but look at all these amazing batteries!" ecosystems.
 
-**Day 11:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/11/gleam/src/solution.gleam)
-**Language:** [Gleam]([https://gleam.run](https://gleam.run/))
-**Frustration:** 😣😣😣
+**Day 11:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/11/gleam/src/solution.gleam)  
+**Language:** [Gleam]([https://gleam.run](https://gleam.run/))  
+**Frustration:** 😣😣😣  
 **Fun:** 🥳🥳
 
 ## Day Twelve: Oooh, this is new!
@@ -166,27 +166,27 @@ perimeter: $[coords][
 ]
 ```
 
-**Day 12:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/12/arturo/solution.art)
-**Language:** [Arturo]([https://arturo-lang.io](https://arturo-lang.io/))
-**Frustration:** 😣
+**Day 12:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/12/arturo/solution.art)  
+**Language:** [Arturo]([https://arturo-lang.io](https://arturo-lang.io/))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳🥳
 
 ## Day Thirteen: Regular expressions!
 
 Between legacy languages, embedded languages, LISPs that prefer more direct parsing...this is the first I'm reaching for regular expressions. Also great to see a return of Cramer's Rule!
 
-**Day 13:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/13/php/solution.php)
-**Language:** [PHP]([https://www.php.net](https://www.php.net/))
-**Frustration:** 😣
+**Day 13:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/13/php/solution.php)  
+**Language:** [PHP]([https://www.php.net](https://www.php.net/))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Fourteen: Oh Christmas Tree...
 
 As puzzles go, this was a really fun one. Didn't really enjoy Ada as a language though. Struggled to figure out the right way to initialize a 2d array, and decided to just leave it flattened. I'm sure with more time, would have gotten used to it. But this is the last of the legacy languages for this year.
 
-**Day 14:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/14/ada/solution.adb)
-**Language:** [Ada]([https://ada-lang.io](https://ada-lang.io/))
-**Frustration:** 😣😣
+**Day 14:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/14/ada/solution.adb)  
+**Language:** [Ada]([https://ada-lang.io](https://ada-lang.io/))  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳
 
 ## Day Fifteen: Programming Done Right?
@@ -199,9 +199,9 @@ Odin claims "Programming Done Right" on its splash page, which is a provocative 
 
 Superficial nitpicks here, but such is the nature of a brief visit with languages!
 
-**Day 15:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/15/odin/solution.odin)
-**Language:** [Odin]([https://odin-lang.org](https://odin-lang.org/))
-**Frustration:** 😣
+**Day 15:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/15/odin/solution.odin)  
+**Language:** [Odin]([https://odin-lang.org](https://odin-lang.org/))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Sixteen: A frustrating choice
@@ -212,9 +212,9 @@ The other annoyance came into play using Rust-style match expressions. Borgo wan
 
 I know there is a market for "Rust, but I don't want to understand lifetimes or the borrow checker", and maybe Borgo will be that some day, but wasn't the best experience basaed on where it's at today.
 
-**Day 16:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/16/borgo/solution.brg)
-**Language:** [Borgo]([https://borgo-lang.github.io](https://borgo-lang.github.io/))
-**Frustration:** 😣😣😣😣
+**Day 16:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/16/borgo/solution.brg)  
+**Language:** [Borgo]([https://borgo-lang.github.io](https://borgo-lang.github.io/))  
+**Frustration:** 😣😣😣😣  
 **Fun:** 🥳
 
 ## Day Seventeen: Emulation!
@@ -223,36 +223,36 @@ I was thrilled to finally by doing an "emulate this instruction set" puzzle - so
 
 Lobster was a nice language - terse and just enough that it got out of the way. Definitely another one that goes on my list to revisit.
 
-**Day 17:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/17/lobster/solution.lobster)
-**Language:** [Lobster](https://strlen.com/lobster/)
-**Frustration:** 😣
+**Day 17:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/17/lobster/solution.lobster)  
+**Language:** [Lobster](https://strlen.com/lobster/)  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳🥳
 
 ## Day Eighteen: A Reprieve
 
 With Day 17 being one of the more challenging, Day 18 took its foot off the gas a bit. Today I used V, which is a language that was embroiled in some controversy for overpromising features, as far as I understand. But for our use case, it was plenty. I am starting to wonder just how many times I'm going to be implementing pathfinding this year though.
 
-**Day 18:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/18/v/solution.v)
-**Language:** [V]([https://vlang.io](https://vlang.io/))
-**Frustration:** 😣
+**Day 18:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/18/v/solution.v)  
+**Language:** [V]([https://vlang.io](https://vlang.io/))  
+**Frustration:** 😣  
 **Fun:** 🥳🥳🥳
 
 ## Day Nineteen: Cleaner Lua?
 
 Moonscript tries to sand off the rougher edges of Lua syntax (`endfunction`? Who has time for that!). My struggles with Lua tend not to be around the syntax, and mostly around the table data structure, which Moonscript keeps. But this was another simple problem day, so our time here is brief!
 
-**Day 19:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/19/moonscript/solution.moon)
-**Language:** [Moonscript](http://moonscript.org/)
-**Frustration:** 😣
+**Day 19:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/19/moonscript/solution.moon)  
+**Language:** [Moonscript](http://moonscript.org/)  
+**Frustration:** 😣  
 **Fun:** 🥳🥳
 
 ## Day Twenty: Not Ruby
 
 I have the vague sense that Groovy was responsible for convincing Java developers that Ruby sucked, and convincing Ruby developers that Java sucked. The syntax didn't seem too bad for me though, though using `def` for variable declaration was a bit odd. Implemented Dijkstra again because I didn't look too closely at the input for part one. But it made part two pretty trivial to solve, so not too broken up about it!
 
-**Day 20:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/20/groovy/solution.groovy)
-**Language:** [Groovy](https://groovy-lang.org/)
-**Frustration:** 😣
+**Day 20:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/20/groovy/solution.groovy)  
+**Language:** [Groovy](https://groovy-lang.org/)  
+**Frustration:** 😣  
 **Fun:** 🥳🥳
 
 ## Day Twenty-One: The Hard One
@@ -269,9 +269,9 @@ Io was a really fun language to explore; though I think it requires a certain de
 cache at(node depth) atPut("#{node src}#{node dst}" interpolate, min)
 ```
 
-**Day 21:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/21/io/solution.io)
-**Language:** [Io](https://iolanguage.org/)
-**Frustration:** 😣😣
+**Day 21:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/21/io/solution.io)  
+**Language:** [Io](https://iolanguage.org/)  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳🥳🥳
 
 ## Day Twenty-Two: Easing Up
@@ -280,9 +280,9 @@ I tackled this one while letting Day 22 sit on the back-burner. I was a little s
 
 As for Haxe...I dunno. Wrapping your code in a class and a `static public function main()` feels a bit quaint these days. But nothing especially stood out to me here. I think Haxe's selling point is more than it can cross-compile to a lot of different targets, which isn't a feature I needed here. So, I'm sure there's value, but just not for me.
 
-**Day 22:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/22/haxe/Solution.hx)
-**Language:** [Haxe](https://haxe.org/)
-**Frustration:** 😣
+**Day 22:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/22/haxe/Solution.hx)  
+**Language:** [Haxe](https://haxe.org/)  
+**Frustration:** 😣  
 **Fun:** 🥳🥳
 
 ## Day Twenty-Three: The Mobile Languages
@@ -295,9 +295,9 @@ In all fairness, this would be trivially solved by using an LSP. Or if I were do
 
 I like the immutable-by-default though!
 
-**Day 23:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/23/kotlin/solution.kt)
-**Language:** [Kotlin](https://kotlinlang.org/)
-**Frustration:** 😣😣😣
+**Day 23:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/23/kotlin/solution.kt)  
+**Language:** [Kotlin](https://kotlinlang.org/)  
+**Frustration:** 😣😣😣  
 **Fun:** 🥳🥳
 
 ## Day Twenty-Four:
@@ -306,18 +306,18 @@ Now it's time to pivot to the iOS side. Docs were confusing here too, sorry to s
 
 The puzzle itself was fun! I was initially worried there'd be a lot of extraneous wires, but scanning through things one-by-one made it easy to identify which circuits were broken. I was reminded of Bach's Tocatta and Fugue - which was originally written to ensure every key of a pipe organ was used and tested. Similar here - just try everything and fix what breaks!
 
-**Day 24:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/24/swift/solution.swift)
-**Language:** [Swift](https://www.swift.org/)
-**Frustration:** 😣😣😣
+**Day 24:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/24/swift/solution.swift)  
+**Language:** [Swift](https://www.swift.org/)  
+**Frustration:** 😣😣😣  
 **Fun:** 🥳🥳
 
 ## Day Twenty-Five: A Last Hurrah!
 
 Scala's infrastructure gave me a bit of a headache here. But once I got it running, this was a nice and simple problem to wrap up the year.
 
-**Day 25:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/25/scala/Solution.scala)
-**Language:** [Scala](https://www.scala-lang.org/)
-**Frustration:** 😣😣
+**Day 25:** [source code](https://github.com/gisikw/advent-of-code/blob/main/solutions/2024/25/scala/Solution.scala)  
+**Language:** [Scala](https://www.scala-lang.org/)  
+**Frustration:** 😣😣  
 **Fun:** 🥳🥳
 
 ## Conclusions
