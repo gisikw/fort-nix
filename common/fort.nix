@@ -185,6 +185,7 @@ in
                   --skip-provider-button=true \
                   --scope="openid email profile groups" \
                   --oidc-groups-claim=groups \
+                  --reverse-proxy=true \
                   ${lib.concatStringsSep " " (map (g: "--allowed-group=" + g) svc.sso.groups)}
               '';
 
