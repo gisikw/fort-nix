@@ -231,6 +231,17 @@ let
       description = "Systemd services to reload (not restart) after successful fulfillment";
       example = [ "nginx.service" ];
     };
+
+    transform = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Script to transform the response before storage.
+        Called with: $1 = store path, stdin = response body JSON.
+        If null, raw response body is written to store path.
+      '';
+      example = "./extract-token.sh";
+    };
   };
 
   # Capability option type
@@ -298,6 +309,7 @@ let
           inherit capability;
           inherit (cfg) providers request restart reload;
           store = cfg.store;
+          transform = if cfg.transform != null then toString cfg.transform else null;
         })
       ) needs);
   in builtins.toJSON (flattenNeeds config.fort.needs);
@@ -352,6 +364,7 @@ let
       providers=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.providers[]')
       restart_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.restart // [] | .[]')
       reload_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.reload // [] | .[]')
+      transform=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.transform // empty')
 
       # Determine handle path
       if [ -n "$store" ]; then
@@ -384,8 +397,15 @@ let
             # Store response if store path specified
             if [ -n "$store" ]; then
               ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store")"
-              echo "$body" | ${pkgs.jq}/bin/jq '.' > "$store"
-              log "[$id] Stored response at $store"
+              if [ -n "$transform" ]; then
+                # Use transform script to process response
+                echo "$body" | "$transform" "$store"
+                log "[$id] Transformed response to $store"
+              else
+                # Store raw response
+                echo "$body" | ${pkgs.jq}/bin/jq '.' > "$store"
+                log "[$id] Stored response at $store"
+              fi
             fi
 
             # Store handle if returned

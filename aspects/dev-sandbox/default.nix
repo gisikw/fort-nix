@@ -16,6 +16,15 @@ let
   beads = import ../../pkgs/beads { inherit pkgs; };
   fort-agent-call = import ../../pkgs/fort-agent-call { inherit pkgs domain; };
 
+  # Transform script for git-token: extracts token from JSON response
+  gitTokenTransform = pkgs.writeShellScript "git-token-transform" ''
+    # $1 = store path, stdin = {"token": "...", "username": "..."}
+    store_path="$1"
+    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store_path")"
+    ${pkgs.jq}/bin/jq -r '.token' > "$store_path"
+    ${pkgs.coreutils}/bin/chmod 644 "$store_path"
+  '';
+
   # Derive SSH keys for dev-sandbox access from principals
   isSSHKey = k: builtins.substring 0 4 k == "ssh-";
   principalsWithDevSandbox = builtins.filter
@@ -139,7 +148,16 @@ in
     "d ${homeDir}/.ssh 0700 ${user} users -"
     "d ${homeDir}/Projects 0755 ${user} users -"
     "d /var/lib/fort/dev-sandbox 0755 ${user} users -"
+    "d /var/lib/fort-git 0755 root root -"
   ];
+
+  # Request RW git token from forge via control plane
+  fort.needs.git-token.dev = {
+    providers = [ "drhorrible" ];
+    request = { access = "rw"; };
+    store = "/var/lib/fort-git/forge-token";
+    transform = gitTokenTransform;
+  };
 
   # Agent key for fort-agent-call signing (readable by dev user)
   age.secrets.dev-sandbox-agent-key = {
