@@ -641,6 +641,24 @@ in
         };
       };
 
+      # Watch for config changes and restart fort-agent
+      # capabilities.json is regenerated on every activation and reflects all capability changes
+      systemd.paths.fort-agent-config = {
+        description = "Watch for fort-agent config changes";
+        wantedBy = [ "multi-user.target" ];
+        pathConfig = {
+          PathModified = "/etc/fort-agent/capabilities.json";
+        };
+      };
+
+      systemd.services.fort-agent-config = {
+        description = "Restart fort-agent on config change";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.systemd}/bin/systemctl restart fort-agent.service";
+        };
+      };
+
       # Add /agent/* location to the host's nginx vhost
       # Extends the existing virtualHost from host-status aspect
       services.nginx.virtualHosts."${hostName}.fort.${domain}" = {
