@@ -10,7 +10,7 @@ In your app or aspect module:
 { config, ... }:
 
 {
-  fort.capabilities.my-capability = {
+  fort.host.capabilities.my-capability = {
     handler = ./handlers/my-capability;
     description = "Brief description of what this does";
   };
@@ -24,7 +24,7 @@ In your app or aspect module:
 | `handler` | path | required | Script that handles requests |
 | `needsGC` | bool | `false` | Enable garbage collection |
 | `ttl` | int | `0` | GC time-to-live in seconds |
-| `satisfies` | string | `null` | Which `fort.needs` type this satisfies |
+| `satisfies` | string | `null` | Which `fort.host.needs` type this satisfies |
 | `description` | string | `""` | Human-readable description |
 
 ## Working Example: OIDC Registration
@@ -32,7 +32,7 @@ In your app or aspect module:
 From `apps/pocket-id/default.nix`:
 
 ```nix
-fort.capabilities.oidc-register = {
+fort.host.capabilities.oidc-register = {
   handler = ./handlers/oidc-register;
   needsGC = true;
   ttl = 86400;  # 24 hours
@@ -44,7 +44,7 @@ fort.capabilities.oidc-register = {
 
 RBAC is computed automatically from the cluster topology:
 
-1. Host A declares `fort.needs.my-capability.foo.providers = ["host-b"]`
+1. Host A declares `fort.host.needs.my-capability.foo.providers = ["host-b"]`
 2. At eval time, `fort-agent.nix` adds Host A to `rbac.json` for `my-capability` on Host B
 3. Only Host A can call `/agent/my-capability` on Host B
 
@@ -55,7 +55,7 @@ This means **capabilities don't need explicit ACLs** - the topology IS the autho
 These are always available on all hosts (defined in `fort-agent.nix`):
 
 ```nix
-fort.capabilities = {
+fort.host.capabilities = {
   status = {
     handler = writeShellScript "status-handler" ''cat /var/lib/fort/status/status.json'';
     description = "Host status (uptime, failed units, deploy info)";

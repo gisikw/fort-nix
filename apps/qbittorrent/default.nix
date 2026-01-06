@@ -26,7 +26,7 @@
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "qbittorrent";
       subdomain = subdomain;

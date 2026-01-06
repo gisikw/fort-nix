@@ -6,7 +6,7 @@ Use `oidc` mode when the service supports OpenID Connect natively. The service-r
 
 ## How It Works
 
-1. You declare `sso.mode = "oidc"` in `fortCluster.exposedServices`
+1. You declare `sso.mode = "oidc"` in `fort.cluster.services`
 2. service-registry (on the forge host) runs every 10 minutes
 3. It creates an OIDC client in pocket-id using the service's FQDN as the client name
 4. Credentials are SSHed to `/var/lib/fort-auth/<service-name>/`:
@@ -18,7 +18,7 @@ Use `oidc` mode when the service supports OpenID Connect natively. The service-r
 
 ```nix
 # 1. Declare exposure with restart target
-fortCluster.exposedServices = [{
+fort.cluster.services = [{
   name = "myapp";
   port = 8080;
   visibility = "public";  # or vpn, local
@@ -96,7 +96,7 @@ in
     };
   };
 
-  fortCluster.exposedServices = [{
+  fort.cluster.services = [{
     name = "outline";
     port = 4654;
     visibility = "public";

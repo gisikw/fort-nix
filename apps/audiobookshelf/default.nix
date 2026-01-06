@@ -10,7 +10,7 @@
   users.groups.media = { };
   users.users.audiobookshelf.extraGroups = [ "media" ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "audiobookshelf";
       subdomain = subdomain;

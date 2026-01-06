@@ -339,20 +339,20 @@ Services declare what they need via options. The system consolidates these into 
 ```nix
 # apps/outline/default.nix
 {
-  fort.needs.oidc.outline = {
+  fort.host.needs.oidc.outline = {
     providers = [ "drhorrible" ];
     request = { service = "outline"; };
     restart = [ "outline.service" ];
   };
 
-  fort.needs.proxy.outline = {
+  fort.host.needs.proxy.outline = {
     providers = [ "raishan" ];
     request = { service = "outline"; upstream = "${config.networking.hostName}:4654"; };
   };
 }
 ```
 
-The `fort.needs` option type handles:
+The `fort.host.needs` option type handles:
 - Generating `/var/lib/fort/needs.json` from all declarations
 - Computing store paths consistently
 - Validating that referenced providers exist in cluster topology
@@ -364,11 +364,11 @@ Providers declare what capabilities they expose. The system generates handlers, 
 ```nix
 # apps/pocket-id/default.nix
 {
-  fort.capabilities.oidc-register = {
+  fort.host.capabilities.oidc-register = {
     description = "Register OIDC client in pocket-id";
     handler = ./handlers/oidc-register;  # Script to run
     needsGC = true;                       # Auto-add handle headers, GC timer
-    # RBAC computed automatically: hosts that declare fort.needs.oidc.*
+    # RBAC computed automatically: hosts that declare fort.host.needs.oidc.*
   };
 }
 ```
@@ -387,12 +387,12 @@ RBAC rules are computed, not configured:
 # Pseudo-code for what the module system does:
 fortAgent.rbac = {
   "oidc-register" =
-    # All hosts that declare any fort.needs.oidc.* need
-    filter (h: h.config.fort.needs.oidc != {}) allHosts;
+    # All hosts that declare any fort.host.needs.oidc.* need
+    filter (h: h.config.fort.host.needs.oidc != {}) allHosts;
 
   "proxy-configure" =
-    # All hosts that declare any fort.needs.proxy.* need
-    filter (h: h.config.fort.needs.proxy != {}) allHosts;
+    # All hosts that declare any fort.host.needs.proxy.* need
+    filter (h: h.config.fort.host.needs.proxy != {}) allHosts;
 };
 ```
 

@@ -91,7 +91,7 @@ Common issues and debugging steps for SSO integration.
 ### Common Causes
 
 - **App not running**: oauth2-proxy can't reach upstream
-- **Wrong port**: `fortCluster.exposedServices` port doesn't match app
+- **Wrong port**: `fort.cluster.services` port doesn't match app
 - **Permission issues**: nginx can't read the socket
 
 ## Groups Claim Issues

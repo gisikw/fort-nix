@@ -6,7 +6,7 @@ Use `basicauth` mode when the service only supports HTTP Basic Authentication. o
 
 ## How It Works
 
-1. You declare `sso.mode = "basicauth"` in `fortCluster.exposedServices`
+1. You declare `sso.mode = "basicauth"` in `fort.cluster.services`
 2. fort.nix creates an `oauth2-proxy-<name>` service (same as headers mode)
 3. oauth2-proxy authenticates via OIDC with pocket-id
 4. Authenticated requests get Basic Auth header injected
@@ -15,7 +15,7 @@ Use `basicauth` mode when the service only supports HTTP Basic Authentication. o
 
 ```nix
 # 1. Declare exposure
-fortCluster.exposedServices = [{
+fort.cluster.services = [{
   name = "myapp";
   port = 8080;
   sso = {

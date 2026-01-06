@@ -28,7 +28,7 @@ in
     "d /var/lib/homepage/config 0755 root root -"
   ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "home";
       subdomain = subdomain;

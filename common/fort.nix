@@ -9,10 +9,11 @@ let
   domain = rootManifest.fortConfig.settings.domain;
 in
 {
-  options.fortCluster = lib.mkOption {
+  options.fort.cluster = lib.mkOption {
     type = lib.types.submodule {
+      freeformType = lib.types.attrsOf lib.types.anything;
       options = {
-        exposedServices = lib.mkOption {
+        services = lib.mkOption {
           type =
             with lib.types;
             listOf (submodule {
@@ -136,7 +137,7 @@ in
       '';
     }
 
-    (lib.mkIf (lib.length config.fortCluster.exposedServices >= 1) {
+    (lib.mkIf (lib.length config.fort.cluster.services >= 1) {
 
       systemd.services = lib.mkMerge (map (svc:
         let
@@ -197,7 +198,7 @@ in
             };
           };
         }
-      ) config.fortCluster.exposedServices);
+      ) config.fort.cluster.services);
 
       services.nginx = {
         enable = true;
@@ -234,7 +235,7 @@ in
                 };
               };
             }
-          ) config.fortCluster.exposedServices
+          ) config.fort.cluster.services
         );
       };
 
@@ -253,7 +254,7 @@ in
           apps = config.fort.host.apps or [];
           aspects = map aspectName (config.fort.host.aspects or []);
           roles = config.fort.host.roles or [];
-          exposedServices = config.fortCluster.exposedServices;
+          services = config.fort.cluster.services;
         });
       in ''
         install -Dm0644 ${hostManifestJson} /var/lib/fort/host-manifest.json

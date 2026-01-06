@@ -343,7 +343,7 @@ For the host that receives and syncs backups:
   };
 
   # Expose via nginx (internal only)
-  fortCluster.exposedServices = [{
+  fort.cluster.services = [{
     name = "backup";
     port = 8000;
     visibility = "vpn";  # Only mesh-accessible

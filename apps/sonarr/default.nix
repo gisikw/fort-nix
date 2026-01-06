@@ -6,7 +6,7 @@
   systemd.services.sonarr.wants = [ "egress-vpn-namespace.service" ];
   systemd.services.sonarr.after = [ "egress-vpn-namespace.service" ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "sonarr";
       subdomain = subdomain;

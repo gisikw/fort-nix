@@ -40,7 +40,7 @@ in
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "silverbullet";
       subdomain = subdomain;

@@ -189,7 +189,7 @@ in
     "d /var/lib/sillytavern/extensions 0755 root root -"
   ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "sillytavern";
       subdomain = subdomain;

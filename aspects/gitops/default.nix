@@ -136,7 +136,7 @@ in
   ];
 
   # Request RO git token from forge for comin pulls
-  fort.needs.git-token.default = {
+  fort.host.needs.git-token.default = {
     providers = [ "drhorrible" ];
     request = { access = "ro"; };
     store = tokenFile;
@@ -171,7 +171,7 @@ in
   };
 
   # Expose deploy capability for on-demand deployments
-  fort.capabilities.deploy = {
+  fort.host.capabilities.deploy = {
     handler = deployHandler;
     description = "Trigger deployment after verifying expected SHA";
     allowed = [ "dev-sandbox" ];

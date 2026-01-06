@@ -52,7 +52,7 @@ in
     ];
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "calibre-web";
       subdomain = subdomain;

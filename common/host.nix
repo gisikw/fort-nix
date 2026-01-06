@@ -129,7 +129,6 @@ in
           clusterDir = cluster.clusterDir;
           clusterHostsDir = cluster.hostsDir;
           clusterDevicesDir = cluster.devicesDir;
-          clusterSettings = cluster.manifest.fortConfig.settings;
         };
       }
       (import ./fort.nix ({

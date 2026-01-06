@@ -38,7 +38,7 @@ services = hosts.reduce([]) do |services, host|
   lan_ip = lines[1].match(/src\s+(\S+)/)[1] rescue 'NOROUTE'
 
   manifest = JSON.parse(lines[2])
-  exposed_services = manifest["exposedServices"] || []
+  exposed_services = manifest["services"] || []
   services | exposed_services.each do |service|
     service["hostname"] = "#{host}.fort.#{DOMAIN}"
     service["host"] = host

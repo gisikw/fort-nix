@@ -11,7 +11,7 @@ in
     port = 3456;
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "vikunja";
       subdomain = subdomain;

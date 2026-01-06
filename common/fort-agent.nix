@@ -1,10 +1,10 @@
 # Fort Agent Module
 #
-# Defines fort.needs and fort.capabilities options for the unified control plane.
+# Defines fort.host.needs and fort.host.capabilities options for the unified control plane.
 # See docs/control-plane-design.md for architecture details.
 #
-# fort.needs.<type>.<name>: Declares what a host needs from capability providers
-# fort.capabilities.<name>: Declares what capabilities a host exposes
+# fort.host.needs.<type>.<name>: Declares what a host needs from capability providers
+# fort.host.capabilities.<name>: Declares what capabilities a host exposes
 #
 { rootManifest, cluster, ... }:
 {
@@ -178,7 +178,7 @@ let
   allCapabilities = mandatoryCapabilities // lib.mapAttrs (name: cfg: {
     needsGC = cfg.needsGC;
     ttl = cfg.ttl;
-  }) config.fort.capabilities;
+  }) config.fort.host.capabilities;
 
   # All hosts AND principals with agentKeys allowed to call mandatory endpoints
   principalNames = builtins.attrNames (lib.filterAttrs (name: cfg: cfg ? agentKey) principals);
@@ -298,7 +298,7 @@ let
         If null, defaults to the capability name itself.
 
         Example: capability "oidc-register" might set satisfies = "oidc" to match
-        fort.needs.oidc.* declarations.
+        fort.host.needs.oidc.* declarations.
       '';
       example = "oidc";
     };
@@ -321,11 +321,11 @@ let
     };
   };
 
-  # Generate needs.json from all fort.needs declarations
+  # Generate needs.json from all fort.host.needs declarations
   #
-  # Structure: fort.needs.<capability>.<name> = { providers, request, store, restart }
+  # Structure: fort.host.needs.<capability>.<name> = { providers, request, store, restart }
   # The first key IS the capability name - no magic transformation.
-  # Example: fort.needs.ssl-cert.wildcard calls the "ssl-cert" capability
+  # Example: fort.host.needs.ssl-cert.wildcard calls the "ssl-cert" capability
   needsJson = let
     flattenNeeds = needs:
       lib.concatLists (lib.mapAttrsToList (capability:
@@ -341,13 +341,13 @@ let
           } else null;
         })
       ) needs);
-  in builtins.toJSON (flattenNeeds config.fort.needs);
+  in builtins.toJSON (flattenNeeds config.fort.host.needs);
 
   # RBAC for mandatory endpoints (respects allowed if specified)
   mandatoryRbac = deriveRbac mandatoryCapabilities;
 
   # Generate rbac.json from capabilities and topology (includes mandatory)
-  rbacJson = builtins.toJSON (mandatoryRbac // deriveRbac config.fort.capabilities);
+  rbacJson = builtins.toJSON (mandatoryRbac // deriveRbac config.fort.host.capabilities);
 
   # Generate capabilities.json with needsGC and ttl settings (includes mandatory)
   capabilitiesJson = builtins.toJSON allCapabilities;
@@ -511,18 +511,18 @@ let
   '';
 
   # Check if we have any needs or capabilities defined
-  hasNeeds = config.fort.needs != { };
-  hasCapabilities = config.fort.capabilities != { };
+  hasNeeds = config.fort.host.needs != { };
+  hasCapabilities = config.fort.host.capabilities != { };
 
 in
 {
-  options.fort = {
+  options.fort.host = {
     needs = lib.mkOption {
       type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule { options = needOptions; }));
       default = { };
       description = ''
         Declares what this host needs from capability providers.
-        Structure: fort.needs.<capability>.<id> = { providers, request, store, restart }
+        Structure: fort.host.needs.<capability>.<id> = { providers, request, store, restart }
 
         The first key is the capability to call. The second key is an arbitrary
         identifier for disambiguation - use "default" for singletons, or a
@@ -531,14 +531,14 @@ in
 
         Examples:
           # Singleton - just use "default"
-          fort.needs.ssl-cert.default = {
+          fort.host.needs.ssl-cert.default = {
             providers = [ "drhorrible" ];
             store = "/var/lib/fort/ssl";
             restart = [ "nginx.service" ];
           };
 
           # Multiple of same capability - use descriptive ids
-          fort.needs.oidc-register.outline = {
+          fort.host.needs.oidc-register.outline = {
             providers = [ "drhorrible" ];
             request = { service = "outline"; };
             store = "/var/lib/fort/oidc/outline";
@@ -563,12 +563,12 @@ in
         RBAC rules are derived automatically from cluster topology.
 
         Examples:
-          fort.capabilities.ssl-cert = {
+          fort.host.capabilities.ssl-cert = {
             handler = ./handlers/ssl-cert;
             description = "Return cluster SSL certificates";
           };
 
-          fort.capabilities.oidc-register = {
+          fort.host.capabilities.oidc-register = {
             handler = ./handlers/oidc-register;
             needsGC = true;  # Creates GC-able state
             description = "Register OIDC client in pocket-id";
@@ -741,7 +741,7 @@ in
           # Install user-defined handler scripts
           ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: cfg: ''
             install -Dm0755 ${cfg.handler} /etc/fort-agent/handlers/${name}
-          '') config.fort.capabilities)}
+          '') config.fort.host.capabilities)}
         '';
       };
     })

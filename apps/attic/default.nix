@@ -282,7 +282,7 @@ TOKEN
   };
 
   # Expose via reverse proxy
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "attic";
       subdomain = subdomain;

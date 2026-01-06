@@ -154,7 +154,7 @@ in
   # Request RW git token from forge via control plane
   # Uses dev-sandbox principal identity for RW access
   # Stored separately from gitops RO token (dev-token vs deploy-token)
-  fort.needs.git-token.dev = {
+  fort.host.needs.git-token.dev = {
     providers = [ "drhorrible" ];
     request = { access = "rw"; };
     store = "/var/lib/fort-git/dev-token";

@@ -10,7 +10,7 @@
   systemd.services.flaresolverr.serviceConfig.NetworkNamespacePath = "/run/netns/egress-vpn";
   systemd.services.flaresolverr.wants = [ "egress-vpn-namespace.service" ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "prowlarr";
       subdomain = subdomain;

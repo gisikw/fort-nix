@@ -102,7 +102,7 @@ in
     '';
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "homeassistant";
       subdomain = subdomain;

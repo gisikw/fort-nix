@@ -61,7 +61,7 @@ in
   };
 
   # Expose ssl-cert capability via agent API
-  fort.capabilities.ssl-cert = {
+  fort.host.capabilities.ssl-cert = {
     handler = sslCertHandler;
     needsGC = false;  # Certs are idempotent, no GC needed
     description = "Return cluster SSL certificates (ACME-managed)";

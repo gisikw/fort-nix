@@ -88,7 +88,7 @@ in
     9100
   ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "monitor";
       subdomain = subdomain;

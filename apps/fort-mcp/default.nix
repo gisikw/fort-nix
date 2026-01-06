@@ -48,7 +48,7 @@ in
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "mcp";
       subdomain = subdomain;

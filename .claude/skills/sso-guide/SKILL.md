@@ -5,7 +5,7 @@ description: SSO integration guidance for fort-nix services. Use when adding aut
 
 # SSO Integration Guide
 
-This skill helps you configure authentication for services exposed via `fortCluster.exposedServices`.
+This skill helps you configure authentication for services exposed via `fort.cluster.services`.
 
 ## Quick Reference: SSO Modes
 

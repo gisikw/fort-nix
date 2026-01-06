@@ -11,7 +11,7 @@ Some capabilities create server-side state (OIDC clients, tokens, etc.). The GC 
 ## Enabling GC
 
 ```nix
-fort.capabilities.my-capability = {
+fort.host.capabilities.my-capability = {
   handler = ./handlers/my-capability;
   needsGC = true;   # Enable handle tracking
   ttl = 86400;      # 24-hour lease
@@ -31,7 +31,7 @@ When `needsGC = true`, `fort-agent-wrapper`:
 
 ## Consumer Side
 
-Consumers using `fort.needs` automatically:
+Consumers using `fort.host.needs` automatically:
 
 1. Store the response at the configured `store` path
 2. Track the handle in `/var/lib/fort/holdings.json`
@@ -39,7 +39,7 @@ Consumers using `fort.needs` automatically:
 
 ## Manual Consumer
 
-If not using `fort.needs`, track handles manually:
+If not using `fort.host.needs`, track handles manually:
 
 ```bash
 # Make request

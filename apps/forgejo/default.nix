@@ -416,7 +416,7 @@ EOF
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "git";
       subdomain = subdomain;
@@ -430,7 +430,7 @@ EOF
   ];
 
   # Expose git-token capability for on-demand token generation
-  fort.capabilities.git-token = {
+  fort.host.capabilities.git-token = {
     handler = gitTokenHandler;
     needsGC = true;
     ttl = 86400 * 30;  # 30-day TTL

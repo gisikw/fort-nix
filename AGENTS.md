@@ -44,10 +44,10 @@ device-profiles/<type>/      # Hardware base images (beelink, linode, etc.)
 Apps live in `apps/<name>/default.nix`. Every app should:
 
 1. Define its systemd service(s)
-2. Declare exposure via `fortCluster.exposedServices`:
+2. Declare exposure via `fort.cluster.services`:
 
 ```nix
-fortCluster.exposedServices = [{
+fort.cluster.services = [{
   name = "myapp";
   port = 8080;
   visibility = "local";      # vpn | local | public
@@ -74,7 +74,7 @@ Use restart **without** delay unless the service would kill the response (nginx,
 
 ### SSO Modes
 
-Services can use SSO via `fortCluster.exposedServices`:
+Services can use SSO via `fort.cluster.services`:
 
 | Mode | Use When |
 |------|----------|
@@ -195,7 +195,7 @@ aspects = [
 Services that should route through the external VPN (e.g., torrent clients):
 
 ```nix
-fortCluster.exposedServices = [{
+fort.cluster.services = [{
   name = "qbittorrent";
   port = 8080;
   inEgressNamespace = true;  # Routes through WireGuard namespace
@@ -443,7 +443,7 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 
 - Don't modify `flake.nix` or `common/` without good reason
 - Don't hardcode IPs or hostnames - use `${domain}` from cluster manifest
-- Don't add nginx virtual hosts manually - use `fortCluster.exposedServices`
+- Don't add nginx virtual hosts manually - use `fort.cluster.services`
 - Don't commit unencrypted secrets
 - Don't use `:latest` container tags - pin to explicit versions (e.g., `:1.10.0`) for reproducible deploys
 - Don't use Write tool for large file transformations - prefer `mv` to rename then Edit for in-place changes (more token-efficient and avoids tool call overhead)

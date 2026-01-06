@@ -145,7 +145,7 @@ in
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "termix";
       subdomain = subdomain;

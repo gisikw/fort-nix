@@ -6,7 +6,7 @@ Use `gatekeeper` mode when you need a login wall but don't need to pass identity
 
 ## How It Works
 
-1. You declare `sso.mode = "gatekeeper"` in `fortCluster.exposedServices`
+1. You declare `sso.mode = "gatekeeper"` in `fort.cluster.services`
 2. fort.nix creates an `oauth2-proxy-<name>` service
 3. oauth2-proxy requires OIDC login before proxying
 4. Requests reach the backend without identity headers
@@ -20,7 +20,7 @@ Use `gatekeeper` mode when you need a login wall but don't need to pass identity
 ## App Responsibilities
 
 ```nix
-fortCluster.exposedServices = [{
+fort.cluster.services = [{
   name = "myapp";
   port = 8080;
   sso = {

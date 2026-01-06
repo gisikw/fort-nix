@@ -6,7 +6,7 @@ Use `headers` mode when the service can consume identity from HTTP headers. fort
 
 ## How It Works
 
-1. You declare `sso.mode = "headers"` in `fortCluster.exposedServices`
+1. You declare `sso.mode = "headers"` in `fort.cluster.services`
 2. fort.nix creates an `oauth2-proxy-<name>` systemd service
 3. nginx proxies to oauth2-proxy's unix socket instead of directly to the app
 4. oauth2-proxy handles OIDC auth with pocket-id
@@ -27,7 +27,7 @@ oauth2-proxy injects these headers (with `--pass-user-headers`):
 
 ```nix
 # 1. Declare exposure
-fortCluster.exposedServices = [{
+fort.cluster.services = [{
   name = "myapp";
   port = 8080;
   sso = {
@@ -67,7 +67,7 @@ in
     };
   };
 
-  fortCluster.exposedServices = [{
+  fort.cluster.services = [{
     name = "monitor";
     port = 3000;
     sso.mode = "headers";

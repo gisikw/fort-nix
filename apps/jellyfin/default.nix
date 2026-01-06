@@ -4,7 +4,7 @@
   services.jellyfin.enable = true;
   users.users.jellyfin.extraGroups = [ "media" ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "jellyfin";
       subdomain = subdomain;

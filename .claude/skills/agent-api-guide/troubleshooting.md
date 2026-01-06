@@ -32,15 +32,15 @@
 
 **Cause**: Caller not in RBAC list for this capability.
 
-**Fix**: Add a `fort.needs` declaration that references this capability:
+**Fix**: Add a `fort.host.needs` declaration that references this capability:
 
 ```nix
-fort.needs.the-capability.my-id = {
+fort.host.needs.the-capability.my-id = {
   providers = ["target-host"];
 };
 ```
 
-Then rebuild. RBAC is computed from `fort.needs` declarations.
+Then rebuild. RBAC is computed from `fort.host.needs` declarations.
 
 ### "capability not found" (404)
 

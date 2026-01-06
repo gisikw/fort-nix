@@ -11,7 +11,7 @@ in
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "super";
       subdomain = subdomain;

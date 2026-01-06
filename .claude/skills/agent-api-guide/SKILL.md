@@ -16,7 +16,7 @@ fort-agent-call <host> <capability> [request-json]
 
 **Provider (exposing a capability):**
 ```nix
-fort.capabilities.my-capability = {
+fort.host.capabilities.my-capability = {
   handler = ./handlers/my-capability;  # Script that handles requests
   needsGC = false;                      # Enable garbage collection
   ttl = 0;                              # GC time-to-live in seconds
@@ -26,7 +26,7 @@ fort.capabilities.my-capability = {
 
 **Consumer (depending on a capability):**
 ```nix
-fort.needs.my-capability.my-id = {
+fort.host.needs.my-capability.my-id = {
   providers = ["hostname"];             # Host(s) providing this
   request = { key = "value"; };         # Request payload
   store = "/var/lib/myapp/response";    # Where to store response
@@ -65,5 +65,5 @@ All hosts expose these capabilities:
 
 - Requests signed with SSH keys (`ssh-keygen -Y sign`)
 - RBAC computed at eval time from cluster topology
-- Only hosts that `fort.needs` a capability can call it
+- Only hosts that `fort.host.needs` a capability can call it
 - Config files: `/etc/fort-agent/hosts.json`, `/etc/fort-agent/rbac.json`

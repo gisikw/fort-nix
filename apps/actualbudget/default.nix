@@ -9,7 +9,7 @@
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "actualbudget";
       subdomain = subdomain;

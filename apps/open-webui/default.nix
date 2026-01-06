@@ -13,7 +13,7 @@
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "ai";
       subdomain = subdomain;

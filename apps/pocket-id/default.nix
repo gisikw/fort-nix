@@ -155,7 +155,7 @@ in
     '';
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "pocket-id";
       subdomain = subdomain;
