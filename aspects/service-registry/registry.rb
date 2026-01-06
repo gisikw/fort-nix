@@ -81,6 +81,7 @@ EOF
 services
   .select { |s| s["visibility"] == "public" }
   .each do |service|
+    # Always proxy to host nginx (port 443) for consistent SSL/auth handling
     public_vhosts << <<-EOF
     server {
       listen 80;
@@ -91,7 +92,7 @@ services
       ssl_certificate_key /var/lib/fort/ssl/#{DOMAIN}/key.pem;
 
       location / {
-        proxy_pass http://#{service["vpn_ip"]}:#{service["port"]};
+        proxy_pass https://#{service["vpn_ip"]}:443;
         proxy_set_header Host               $host;
         proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto  $scheme;
@@ -99,6 +100,12 @@ services
         proxy_http_version 1.1;
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+
+        # Validate upstream cert - reject bad traffic at ingress
+        proxy_ssl_verify on;
+        proxy_ssl_server_name on;
+        proxy_ssl_name $host;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
       }
     }
     EOF
