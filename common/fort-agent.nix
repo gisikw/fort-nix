@@ -242,6 +242,31 @@ let
       '';
       example = "./extract-token.sh";
     };
+
+    identity = lib.mkOption {
+      type = lib.types.nullOr (lib.types.submodule {
+        options = {
+          origin = lib.mkOption {
+            type = lib.types.str;
+            description = "Origin header value (principal name) to use for authentication";
+          };
+          keyPath = lib.mkOption {
+            type = lib.types.str;
+            description = "Path to SSH key for signing requests";
+          };
+        };
+      });
+      default = null;
+      description = ''
+        Override identity for this need. If null, uses host identity.
+        Use this when the need requires authentication as a different principal
+        (e.g., dev-sandbox principal for RW git access).
+      '';
+      example = {
+        origin = "dev-sandbox";
+        keyPath = "/var/lib/fort/dev-sandbox/agent-key";
+      };
+    };
   };
 
   # Capability option type
@@ -310,6 +335,10 @@ let
           inherit (cfg) providers request restart reload;
           store = cfg.store;
           transform = if cfg.transform != null then toString cfg.transform else null;
+          identity = if cfg.identity != null then {
+            origin = cfg.identity.origin;
+            keyPath = cfg.identity.keyPath;
+          } else null;
         })
       ) needs);
   in builtins.toJSON (flattenNeeds config.fort.needs);
@@ -365,6 +394,8 @@ let
       restart_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.restart // [] | .[]')
       reload_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.reload // [] | .[]')
       transform=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.transform // empty')
+      identity_origin=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.identity.origin // empty')
+      identity_key=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.identity.keyPath // empty')
 
       # Determine handle path
       if [ -n "$store" ]; then
@@ -386,7 +417,14 @@ let
       for provider in $providers; do
         log "[$id] Calling $provider/$capability..."
 
-        if result=$(${fortAgentCall}/bin/fort-agent-call "$provider" "$capability" "$request" 2>&1); then
+        # Build environment for fort-agent-call (identity override if specified)
+        call_env=""
+        if [ -n "$identity_origin" ] && [ -n "$identity_key" ]; then
+          call_env="FORT_ORIGIN=$identity_origin FORT_SSH_KEY=$identity_key"
+          log "[$id] Using identity: $identity_origin"
+        fi
+
+        if result=$(env $call_env ${fortAgentCall}/bin/fort-agent-call "$provider" "$capability" "$request" 2>&1); then
           status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
           handle=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.handle // empty')
           body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')

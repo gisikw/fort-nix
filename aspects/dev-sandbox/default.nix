@@ -152,11 +152,16 @@ in
   ];
 
   # Request RW git token from forge via control plane
+  # Uses dev-sandbox principal identity for RW access
   fort.needs.git-token.dev = {
     providers = [ "drhorrible" ];
     request = { access = "rw"; };
     store = "/var/lib/fort-git/forge-token";
     transform = gitTokenTransform;
+    identity = {
+      origin = "dev-sandbox";
+      keyPath = agentKeyPath;
+    };
   };
 
   # Agent key for fort-agent-call signing (readable by dev user)
