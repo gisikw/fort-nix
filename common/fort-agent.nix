@@ -450,6 +450,8 @@ let
     done <<< "$needs"
 
     # Write holdings.json
+    # Disable strict unset checking - associative arrays can be tricky with set -u
+    set +u
     holdings_json='{"handles":['
     first=true
     for id in "''${!HOLDINGS[@]}"; do
@@ -461,9 +463,11 @@ let
       holdings_json+="{\"id\":\"$id\",\"handle\":\"''${HOLDINGS[$id]}\"}"
     done
     holdings_json+=']}'
+    holdings_count="''${#HOLDINGS[@]}"
+    set -u  # Re-enable strict mode
 
     echo "$holdings_json" | ${pkgs.jq}/bin/jq '.' > "$HOLDINGS_FILE"
-    log "Updated holdings.json with ''${#HOLDINGS[@]} handle(s)"
+    log "Updated holdings.json with $holdings_count handle(s)"
 
     exit 0
   '';
