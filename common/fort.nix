@@ -219,6 +219,8 @@ in
                 sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
                 locations."/" = {
                   extraConfig = lib.concatStringsSep "\n" (lib.filter (s: s != "") [
+                    # Ensure cookies are forwarded (not included in recommendedProxySettings)
+                    "proxy_set_header Cookie $http_cookie;"
                     (lib.optionalString (svc.visibility == "vpn") ''
                       if ($is_vpn = 0) {
                         return 444;
