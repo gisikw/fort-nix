@@ -224,6 +224,13 @@ let
       description = "Systemd services to restart after successful fulfillment";
       example = [ "outline.service" ];
     };
+
+    reload = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Systemd services to reload (not restart) after successful fulfillment";
+      example = [ "nginx.service" ];
+    };
   };
 
   # Capability option type
@@ -289,7 +296,7 @@ let
         lib.mapAttrsToList (name: cfg: {
           id = "${capability}-${name}";
           inherit capability;
-          inherit (cfg) providers request restart;
+          inherit (cfg) providers request restart reload;
           store = cfg.store;
         })
       ) needs);
@@ -306,6 +313,140 @@ let
 
   # Import the agent wrapper
   fortAgentWrapper = import ../pkgs/fort-agent-wrapper { inherit pkgs; };
+
+  # Import fort-agent-call for fulfill service
+  fortAgentCall = import ../pkgs/fort-agent-call { inherit pkgs domain; };
+
+  # Fulfill script - reads needs.json and calls providers
+  fortFulfillScript = pkgs.writeShellScript "fort-fulfill" ''
+    set -euo pipefail
+
+    NEEDS_FILE="/var/lib/fort/needs.json"
+    HOLDINGS_FILE="/var/lib/fort/holdings.json"
+    HANDLES_DIR="/var/lib/fort/handles"
+
+    log() { echo "[fort-fulfill] $*"; }
+
+    # Exit early if no needs file
+    if [ ! -f "$NEEDS_FILE" ]; then
+      log "No needs.json found, nothing to fulfill"
+      exit 0
+    fi
+
+    # Ensure handles directory exists
+    ${pkgs.coreutils}/bin/mkdir -p "$HANDLES_DIR"
+
+    # Track holdings for final output
+    declare -A HOLDINGS
+
+    # Read needs.json and process each need
+    needs=$(${pkgs.jq}/bin/jq -c '.[]' "$NEEDS_FILE")
+
+    while IFS= read -r need; do
+      [ -z "$need" ] && continue
+
+      id=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.id')
+      capability=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.capability')
+      store=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.store // empty')
+      request=$(echo "$need" | ${pkgs.jq}/bin/jq -c '.request // {}')
+      providers=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.providers[]')
+      restart_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.restart // [] | .[]')
+      reload_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.reload // [] | .[]')
+
+      # Determine handle path
+      if [ -n "$store" ]; then
+        handle_path="''${store}.handle"
+      else
+        handle_path="$HANDLES_DIR/$id"
+      fi
+
+      # Check if already fulfilled (handle file exists and non-empty)
+      if [ -f "$handle_path" ] && [ -s "$handle_path" ]; then
+        handle=$(${pkgs.coreutils}/bin/cat "$handle_path")
+        log "[$id] Already fulfilled (handle: $handle)"
+        HOLDINGS["$id"]="$handle"
+        continue
+      fi
+
+      # Try each provider in order
+      fulfilled=false
+      for provider in $providers; do
+        log "[$id] Calling $provider/$capability..."
+
+        if result=$(${fortAgentCall}/bin/fort-agent-call "$provider" "$capability" "$request" 2>&1); then
+          status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
+          handle=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.handle // empty')
+          body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')
+
+          if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+            log "[$id] Success from $provider (HTTP $status)"
+
+            # Store response if store path specified
+            if [ -n "$store" ]; then
+              ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store")"
+              echo "$body" | ${pkgs.jq}/bin/jq '.' > "$store"
+              log "[$id] Stored response at $store"
+            fi
+
+            # Store handle if returned
+            if [ -n "$handle" ]; then
+              ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$handle_path")"
+              echo "$handle" > "$handle_path"
+              HOLDINGS["$id"]="$handle"
+              log "[$id] Stored handle at $handle_path"
+            fi
+
+            # Reload services (graceful)
+            for service in $reload_services; do
+              if ${pkgs.systemd}/bin/systemctl reload "$service" 2>&1; then
+                log "[$id] Reloaded $service"
+              else
+                log "[$id] Warning: failed to reload $service"
+              fi
+            done
+
+            # Restart services
+            for service in $restart_services; do
+              if ${pkgs.systemd}/bin/systemctl restart "$service" 2>&1; then
+                log "[$id] Restarted $service"
+              else
+                log "[$id] Warning: failed to restart $service"
+              fi
+            done
+
+            fulfilled=true
+            break
+          else
+            log "[$id] Provider $provider returned HTTP $status"
+          fi
+        else
+          log "[$id] Provider $provider failed: $result"
+        fi
+      done
+
+      if [ "$fulfilled" = false ]; then
+        log "[$id] All providers failed, will retry later"
+      fi
+    done <<< "$needs"
+
+    # Write holdings.json
+    holdings_json='{"handles":['
+    first=true
+    for id in "''${!HOLDINGS[@]}"; do
+      if [ "$first" = true ]; then
+        first=false
+      else
+        holdings_json+=','
+      fi
+      holdings_json+="{\"id\":\"$id\",\"handle\":\"''${HOLDINGS[$id]}\"}"
+    done
+    holdings_json+=']}'
+
+    echo "$holdings_json" | ${pkgs.jq}/bin/jq '.' > "$HOLDINGS_FILE"
+    log "Updated holdings.json with ''${#HOLDINGS[@]} handle(s)"
+
+    exit 0
+  '';
 
   # Check if we have any needs or capabilities defined
   hasNeeds = config.fort.needs != { };
@@ -466,13 +607,49 @@ in
       };
     }
 
-    # Generate needs.json if any needs are declared
+    # Generate needs.json and fulfillment services if any needs are declared
     (lib.mkIf hasNeeds {
       system.activationScripts.fortNeedsJson = {
         deps = [ "fortHostManifest" ];
         text = ''
           install -Dm0644 ${pkgs.writeText "needs.json" needsJson} /var/lib/fort/needs.json
         '';
+      };
+
+      # Fulfillment service - runs at activation to satisfy needs
+      systemd.services.fort-fulfill = {
+        description = "Fulfill fort agent needs";
+        after = [ "network-online.target" "fort-agent.service" ];
+        wants = [ "network-online.target" ];
+        wantedBy = [ "multi-user.target" ];
+
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = fortFulfillScript;
+        };
+
+        path = [ fortAgentCall pkgs.jq pkgs.coreutils pkgs.systemd ];
+      };
+
+      # Retry timer - periodically re-attempts unfulfilled needs
+      systemd.timers.fort-fulfill-retry = {
+        description = "Retry unfulfilled fort agent needs";
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "5m";
+          OnUnitActiveSec = "5m";
+        };
+      };
+
+      systemd.services.fort-fulfill-retry = {
+        description = "Retry unfulfilled fort agent needs";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = fortFulfillScript;
+        };
+
+        path = [ fortAgentCall pkgs.jq pkgs.coreutils pkgs.systemd ];
       };
     })
 
