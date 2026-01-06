@@ -7,7 +7,66 @@ let
   oidcPath = "/user/oauth2/Pocket%20ID";
   bootstrapDir = "/var/lib/forgejo/bootstrap";
   runnerDir = "/var/lib/forgejo-runner";
+  tokenDir = "/var/lib/forgejo/tokens";
   mirrorNames = builtins.attrNames forgeConfig.mirrors;
+
+  # Handler for git-token capability
+  # Creates Forgejo deploy tokens on-demand with appropriate access levels
+  gitTokenHandler = pkgs.writeShellScript "handler-git-token" ''
+    set -euo pipefail
+
+    # Parse request
+    request=$(${pkgs.coreutils}/bin/cat)
+    access=$(echo "$request" | ${pkgs.jq}/bin/jq -r '.access // "ro"')
+    caller="$FORT_ORIGIN"
+
+    # Validate access level
+    if [ "$access" != "ro" ] && [ "$access" != "rw" ]; then
+      echo '{"error": "access must be ro or rw"}'
+      exit 1
+    fi
+
+    # RBAC: Only dev-sandbox principal can request rw access
+    if [ "$access" = "rw" ] && [ "$caller" != "dev-sandbox" ]; then
+      echo '{"error": "rw access requires dev-sandbox principal"}'
+      exit 1
+    fi
+
+    # Token storage (idempotent - reuse existing token)
+    token_file="${tokenDir}/$caller-$access"
+    ${pkgs.coreutils}/bin/mkdir -p "${tokenDir}"
+
+    # Generate token if not exists
+    if [ ! -s "$token_file" ]; then
+      scopes="read:repository"
+      [ "$access" = "rw" ] && scopes="read:repository,write:repository"
+
+      # Generate token via forgejo CLI (must run as forgejo user, not root)
+      if ! token=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "
+        GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom \
+        ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token \
+          --username forge-admin \
+          --token-name $caller-$access \
+          --scopes $scopes \
+          --raw
+      " 2>/dev/null); then
+        # If generation failed but file exists (race condition), use it
+        if [ -s "$token_file" ]; then
+          token=$(${pkgs.coreutils}/bin/cat "$token_file")
+        else
+          echo '{"error": "failed to generate token"}'
+          exit 1
+        fi
+      fi
+
+      echo "$token" > "$token_file"
+      ${pkgs.coreutils}/bin/chmod 600 "$token_file"
+    fi
+
+    # Return token
+    token=$(${pkgs.coreutils}/bin/cat "$token_file")
+    ${pkgs.jq}/bin/jq -n --arg token "$token" '{"token": $token, "username": "forge-admin"}'
+  '';
 in
 {
   # Age secrets for mirror tokens and runner
@@ -451,4 +510,12 @@ TOKEN
       };
     }
   ];
+
+  # Expose git-token capability for on-demand token generation
+  fort.capabilities.git-token = {
+    handler = gitTokenHandler;
+    needsGC = true;
+    ttl = 86400 * 30;  # 30-day TTL
+    description = "Generate Forgejo deploy tokens on-demand";
+  };
 }
