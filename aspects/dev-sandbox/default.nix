@@ -153,10 +153,11 @@ in
 
   # Request RW git token from forge via control plane
   # Uses dev-sandbox principal identity for RW access
+  # Stored separately from gitops RO token (dev-token vs deploy-token)
   fort.needs.git-token.dev = {
     providers = [ "drhorrible" ];
     request = { access = "rw"; };
-    store = "/var/lib/fort-git/forge-token";
+    store = "/var/lib/fort-git/dev-token";
     transform = gitTokenTransform;
     identity = {
       origin = "dev-sandbox";
@@ -174,16 +175,21 @@ in
   };
 
   # Git credential helper for Forgejo access
-  # Reads the token distributed by forgejo-deploy-token-sync
+  # Prefers RW dev-token, falls back to RO deploy-token
   environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
     # Git credential helper - only respond to "get" action
     case "$1" in
       get)
-        TOKEN_FILE="/var/lib/fort-git/forge-token"
-        if [ -s "$TOKEN_FILE" ]; then
-          echo "username=forge-admin"
-          echo "password=$(cat "$TOKEN_FILE")"
+        # Prefer RW token (dev-sandbox), fallback to RO token (gitops)
+        if [ -s "/var/lib/fort-git/dev-token" ]; then
+          TOKEN=$(cat "/var/lib/fort-git/dev-token")
+        elif [ -s "/var/lib/fort-git/deploy-token" ]; then
+          TOKEN=$(cat "/var/lib/fort-git/deploy-token")
+        else
+          exit 0
         fi
+        echo "username=forge-admin"
+        echo "password=$TOKEN"
         ;;
     esac
   '';

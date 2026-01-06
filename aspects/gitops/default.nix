@@ -23,6 +23,14 @@ let
   # Comin binary for CLI commands
   cominBin = config.services.comin.package;
 
+  # Transform script for git-token: extracts token from JSON response
+  gitTokenTransform = pkgs.writeShellScript "git-token-transform" ''
+    store_path="$1"
+    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store_path")"
+    ${pkgs.jq}/bin/jq -r '.token' > "$store_path"
+    ${pkgs.coreutils}/bin/chmod 600 "$store_path"
+  '';
+
   # Deploy handler - verifies SHA then confirms deployment
   deployHandler = pkgs.writeShellScript "handler-deploy" ''
     set -euo pipefail
@@ -126,6 +134,14 @@ in
   systemd.tmpfiles.rules = [
     "d ${credDir} 0700 root root -"
   ];
+
+  # Request RO git token from forge for comin pulls
+  fort.needs.git-token.default = {
+    providers = [ "drhorrible" ];
+    request = { access = "ro"; };
+    store = tokenFile;
+    transform = gitTokenTransform;
+  };
 
   services.comin = {
     enable = true;

@@ -25,7 +25,8 @@
       "Bash(git reset:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfort-89e.3: Add fort-agent-call client script\n\nBash script that calls agent endpoints on other hosts:\n- Signs request body with host SSH key \\(ssh-keygen -Y sign\\)\n- Builds canonical string: METHOD\\\\nPATH\\\\nTIMESTAMP\\\\nSHA256\\(body\\)\n- POSTs via curl with X-Fort-Origin, X-Fort-Timestamp, X-Fort-Signature\n- Parses X-Fort-Handle and X-Fort-TTL from response headers\n- Outputs body to stdout, handle/ttl markers to stderr\n- Exit codes: 0=success, 1=http error, 2=auth error\n\nUsage: fort-agent-call <host> <capability> [request-json]\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(fort-agent-call drhorrible status:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(nix flake check:*)"
     ],
     "deny": [],
     "ask": []
