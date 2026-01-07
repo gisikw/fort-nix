@@ -139,69 +139,148 @@ Providers declare capabilities in their Nix module:
 
 ```nix
 fort.host.capabilities.oidc = {
-  handler = ./handlers/oidc-handler.sh;
+  handler = ./handlers/oidc-reconcile.sh;
+  initialize = true;  # Run on boot
+};
+
+fort.host.capabilities.git = {
+  handler = ./handlers/git-reconcile.sh;
+  cacheResponse = "30d";  # Persist responses, reuse for this duration
+  initialize = true;
+};
+
+fort.host.capabilities.ssl = {
+  handler = ./handlers/ssl-reconcile.sh;
+  initialize = true;
+  after = [ "acme.service" ];  # Re-run when ACME renews
 };
 
 fort.host.capabilities.journal = {
   handler = ./handlers/journal.sh;
-  allowed = [ "dev-sandbox" ];  # Additional callers beyond needers
-  synchronous = true;           # Direct request-response, no orchestration
+  allowed = [ "dev-sandbox" ];
+  synchronous = true;  # Direct request-response, no orchestration
 };
 ```
 
 The capability name (`oidc`) corresponds directly to the need type. Exposed at `/agent/capabilities/oidc`.
 
-**Access control**: Permitted callers = `allowed` list ++ hosts that declare `fort.host.needs.<capability>.*`. The `allowed` field adds extra callers (e.g., principals like `dev-sandbox`) beyond the implicit needer set.
+**Capability options:**
 
-**Synchronous capabilities**: When `synchronous = true`, the agent invokes the handler and returns its output directly. No callbacks, no handles, no GC - just request-response. Used for operational endpoints like `journal`, `restart`, `status`.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `handler` | path | required | Script to invoke |
+| `allowed` | list | `[]` | Additional callers beyond needers |
+| `synchronous` | bool | `false` | Direct request-response, no orchestration |
+| `cacheResponse` | duration | `null` | Persist responses for reuse (e.g., `"30d"`) |
+| `initialize` | bool | `false` | Run on boot with all known state |
+| `after` | list | `[]` | Systemd units that trigger re-run |
 
-### Handler Contract
+**Access control**: Permitted callers = `allowed` list ++ hosts that declare `fort.host.needs.<capability>.*`.
 
-Handlers receive the request payload on stdin and produce a response on stdout:
+**Synchronous capabilities**: When `synchronous = true`, the agent invokes the handler and returns its output directly. No callbacks, no state, no GC - just request-response. Used for operational endpoints like `journal`, `restart`, `status`.
+
+### Handler Contract (Aggregate Mode)
+
+By default, capabilities run in aggregate mode. Handlers receive **all active requests** (with cached responses if available) and return **all responses**:
 
 **Input** (stdin):
 ```json
 {
-  "client_name": "outline",
-  "redirect_uris": ["https://outline.example.com/auth/callback"]
+  "joker:oidc/outline": {
+    "request": { "client_name": "outline", "redirect_uris": [...] },
+    "response": { "client_id": "xxx", "client_secret": "yyy" }
+  },
+  "ursula:oidc/grafana": {
+    "request": { "client_name": "grafana", "redirect_uris": [...] },
+    "response": null
+  }
 }
 ```
 
 **Output** (stdout):
 ```json
 {
-  "client_id": "outline-client-id",
-  "client_secret": "secret-value"
+  "joker:oidc/outline": { "client_id": "xxx", "client_secret": "yyy" },
+  "ursula:oidc/grafana": { "client_id": "zzz", "client_secret": "www" }
 }
 ```
 
-The handler just processes the request and returns the payload. It doesn't know or care about who requested it, callback routing, or handle management - that's orchestration's job.
+The handler:
+- Receives all active needs for this capability
+- Sees existing responses (if `cacheResponse` is set) - can reuse or regenerate
+- Returns responses for all needs
+- Can perform cleanup (entries missing from input = needs that went away)
 
-### Capability Dispatch
+The handler doesn't know or care about callback routing - that's orchestration's job.
 
-When agent receives a fulfillment request:
+### Handler Contract (Synchronous Mode)
 
-1. Validates signature and authorization
-2. Invokes capability handler
-3. Generates handle (e.g., `sha256(origin + need + request + response)`)
-4. Records `{handle → {origin, need, artifact}}` in provider state
-5. Sends callback to `POST /agent/needs/<need-path>` on origin host (fire-and-forget)
-6. Returns HTTP 202 to original request (informational only)
+Synchronous handlers receive a single request and return a single response:
 
-### Provider-Initiated Rotation
+**Input** (stdin):
+```json
+{ "unit": "nginx", "lines": 50 }
+```
 
-When a provider needs to rotate credentials (cert renewal, key rotation, etc.):
+**Output** (stdout):
+```json
+{ "logs": "..." }
+```
 
-1. Provider's internal logic determines rotation is needed (e.g., ACME cron)
-2. Provider looks up affected handles and their origin hosts/needs
-3. Provider sends callback with new payload (push model)
+No state, no callbacks - just request-response.
 
-Nags are a **resiliency mechanism**, not the primary rotation trigger. We optimize for true rotation (provider pushes new credentials) and use revocation (empty callback) only when truly necessary.
+### Provider Orchestration
 
-The orchestration layer (not the handler) is responsible for:
-- Tracking which origins/needs have been fulfilled
-- Initiating callbacks when rotation is needed
-- Reconstructing this state at boot from persistent storage
+The orchestration layer manages the lifecycle around handlers:
+
+**On new request:**
+1. Validate signature and authorization
+2. Add request to provider state
+3. Invoke handler with all requests for this capability
+4. Update state with responses
+5. Send callbacks to all origins with their responses (fire-and-forget)
+6. Return HTTP 202 to original request
+
+**On boot** (if `initialize = true`):
+1. Load provider state from disk
+2. Invoke handler with all known requests
+3. Send callbacks to all origins
+
+**On systemd trigger** (if `after` specified):
+1. Invoke handler with all known requests
+2. Compare responses to cached values
+3. Send callbacks only where response changed
+
+**Provider state** (`/var/lib/fort/provider-state.json`):
+```json
+{
+  "oidc": {
+    "joker:oidc/outline": {
+      "request": { "client_name": "outline", ... },
+      "response": { "client_id": "xxx", "client_secret": "yyy" },
+      "updated_at": 1704672005
+    }
+  },
+  "proxy": {
+    "joker:proxy/outline": {
+      "request": { "vhost": "outline.example.com", ... },
+      "updated_at": 1704672005
+    }
+  }
+}
+```
+
+Responses are persisted only if `cacheResponse` is set. The `cacheResponse` TTL determines how long to reuse a cached response before regenerating.
+
+### Rotation and Reconciliation
+
+Nags are a **resiliency mechanism**, not the primary trigger. Rotation happens via:
+
+1. **Systemd triggers** (`after`): ACME renews → handler re-runs → changed certs sent to consumers
+2. **Periodic reconciliation**: Timer invokes handler, diffs against cached responses, pushes changes
+3. **Request-driven**: New request triggers full reconcile, may update other consumers
+
+Handlers are responsible for their own diff logic - the orchestrator just passes all state and dispatches whatever comes back.
 
 ---
 
@@ -284,54 +363,28 @@ Response:
 
 ## Reconciliation and GC
 
-### Provider State
-
-Each provider maintains:
-```json
-{
-  "handles": {
-    "h_<sha256>": {
-      "origin": "joker",
-      "need": "oidc/outline",
-      "created_at": 1704672005,
-      "artifact": { /* provider-specific: client ID, cert serial, etc. */ }
-    }
-  }
-}
-```
-
-The capability is derived from the need (`oidc/outline` → `oidc`). Handle could be `sha256(origin + need + request + response)` or similar - just needs to be stable for the same fulfillment and change when the artifact changes.
-
 ### GC Sweep
 
 Provider periodically:
 
-1. Groups handles by origin host
-2. For each origin host, queries `POST /agent/needs`
-3. For handles where `need` is not in the response:
-   - If host responded: need is gone, clean up artifact
+1. For each origin in provider state, query `POST /agent/needs`
+2. For entries where `need` is not in the response:
+   - If host responded: remove from provider state
    - If host unreachable: skip (don't delete on network failure)
+3. Invoke handler with updated state (now excludes removed entries)
+4. Handler cleans up artifacts for missing entries
 
 **Positive absence**: Only delete when we get a positive response that doesn't include the need. Network failures are not evidence of abandonment.
 
 ### Host Decommissioning
 
-When a host is removed from the cluster, it's a build-time change that triggers a deploy. GC sweep will see the host is no longer in the build-time host list and clean up handles for that origin.
+When a host is removed from the cluster, it's a build-time change that triggers a deploy. GC sweep will see the host is no longer in the build-time host list and clean up entries for that origin.
 
 ---
 
 ## Open Questions
 
-### 1. Handle Generation
-
-Who generates handles and how?
-
-- **Handler generates**: Handler knows its artifacts, can create meaningful IDs
-- **Orchestrator generates**: Hash of (origin, need, request, response), handler stays simple
-
-Leaning toward orchestrator generates, keeps handlers focused on business logic.
-
-### 2. GC-Only Needs (Proxy Vhosts)
+### 1. GC-Only Needs (Proxy Vhosts)
 
 For needs where the consumer doesn't receive/use a credential (just triggers a side effect on provider):
 
@@ -358,4 +411,4 @@ The need existing in `/agent/needs` is what keeps the proxy vhost alive. Provide
 |-----------|-------|----------|
 | Consumer: declared needs | `/etc/fort/needs.json` | Build-time, read-only |
 | Consumer: fulfillment state | `/var/lib/fort/fulfillment-state.json` | `{need_id → {satisfied, last_sought}}` |
-| Provider: handle mappings | `/var/lib/fort/provider-state.json` | `{handle → {origin, need, artifact}}` |
+| Provider: capability state | `/var/lib/fort/provider-state.json` | `{capability → {origin:need → {request, response?, updated_at}}}` |
