@@ -49,14 +49,13 @@ fort.host.needs.oidc.outline = {
   # ... need declaration ...
   handler = pkgs.writeShellScript "oidc-outline-callback" ''
     # Receives payload on stdin (format depends on capability - could be JSON, could be binary)
-    # Should:
-    # 1. Store/apply the credential
-    # 2. Reload/restart dependent services if needed
-    # 3. Exit 0 on success
+    # Exit 0 if the credential was successfully received/stored
+    # Exit non-zero only if the credential itself is bad or couldn't be stored
+    # (downstream failures like service restart don't affect exit code)
 
     payload=$(cat)
     echo "$payload" | jq -r '.client_secret' > /var/lib/outline/oidc-secret
-    systemctl reload outline
+    systemctl reload outline || true  # Credential is fine even if reload fails
   '';
 };
 ```
@@ -140,25 +139,27 @@ Providers declare capabilities in their Nix module:
 ```nix
 fort.host.capabilities.oidc = {
   handler = ./handlers/oidc-reconcile.sh;
-  initialize = true;  # Run on boot
+  triggers.initialize = true;
 };
 
 fort.host.capabilities.git = {
   handler = ./handlers/git-reconcile.sh;
-  cacheResponse = "30d";  # Persist responses, reuse for this duration
-  initialize = true;
+  cacheResponse = true;
+  triggers.initialize = true;
 };
 
 fort.host.capabilities.ssl = {
   handler = ./handlers/ssl-reconcile.sh;
-  initialize = true;
-  after = [ "acme.service" ];  # Re-run when ACME renews
+  triggers = {
+    initialize = true;
+    systemd = [ "acme.service" ];  # Re-run when ACME renews
+  };
 };
 
 fort.host.capabilities.journal = {
   handler = ./handlers/journal.sh;
   allowed = [ "dev-sandbox" ];
-  synchronous = true;  # Direct request-response, no orchestration
+  mode = "rpc";  # Direct request-response, no orchestration
 };
 ```
 
@@ -170,18 +171,18 @@ The capability name (`oidc`) corresponds directly to the need type. Exposed at `
 |--------|------|---------|-------------|
 | `handler` | path | required | Script to invoke |
 | `allowed` | list | `[]` | Additional callers beyond needers |
-| `synchronous` | bool | `false` | Direct request-response, no orchestration |
-| `cacheResponse` | duration | `null` | Persist responses for reuse (e.g., `"30d"`) |
-| `initialize` | bool | `false` | Run on boot with all known state |
-| `after` | list | `[]` | Systemd units that trigger re-run |
+| `mode` | `"rpc"` | (async) | RPC = direct request-response, no orchestration |
+| `cacheResponse` | bool | `false` | Persist responses for handler to reuse |
+| `triggers.initialize` | bool | `false` | Run on boot with all known state |
+| `triggers.systemd` | list | `[]` | Systemd units that trigger re-run |
 
 **Access control**: Permitted callers = `allowed` list ++ hosts that declare `fort.host.needs.<capability>.*`.
 
-**Synchronous capabilities**: When `synchronous = true`, the agent invokes the handler and returns its output directly. No callbacks, no state, no GC - just request-response. Used for operational endpoints like `journal`, `restart`, `status`.
+**RPC mode**: When `mode = "rpc"`, the agent invokes the handler and returns its output directly. No callbacks, no state, no GC - just request-response. Used for operational endpoints like `journal`, `restart`, `status`.
 
-### Handler Contract (Aggregate Mode)
+### Handler Contract
 
-By default, capabilities run in aggregate mode. Handlers receive **all active requests** (with cached responses if available) and return **all responses**:
+Handlers receive **all active requests** (with cached responses if available) and return **all responses**:
 
 **Input** (stdin):
 ```json
@@ -213,9 +214,9 @@ The handler:
 
 The handler doesn't know or care about callback routing - that's orchestration's job.
 
-### Handler Contract (Synchronous Mode)
+### Handler Contract (RPC Mode)
 
-Synchronous handlers receive a single request and return a single response:
+RPC handlers receive a single request and return a single response:
 
 **Input** (stdin):
 ```json
@@ -241,12 +242,12 @@ The orchestration layer manages the lifecycle around handlers:
 5. Send callbacks to all origins with their responses (fire-and-forget)
 6. Return HTTP 202 to original request
 
-**On boot** (if `initialize = true`):
+**On boot** (if `triggers.initialize = true`):
 1. Load provider state from disk
 2. Invoke handler with all known requests
 3. Send callbacks to all origins
 
-**On systemd trigger** (if `after` specified):
+**On systemd trigger** (if `triggers.systemd` specified):
 1. Invoke handler with all known requests
 2. Compare responses to cached values
 3. Send callbacks only where response changed
@@ -270,15 +271,15 @@ The orchestration layer manages the lifecycle around handlers:
 }
 ```
 
-Responses are persisted only if `cacheResponse` is set. The `cacheResponse` TTL determines how long to reuse a cached response before regenerating.
+Responses are persisted only if `cacheResponse = true`. The handler decides whether to reuse cached responses or regenerate.
 
 ### Rotation and Reconciliation
 
 Nags are a **resiliency mechanism**, not the primary trigger. Rotation happens via:
 
-1. **Systemd triggers** (`after`): ACME renews → handler re-runs → changed certs sent to consumers
-2. **Periodic reconciliation**: Timer invokes handler, diffs against cached responses, pushes changes
-3. **Request-driven**: New request triggers full reconcile, may update other consumers
+1. **Systemd triggers** (`triggers.systemd`): ACME renews → handler re-runs → changed certs sent to consumers
+2. **GC sweep**: Periodic GC invokes handler with current state, which also serves as reconciliation
+3. **Request-driven**: New request triggers full handler invocation, may update other consumers
 
 Handlers are responsible for their own diff logic - the orchestrator just passes all state and dispatches whatever comes back.
 
@@ -380,11 +381,7 @@ Provider periodically:
 
 When a host is removed from the cluster, it's a build-time change that triggers a deploy. GC sweep will see the host is no longer in the build-time host list and clean up entries for that origin.
 
----
-
-## Open Questions
-
-### 1. GC-Only Needs (Proxy Vhosts)
+### Side-Effect-Only Needs
 
 For needs where the consumer doesn't receive/use a credential (just triggers a side effect on provider):
 
