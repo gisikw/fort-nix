@@ -54,8 +54,9 @@ rec {
           chmod 2775 /home/dev/Projects/exocortex
 
           # Allow silverbullet to traverse parent directories (execute only, no read)
-          setfacl -m u:silverbullet:x /home/dev
-          setfacl -m u:silverbullet:x /home/dev/Projects
+          # Must also set mask to allow execute, otherwise effective perms are ---
+          setfacl -m u:silverbullet:x,m::x /home/dev
+          setfacl -m u:silverbullet:x,m::x /home/dev/Projects
 
           # Set default ACLs - new files inherit group write permission
           setfacl -R -d -m g:silverbullet:rwX /home/dev/Projects/exocortex
