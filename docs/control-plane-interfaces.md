@@ -145,7 +145,7 @@ fort.host.capabilities.oidc = {
 fort.host.capabilities.journal = {
   handler = ./handlers/journal.sh;
   allowed = [ "dev-sandbox" ];  # Additional callers beyond needers
-  immediate = true;             # Synchronous RPC, no orchestration
+  synchronous = true;           # Direct request-response, no orchestration
 };
 ```
 
@@ -153,17 +153,18 @@ The capability name (`oidc`) corresponds directly to the need type. Exposed at `
 
 **Access control**: Permitted callers = `allowed` list ++ hosts that declare `fort.host.needs.<capability>.*`. The `allowed` field adds extra callers (e.g., principals like `dev-sandbox`) beyond the implicit needer set.
 
-**Immediate capabilities**: When `immediate = true`, the agent invokes the handler and returns its output directly. No callbacks, no handles, no GC - just synchronous request-response. Used for operational endpoints like `journal`, `restart`, `status`.
+**Synchronous capabilities**: When `synchronous = true`, the agent invokes the handler and returns its output directly. No callbacks, no handles, no GC - just request-response. Used for operational endpoints like `journal`, `restart`, `status`.
 
 ### Handler Contract
 
-Handlers receive request details and must produce a response:
+Handlers receive the request payload on stdin and produce a response on stdout:
 
-**Input** (environment variables + stdin):
-```bash
-FORT_ORIGIN="joker"              # Requesting host
-FORT_NEED="oidc/outline"         # Need path (for callback routing)
-# stdin contains the request payload JSON
+**Input** (stdin):
+```json
+{
+  "client_name": "outline",
+  "redirect_uris": ["https://outline.example.com/auth/callback"]
+}
 ```
 
 **Output** (stdout):
@@ -174,11 +175,7 @@ FORT_NEED="oidc/outline"         # Need path (for callback routing)
 }
 ```
 
-The handler just returns the payload to deliver. It doesn't manage handles - the provider orchestrator handles that.
-
-The handler is responsible for:
-1. Processing the request (creating OIDC client, generating cert, etc.)
-2. Returning the payload to send to the consumer
+The handler just processes the request and returns the payload. It doesn't know or care about who requested it, callback routing, or handle management - that's orchestration's job.
 
 ### Capability Dispatch
 
@@ -343,15 +340,15 @@ fort.host.needs.proxy.outline = {
   from = "raishan";
   request = { vhost = "outline.example.com"; upstream = "joker:3000"; };
   nag = "1h";
-  # No handler - callback payload is interpreted as exit code
+  # No handler - callback payload is interpreted as status (OK or empty)
 };
 ```
 
-When no handler is specified, the callback payload is interpreted as an exit code:
-- `0` (or empty): satisfied, stop nagging
-- `1`: unsatisfied, will nag after interval
+When no handler is specified, the callback payload is interpreted as a status:
+- `OK`: satisfied, stop nagging
+- empty: unsatisfied/revoked, will nag after interval
 
-The need existing in `/agent/needs` is what keeps the proxy vhost alive. Provider can "revoke" by sending `1`, triggering re-request.
+The need existing in `/agent/needs` is what keeps the proxy vhost alive. Provider can "revoke" by sending empty payload, triggering re-request.
 
 ---
 
