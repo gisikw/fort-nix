@@ -6,11 +6,18 @@ Audit of current state vs. `docs/control-plane-interfaces.md` spec, with impleme
 
 ### Working Infrastructure
 
-**Agent Core (RPC mode):**
-- FastCGI wrapper (`pkgs/fort-agent-wrapper/`) - Go, handles auth + RBAC + dispatch
-- Client script (`pkgs/fort-agent-call/`) - bash, SSH signing + request
-- Nix module (`common/fort-agent.nix`) - `fort.host.needs`, `fort.host.capabilities`
-- nginx integration - `/agent/*` location with VPN-only access
+**Control Plane Core (RPC mode):**
+- `fort-provider` (`pkgs/fort-provider/`) - Go FastCGI, handles auth + RBAC + dispatch
+- `fort` (`pkgs/fort/`) - CLI for signed requests
+- Nix module (`common/fort.nix` or rename from `fort-agent.nix`)
+- nginx integration - `/fort/*` location with VPN-only access
+
+**Naming Convention:**
+- `/fort/*` - path prefix for all control plane endpoints
+- `fort` - CLI client (`fort <host> <capability> [request]`, request defaults to `{}`)
+- `fort-consumer` - consumer-side service (requests needs, receives callbacks)
+- `fort-provider` - provider-side FastCGI dispatch
+- `fort-provider-*` - provider-side services (rotation, GC, etc.)
 
 **RPC Capabilities (callable, all working):**
 | Capability | Host | Description |
@@ -20,7 +27,7 @@ Audit of current state vs. `docs/control-plane-interfaces.md` spec, with impleme
 | needs | all | Return list of declared needs (for GC) - **to be added** |
 | journal | all | Fetch journalctl output (debug, restricted) |
 | restart | all | Restart systemd unit (debug, restricted) |
-| deploy | gitops hosts | Trigger manual deployment confirmation |
+| deploy | all | Trigger manual deployment confirmation (some hosts auto-deploy) |
 | git-token | forgejo | Generate Forgejo deploy tokens |
 | ssl-cert | certificate-broker | Return ACME certs (defined but unused) |
 
@@ -50,20 +57,17 @@ Note: `service-registry` does a lot:
 - Generates nginx configs for public services on beacon
 - Creates/deletes OIDC clients in pocket-id based on exposed services
 
-**Fulfillment Service:**
-- `fort-fulfill.service` runs at activation
-- `fort-fulfill-retry` timer (5m interval)
-- Stores responses at `store` path
-- Transforms via optional `transform` script
-- Restarts/reloads specified services
-- Supports identity override for principal auth
+**Consumer Service (current: `fort-fulfill`, target: `fort-consumer`):**
+- Runs at activation + retry timer (5m interval)
+- Current impl: stores responses at `store` path, transforms, restarts services
+- Target impl: invokes need handler with callback payload
 
 ### What's NOT Implemented
 
 **Consumer Side:**
 1. Callback handlers - spec calls for `handler` script invoked on callback, current impl uses `store` + `restart`
-2. Callback endpoints - no `/agent/needs/<type>/<id>` route
-3. Needs enumeration - no `POST /agent/needs` endpoint
+2. Callback endpoints - no `/fort/needs/<type>/<id>` route
+3. Needs enumeration - no `POST /fort/needs` endpoint
 4. Nag-based retry - current impl just retries on timer, doesn't track `satisfied` state
 5. Fulfillment state file - no `/var/lib/fort/fulfillment-state.json`
 
@@ -128,7 +132,7 @@ Note: `service-registry` does a lot:
    - Inferred from absence of `mode = "rpc"`
    - All async capabilities need GC, RPC capabilities don't
 
-5. **`/agent/holdings` superseded by `/agent/needs`**
+5. **`/fort/holdings` superseded by `/fort/needs`**
    - GC uses needs enumeration, not holdings
    - Remove holdings from mandatory endpoints
 
@@ -138,22 +142,22 @@ Note: `service-registry` does a lot:
 
 Add callback support to receive provider-initiated updates.
 
-**1.1 Add callback endpoint to agent wrapper**
-- Route: `POST /agent/needs/<type>/<id>`
+**1.1 Add callback endpoint to fort-provider**
+- Route: `POST /fort/needs/<type>/<id>`
 - Auth: verify caller matches declared `from` provider
-- Dispatch: invoke callback handler with payload on stdin
-- Update: set `satisfied = true` in fulfillment state
+- Dispatch: invoke need handler with payload on stdin
+- Update: set `satisfied = true` in consumer state
 
 **1.2 Add needs enumeration endpoint**
-- Route: `POST /agent/needs`
+- Route: `POST /fort/needs`
 - Response: `{"needs": ["type/id", ...]}`
 - Source: build-time generated list (same source as needs.json, but static)
 - No runtime file dependency - just a static response compiled into config
 
-**1.3 Add fulfillment state tracking**
-- File: `/var/lib/fort/fulfillment-state.json`
+**1.3 Add consumer state tracking**
+- File: `/var/lib/fort/consumer-state.json`
 - Schema: `{need_id → {satisfied: bool, last_sought: timestamp}}`
-- Update fort-fulfill to:
+- Update fort-consumer to:
   - Check `satisfied` before requesting
   - Track `last_sought` timestamp
   - Implement nag-based retry (only request if unsatisfied AND past nag interval)
@@ -170,7 +174,7 @@ Add callback support to receive provider-initiated updates.
 - Handlers: `/etc/fort/handlers/`
 - Static config: `/etc/fort/needs-list.json`, `/etc/fort/rbac.json`, etc.
 
-Files: `common/fort-agent.nix`, `pkgs/fort-agent-wrapper/main.go`
+Files: `common/fort.nix`, `pkgs/fort-provider/`
 
 ### Phase 2: Provider Orchestration
 
@@ -207,30 +211,26 @@ Add async capability mode with aggregate handlers.
 - For each `triggers.systemd` unit, create path/timer watcher
 - On trigger: re-invoke handler, diff responses, callback changes
 
-Files: `common/fort-agent.nix`, `pkgs/fort-agent-wrapper/main.go` (or new orchestrator service)
+Files: `common/fort.nix`, `pkgs/fort-provider/`, new `fort-provider-*` services
 
 ### Phase 3: GC Implementation
 
 Implement garbage collection for orphaned state.
 
-**3.1 Add GC sweep timer**
+**3.1 Add GC sweep timer (`fort-provider-gc`)**
 - Periodic service (e.g., 1h interval)
-- For each capability with `needsGC`:
+- For each async capability:
   - For each origin in provider state
-  - Call `POST /agent/needs` on origin
+  - Call `POST /fort/needs` on origin
   - If need not in response (and host reachable): remove from state
   - Invoke handler with updated state (for cleanup)
 
-**3.2 Add holdings advertisement**
-- Update consumer to advertise handles in `/agent/holdings`
-- Current implementation exists but may need updates
-
-**3.3 Add positive-absence rules**
+**3.2 Positive-absence rules**
 - Only delete on 200 + absence
 - Network failures = assume still in use
 - Host removed from cluster = immediate cleanup
 
-Files: `common/fort-agent.nix`, new GC service script
+Files: `common/fort.nix`, `fort-provider-gc` service
 
 ### Phase 4: Migration
 
