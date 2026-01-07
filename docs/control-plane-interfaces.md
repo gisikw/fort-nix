@@ -5,10 +5,10 @@ This document defines the interfaces for the fort-nix control plane. It focuses 
 ## Design Principles
 
 1. **Fire-and-forget communication** - Neither consumer nor provider tracks delivery acknowledgment
-2. **Nag-based reliability** - Consumers periodically re-request unfulfilled needs; eventual consistency within nag interval
+2. **Nag-based reliability** - Consumers periodically re-request unsatisfied needs; eventual consistency within nag interval
 3. **Single code path** - Initial fulfillment and rotation use the same callback mechanism
 4. **Build-time knowledge** - Provider locations and capability types are known at build time
-5. **Handles for GC only** - Handles exist to enable garbage collection, not for consumer-side lifecycle
+5. **Consumer advertises needs, not handles** - Provider tracks handles internally for GC
 
 ---
 
@@ -21,11 +21,11 @@ Apps declare needs in their Nix module:
 ```nix
 fort.needs.oidc.outline = {
   from = "drhorrible";
+  capability = "oidc.register";
   request = {
     client_name = "outline";
     redirect_uris = [ "https://outline.example.com/auth/callback" ];
   };
-  callback = "outline-oidc-updated";
   nag = "15m";
 };
 ```
@@ -33,20 +33,21 @@ fort.needs.oidc.outline = {
 | Field | Type | Description |
 |-------|------|-------------|
 | `from` | hostname | Provider host that serves this capability |
+| `capability` | string | Capability name as `<namespace>.<action>` |
 | `request` | attrset | Capability-specific request payload |
-| `callback` | string | Handler name on this host to receive fulfillment |
-| `nag` | duration | Re-request if not fulfilled within this interval |
+| `nag` | duration | Period of acceptable absence - re-request if unsatisfied for this long |
 
-The need is identified by `<type>.<name>` (e.g., `oidc.outline`). This forms a stable need ID.
+The need is identified by `<type>.<name>` (e.g., `oidc.outline`). The callback endpoint is derived from this: `/agent/needs/oidc/outline`.
 
 ### Declaring a Callback Handler
 
 The callback handler is invoked when the provider fulfills the need:
 
 ```nix
-fort.callbacks.outline-oidc-updated = {
-  handler = pkgs.writeShellScript "outline-oidc-updated" ''
-    # Receives JSON on stdin: { handle, client_id, client_secret, ... }
+fort.needs.oidc.outline = {
+  # ... need declaration ...
+  handler = pkgs.writeShellScript "oidc-outline-callback" ''
+    # Receives payload on stdin (format depends on capability - could be JSON, could be binary)
     # Should:
     # 1. Store/apply the credential
     # 2. Reload/restart dependent services if needed
@@ -67,23 +68,21 @@ At build time, all `fort.needs.*` declarations across enabled apps/aspects are c
 
 ```json
 {
-  "oidc.outline": {
+  "oidc/outline": {
     "from": "drhorrible",
-    "capability": "oidc-register",
+    "capability": "oidc/register",
     "request": {
       "client_name": "outline",
       "redirect_uris": ["https://outline.example.com/auth/callback"]
     },
-    "callback": "outline-oidc-updated",
     "nag_seconds": 900
   },
-  "ssl.outline": {
+  "ssl/outline": {
     "from": "drhorrible",
-    "capability": "ssl-cert",
+    "capability": "ssl/cert",
     "request": {
       "domain": "outline.example.com"
     },
-    "callback": "outline-ssl-updated",
     "nag_seconds": 3600
   }
 }
@@ -94,35 +93,38 @@ At build time, all `fort.needs.*` declarations across enabled apps/aspects are c
 `fort-fulfill.service` runs on a timer and:
 
 1. Reads `/etc/fort/needs.json`
-2. Reads `/var/lib/fort/fulfillment-state.json` (tracks `{need_id → last_fulfilled_at}`)
-3. For each need where `now - last_fulfilled_at > nag_seconds`:
+2. Reads `/var/lib/fort/fulfillment-state.json` (tracks `{need_id → {satisfied, last_sought}}`)
+3. For each need where `!satisfied && (now - last_sought) > nag_seconds`:
+   - Updates `last_sought` to now
    - Sends request to provider (fire-and-forget)
-4. Logs results but doesn't update state (callback updates state)
+4. Logs results but doesn't update `satisfied` (callback updates that)
 
 ### Callback Invocation
 
 When the provider calls back:
 
-1. Agent receives `POST /agent/<callback-name>` with payload
+1. Agent receives `POST /agent/needs/<type>/<name>` with payload
 2. Agent invokes the callback handler script with payload on stdin
-3. If handler exits 0, agent updates `last_fulfilled_at` for the corresponding need
-4. If handler exits non-zero, state is not updated (nag will retry)
+3. If handler exits 0, agent sets `satisfied = true` for that need
+4. If handler exits non-zero, `satisfied` remains false (nag will retry)
 
-### Holdings
+A null/empty callback (revocation) sets `satisfied = false`, triggering re-request after nag interval.
 
-`/agent/holdings` returns all handles this host currently holds:
+### Needs Enumeration
+
+`POST /agent/needs` returns all active need paths this host is listening for:
 
 ```json
 {
-  "handles": [
-    { "handle": "h_abc123", "provider": "drhorrible", "capability": "oidc-register" },
-    { "handle": "h_def456", "provider": "drhorrible", "capability": "ssl-cert" },
-    { "handle": "h_ghi789", "provider": "raishan", "capability": "proxy-config" }
+  "needs": [
+    "oidc/outline",
+    "ssl/outline",
+    "proxy/outline"
   ]
 }
 ```
 
-Holdings are derived from fulfillment state - each fulfilled need has an associated handle.
+This is deterministic from the Nix config - it's just the keys of `/etc/fort/needs.json`. Providers use this for GC (see Reconciliation).
 
 ---
 
@@ -133,11 +135,13 @@ Holdings are derived from fulfillment state - each fulfilled need has an associa
 Providers declare capabilities in their Nix module:
 
 ```nix
-fort.capabilities.oidc-register = {
+fort.capabilities.oidc.register = {
   handler = ./handlers/oidc-register.sh;
   # Access control is derived from cluster topology
 };
 ```
+
+Capabilities are namespaced as `<namespace>.<action>`, exposed at `/agent/capabilities/<namespace>/<action>`.
 
 ### Handler Contract
 
@@ -145,31 +149,24 @@ Handlers receive request details and must produce a response:
 
 **Input** (environment variables + stdin):
 ```bash
-FORT_ORIGIN="joker"           # Requesting host
-FORT_CALLBACK="outline-oidc-updated"  # Callback handler name
+FORT_ORIGIN="joker"              # Requesting host
+FORT_NEED="oidc/outline"         # Need path (for callback routing)
 # stdin contains the request payload JSON
 ```
 
-**Output** (stdout, JSON):
+**Output** (stdout):
 ```json
 {
-  "handle": "h_abc123",
-  "payload": {
-    "client_id": "outline-client-id",
-    "client_secret": "secret-value"
-  }
+  "client_id": "outline-client-id",
+  "client_secret": "secret-value"
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `handle` | Stable identifier for this fulfillment (for GC) |
-| `payload` | Data to send to the consumer's callback |
+The handler just returns the payload to deliver. It doesn't manage handles - the provider orchestrator handles that.
 
 The handler is responsible for:
 1. Processing the request (creating OIDC client, generating cert, etc.)
-2. Generating/retrieving a stable handle for this consumer+need combination
-3. Returning the payload to send to the consumer
+2. Returning the payload to send to the consumer
 
 ### Capability Dispatch
 
@@ -177,21 +174,25 @@ When agent receives a fulfillment request:
 
 1. Validates signature and authorization
 2. Invokes capability handler
-3. Records `{handle → origin_host}` mapping in provider state
-4. Sends callback to origin host (fire-and-forget)
-5. Returns HTTP 202 to original request (informational only)
+3. Generates handle (e.g., `sha256(origin + need + request + response)`)
+4. Records `{handle → {origin, need, artifact}}` in provider state
+5. Sends callback to `POST /agent/needs/<need-path>` on origin host (fire-and-forget)
+6. Returns HTTP 202 to original request (informational only)
 
 ### Provider-Initiated Rotation
 
+*This section is intentionally sparse - rotation flow needs more design work.*
+
 When a provider needs to rotate credentials (cert renewal, key rotation, etc.):
 
-1. Provider's internal logic determines rotation is needed
-2. For each affected handle, provider:
-   - Generates new credentials
-   - Looks up origin host and callback name from handle mapping
-   - Sends callback with same handle, new payload
+1. Provider's internal logic determines rotation is needed (e.g., ACME cron)
+2. Provider looks up affected handles and their origin hosts
+3. Provider... sends new callbacks? Invalidates and waits for re-request?
 
-The consumer's callback handler runs, applying the new credentials. Same code path as initial fulfillment.
+**Open question**: This doesn't fit cleanly into unidirectional fire-and-forget. Options:
+- Provider sends callback with new payload (push)
+- Provider sends null callback to mark unsatisfied, consumer nags for new value (pull)
+- Provider has internal "pending rotation" state, next request gets new value
 
 ---
 
@@ -202,7 +203,7 @@ The consumer's callback handler runs, applying the new credentials. Same code pa
 Consumer → Provider:
 
 ```
-POST /agent/oidc-register HTTP/1.1
+POST /agent/capabilities/oidc/register HTTP/1.1
 Host: drhorrible.fort.example.com
 X-Fort-Origin: joker
 X-Fort-Timestamp: 1704672000
@@ -210,7 +211,7 @@ X-Fort-Signature: <ssh-signature>
 Content-Type: application/json
 
 {
-  "callback": "outline-oidc-updated",
+  "need": "oidc/outline",
   "request": {
     "client_name": "outline",
     "redirect_uris": ["https://outline.example.com/auth/callback"]
@@ -228,7 +229,7 @@ HTTP/1.1 202 Accepted
 Provider → Consumer:
 
 ```
-POST /agent/outline-oidc-updated HTTP/1.1
+POST /agent/needs/oidc/outline HTTP/1.1
 Host: joker.fort.example.com
 X-Fort-Origin: drhorrible
 X-Fort-Timestamp: 1704672005
@@ -236,23 +237,24 @@ X-Fort-Signature: <ssh-signature>
 Content-Type: application/json
 
 {
-  "handle": "h_abc123",
   "client_id": "outline-client-id",
   "client_secret": "secret-value"
 }
 ```
+
+Payload is passed directly to handler stdin. Could be JSON, could be binary (e.g., cert PEM).
 
 Response (informational, provider ignores):
 ```
 HTTP/1.1 200 OK
 ```
 
-### Holdings Query
+### Needs Enumeration
 
 Requester → Host:
 
 ```
-POST /agent/holdings HTTP/1.1
+POST /agent/needs HTTP/1.1
 ...
 
 {}
@@ -261,9 +263,10 @@ POST /agent/holdings HTTP/1.1
 Response:
 ```json
 {
-  "handles": [
-    { "handle": "h_abc123", "provider": "drhorrible", "capability": "oidc-register" },
-    ...
+  "needs": [
+    "oidc/outline",
+    "ssl/outline",
+    "proxy/outline"
   ]
 }
 ```
@@ -278,10 +281,10 @@ Each provider maintains:
 ```json
 {
   "handles": {
-    "h_abc123": {
+    "h_<sha256>": {
       "origin": "joker",
-      "capability": "oidc-register",
-      "callback": "outline-oidc-updated",
+      "need": "oidc/outline",
+      "capability": "oidc/register",
       "created_at": 1704672005,
       "artifact": { /* provider-specific: client ID, cert serial, etc. */ }
     }
@@ -289,23 +292,25 @@ Each provider maintains:
 }
 ```
 
+Handle could be `sha256(origin + need + request + response)` or similar - just needs to be stable for the same fulfillment and change when the artifact changes.
+
 ### GC Sweep
 
 Provider periodically:
 
 1. Groups handles by origin host
-2. For each origin host, queries `/agent/holdings`
-3. For handles not present in holdings response:
-   - If host responded: handle is orphaned, clean up artifact
+2. For each origin host, queries `POST /agent/needs`
+3. For handles where `need` is not in the response:
+   - If host responded: need is gone, clean up artifact
    - If host unreachable: skip (don't delete on network failure)
 
-**Positive absence**: Only delete when we get a positive response that doesn't include the handle. Network failures are not evidence of abandonment.
+**Positive absence**: Only delete when we get a positive response that doesn't include the need. Network failures are not evidence of abandonment.
 
 ### Consumer Decommissioning
 
 When a host is removed from the cluster:
 
-1. Host stops responding to holdings queries
+1. Host stops responding to needs queries
 2. Provider's GC sweep sees "host unreachable"
 3. After N consecutive failures (configurable), provider assumes host is gone
 4. Provider cleans up all handles for that origin
@@ -314,56 +319,48 @@ When a host is removed from the cluster:
 
 ## Open Questions
 
-### 1. Handle Stability Across Rotations
+### 1. Provider-Initiated Rotation
 
-Should rotation reuse the same handle or issue a new one?
+How does a provider push new credentials when it decides to rotate (e.g., ACME renewal)?
 
-- **Same handle**: Simpler consumer state, but provider must track handle→artifact mapping that changes
-- **New handle**: Consumer holdings change on rotation, provider can use handle as artifact ID
+Options:
+- **Push model**: Provider sends callback with new payload. Consumer handler is idempotent, applies new value.
+- **Invalidate model**: Provider sends null/empty callback, consumer marks unsatisfied, nags for new value.
+- **Lazy model**: Provider updates internal state, next nag request gets new value.
 
-Leaning toward: **same handle**. The handle identifies the consumer-provider relationship, not the specific credential version.
+Push is most responsive but adds provider→consumer call initiation. Invalidate reuses existing machinery but adds latency (up to nag interval). Lazy only works if consumers nag periodically even when satisfied (wasteful).
 
-### 2. Callback Registration
+**Leaning toward**: Push for rotation, with invalidate as fallback for revocation.
 
-Current design assumes callback name is passed with each request. Alternative: callbacks are registered separately, and requests just reference needs.
+### 2. Handle Generation
 
-Pro of current: Self-contained requests, no registration state
-Con of current: Callback name repeated in every request
+Who generates handles and how?
 
-### 3. Need ID Derivation
+- **Handler generates**: Handler knows its artifacts, can create meaningful IDs
+- **Orchestrator generates**: Hash of (origin, need, request, response), handler stays simple
 
-How is the stable need ID derived?
+Leaning toward orchestrator generates, keeps handlers focused on business logic.
 
-- Option A: Explicit `name` field in declaration (current: `fort.needs.oidc.outline`)
-- Option B: Hash of (type, from, request)
-- Option C: UUID generated at declaration time
-
-Option A seems most ergonomic. Need IDs must be stable across rebuilds for nag logic to work.
-
-### 4. GC-Only Handles (Proxy Vhosts)
+### 3. GC-Only Needs (Proxy Vhosts)
 
 For needs where the consumer doesn't receive/use a credential (just triggers a side effect on provider):
 
 ```nix
 fort.needs.proxy.outline = {
   from = "raishan";
+  capability = "proxy.configure";
   request = { vhost = "outline.example.com"; upstream = "joker:3000"; };
-  callback = "proxy-ack";  # Just records handle, no credential to apply
   nag = "1h";
+  handler = pkgs.writeShellScript "proxy-ack" ''
+    # No-op - just needs to succeed so satisfied=true
+    exit 0
+  '';
 };
 ```
 
-The callback handler just needs to exist and succeed. It stores the handle for holdings but doesn't apply any credential.
+The callback handler is a no-op. The need existing in `/agent/needs` is what keeps the proxy vhost alive.
 
-Should this be a distinct need type, or just a pattern?
-
-### 5. Multi-Provider Needs
-
-Can a single need have multiple providers (failover/load-balance)?
-
-Current design: No. Each need specifies exactly one provider. High availability is the provider's responsibility.
-
-### 6. Nag Interval Guidance
+### 4. Nag Interval Guidance
 
 What's the right nag interval for different need types?
 
@@ -374,11 +371,16 @@ What's the right nag interval for different need types?
 | Git tokens | 30m | Moderate sensitivity |
 | Proxy config | 1h | Side-effect only, less urgent |
 
-### 7. Concurrent Callbacks
+### 5. Revocation Semantics
 
-If provider rotates while consumer's nag request is in flight, consumer might receive two callbacks. Is this a problem?
+When a provider wants to revoke (not rotate) a credential:
 
-Callback handlers must be idempotent, so receiving the same or newer credentials twice should be safe. Last-write-wins semantics.
+1. Provider sends empty/null callback to consumer
+2. Consumer handler receives empty payload - what does it do?
+3. Consumer marks `satisfied = false`
+4. Consumer nags after interval, provider returns... error? New credential? Nothing?
+
+Need to define the "I no longer have this for you" flow.
 
 ---
 
@@ -387,5 +389,5 @@ Callback handlers must be idempotent, so receiving the same or newer credentials
 | Component | State | Location |
 |-----------|-------|----------|
 | Consumer: declared needs | `/etc/fort/needs.json` | Build-time, read-only |
-| Consumer: fulfillment state | `/var/lib/fort/fulfillment-state.json` | `{need_id → {handle, last_fulfilled_at}}` |
-| Provider: handle mappings | `/var/lib/fort/provider-state.json` | `{handle → {origin, callback, artifact}}` |
+| Consumer: fulfillment state | `/var/lib/fort/fulfillment-state.json` | `{need_id → {satisfied, last_sought}}` |
+| Provider: handle mappings | `/var/lib/fort/provider-state.json` | `{handle → {origin, need, capability, artifact}}` |
