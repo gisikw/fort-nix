@@ -370,6 +370,13 @@ The forge (drhorrible) and beacon (raishan) use GitOps but with **manual confirm
 
 Use `just deploy <host>` like any other host - it handles the confirmation automatically. If the agent API isn't responding, ask the user to run the command instead.
 
+## Dev Sandbox Constraints
+
+The dev-sandbox environment has limited local privileges:
+- **No sudo access** - use `fort-agent-call` to restart services or run privileged operations on hosts
+- **No interactive SSH** - construct one-shot commands or use agent calls
+- **Age key for secrets** - can decrypt secrets on `main` branch only
+
 ## Debugging Deployment Failures
 
 **Important**: deploy-rs automatically rolls back on activation failure. If a deploy fails, the host reverts to its previous state - checking service status afterward won't reflect your changes.
