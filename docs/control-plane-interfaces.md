@@ -19,9 +19,8 @@ This document defines the interfaces for the fort-nix control plane. It focuses 
 Apps declare needs in their Nix module:
 
 ```nix
-fort.needs.oidc.outline = {
+fort.host.needs.oidc.outline = {
   from = "drhorrible";
-  capability = "oidc.register";
   request = {
     client_name = "outline";
     redirect_uris = [ "https://outline.example.com/auth/callback" ];
@@ -33,18 +32,20 @@ fort.needs.oidc.outline = {
 | Field | Type | Description |
 |-------|------|-------------|
 | `from` | hostname | Provider host that serves this capability |
-| `capability` | string | Capability name as `<namespace>.<action>` |
 | `request` | attrset | Capability-specific request payload |
 | `nag` | duration | Period of acceptable absence - re-request if unsatisfied for this long |
 
-The need is identified by `<type>.<name>` (e.g., `oidc.outline`). The callback endpoint is derived from this: `/agent/needs/oidc/outline`.
+The need is identified by `<type>.<id>` (e.g., `oidc.outline`):
+- `<type>` maps directly to the capability name on the provider (`/agent/capabilities/oidc`)
+- `<id>` distinguishes multiple needs of the same type on one host
+- The callback endpoint is derived from both: `/agent/needs/oidc/outline`
 
 ### Declaring a Callback Handler
 
 The callback handler is invoked when the provider fulfills the need:
 
 ```nix
-fort.needs.oidc.outline = {
+fort.host.needs.oidc.outline = {
   # ... need declaration ...
   handler = pkgs.writeShellScript "oidc-outline-callback" ''
     # Receives payload on stdin (format depends on capability - could be JSON, could be binary)
@@ -70,7 +71,6 @@ At build time, all `fort.needs.*` declarations across enabled apps/aspects are c
 {
   "oidc/outline": {
     "from": "drhorrible",
-    "capability": "oidc/register",
     "request": {
       "client_name": "outline",
       "redirect_uris": ["https://outline.example.com/auth/callback"]
@@ -79,7 +79,6 @@ At build time, all `fort.needs.*` declarations across enabled apps/aspects are c
   },
   "ssl/outline": {
     "from": "drhorrible",
-    "capability": "ssl/cert",
     "request": {
       "domain": "outline.example.com"
     },
@@ -87,6 +86,8 @@ At build time, all `fort.needs.*` declarations across enabled apps/aspects are c
   }
 }
 ```
+
+The capability is derived from the need type: `oidc/outline` → `/agent/capabilities/oidc`.
 
 ### Fulfill Service (Runtime)
 
@@ -135,13 +136,13 @@ This is deterministic from the Nix config - it's just the keys of `/etc/fort/nee
 Providers declare capabilities in their Nix module:
 
 ```nix
-fort.capabilities.oidc.register = {
-  handler = ./handlers/oidc-register.sh;
+fort.host.capabilities.oidc = {
+  handler = ./handlers/oidc-handler.sh;
   # Access control is derived from cluster topology
 };
 ```
 
-Capabilities are namespaced as `<namespace>.<action>`, exposed at `/agent/capabilities/<namespace>/<action>`.
+The capability name (`oidc`) corresponds directly to the need type. Exposed at `/agent/capabilities/oidc`.
 
 ### Handler Contract
 
@@ -203,7 +204,7 @@ When a provider needs to rotate credentials (cert renewal, key rotation, etc.):
 Consumer → Provider:
 
 ```
-POST /agent/capabilities/oidc/register HTTP/1.1
+POST /agent/capabilities/oidc HTTP/1.1
 Host: drhorrible.fort.example.com
 X-Fort-Origin: joker
 X-Fort-Timestamp: 1704672000
@@ -284,7 +285,6 @@ Each provider maintains:
     "h_<sha256>": {
       "origin": "joker",
       "need": "oidc/outline",
-      "capability": "oidc/register",
       "created_at": 1704672005,
       "artifact": { /* provider-specific: client ID, cert serial, etc. */ }
     }
@@ -292,7 +292,7 @@ Each provider maintains:
 }
 ```
 
-Handle could be `sha256(origin + need + request + response)` or similar - just needs to be stable for the same fulfillment and change when the artifact changes.
+The capability is derived from the need (`oidc/outline` → `oidc`). Handle could be `sha256(origin + need + request + response)` or similar - just needs to be stable for the same fulfillment and change when the artifact changes.
 
 ### GC Sweep
 
@@ -346,9 +346,8 @@ Leaning toward orchestrator generates, keeps handlers focused on business logic.
 For needs where the consumer doesn't receive/use a credential (just triggers a side effect on provider):
 
 ```nix
-fort.needs.proxy.outline = {
+fort.host.needs.proxy.outline = {
   from = "raishan";
-  capability = "proxy.configure";
   request = { vhost = "outline.example.com"; upstream = "joker:3000"; };
   nag = "1h";
   handler = pkgs.writeShellScript "proxy-ack" ''
@@ -390,4 +389,4 @@ Need to define the "I no longer have this for you" flow.
 |-----------|-------|----------|
 | Consumer: declared needs | `/etc/fort/needs.json` | Build-time, read-only |
 | Consumer: fulfillment state | `/var/lib/fort/fulfillment-state.json` | `{need_id → {satisfied, last_sought}}` |
-| Provider: handle mappings | `/var/lib/fort/provider-state.json` | `{handle → {origin, need, capability, artifact}}` |
+| Provider: handle mappings | `/var/lib/fort/provider-state.json` | `{handle → {origin, need, artifact}}` |
