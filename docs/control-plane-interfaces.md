@@ -111,6 +111,8 @@ When the provider calls back:
 
 A null/empty callback (revocation) sets `satisfied = false`, triggering re-request after nag interval.
 
+**Security**: The callback endpoint rejects requests from any origin other than the provider specified in the need declaration.
+
 ### Needs Enumeration
 
 `POST /agent/needs` returns all active need paths this host is listening for:
@@ -138,11 +140,20 @@ Providers declare capabilities in their Nix module:
 ```nix
 fort.host.capabilities.oidc = {
   handler = ./handlers/oidc-handler.sh;
-  # Access control is derived from cluster topology
+};
+
+fort.host.capabilities.journal = {
+  handler = ./handlers/journal.sh;
+  allowed = [ "dev-sandbox" ];  # Additional callers beyond needers
+  immediate = true;             # Synchronous RPC, no orchestration
 };
 ```
 
 The capability name (`oidc`) corresponds directly to the need type. Exposed at `/agent/capabilities/oidc`.
+
+**Access control**: Permitted callers = `allowed` list ++ hosts that declare `fort.host.needs.<capability>.*`. The `allowed` field adds extra callers (e.g., principals like `dev-sandbox`) beyond the implicit needer set.
+
+**Immediate capabilities**: When `immediate = true`, the agent invokes the handler and returns its output directly. No callbacks, no handles, no GC - just synchronous request-response. Used for operational endpoints like `journal`, `restart`, `status`.
 
 ### Handler Contract
 
@@ -182,18 +193,18 @@ When agent receives a fulfillment request:
 
 ### Provider-Initiated Rotation
 
-*This section is intentionally sparse - rotation flow needs more design work.*
-
 When a provider needs to rotate credentials (cert renewal, key rotation, etc.):
 
 1. Provider's internal logic determines rotation is needed (e.g., ACME cron)
-2. Provider looks up affected handles and their origin hosts
-3. Provider... sends new callbacks? Invalidates and waits for re-request?
+2. Provider looks up affected handles and their origin hosts/needs
+3. Provider sends callback with new payload (push model)
 
-**Open question**: This doesn't fit cleanly into unidirectional fire-and-forget. Options:
-- Provider sends callback with new payload (push)
-- Provider sends null callback to mark unsatisfied, consumer nags for new value (pull)
-- Provider has internal "pending rotation" state, next request gets new value
+Nags are a **resiliency mechanism**, not the primary rotation trigger. We optimize for true rotation (provider pushes new credentials) and use revocation (empty callback) only when truly necessary.
+
+The orchestration layer (not the handler) is responsible for:
+- Tracking which origins/needs have been fulfilled
+- Initiating callbacks when rotation is needed
+- Reconstructing this state at boot from persistent storage
 
 ---
 
@@ -306,33 +317,15 @@ Provider periodically:
 
 **Positive absence**: Only delete when we get a positive response that doesn't include the need. Network failures are not evidence of abandonment.
 
-### Consumer Decommissioning
+### Host Decommissioning
 
-When a host is removed from the cluster:
-
-1. Host stops responding to needs queries
-2. Provider's GC sweep sees "host unreachable"
-3. After N consecutive failures (configurable), provider assumes host is gone
-4. Provider cleans up all handles for that origin
+When a host is removed from the cluster, it's a build-time change that triggers a deploy. GC sweep will see the host is no longer in the build-time host list and clean up handles for that origin.
 
 ---
 
 ## Open Questions
 
-### 1. Provider-Initiated Rotation
-
-How does a provider push new credentials when it decides to rotate (e.g., ACME renewal)?
-
-Options:
-- **Push model**: Provider sends callback with new payload. Consumer handler is idempotent, applies new value.
-- **Invalidate model**: Provider sends null/empty callback, consumer marks unsatisfied, nags for new value.
-- **Lazy model**: Provider updates internal state, next nag request gets new value.
-
-Push is most responsive but adds provider→consumer call initiation. Invalidate reuses existing machinery but adds latency (up to nag interval). Lazy only works if consumers nag periodically even when satisfied (wasteful).
-
-**Leaning toward**: Push for rotation, with invalidate as fallback for revocation.
-
-### 2. Handle Generation
+### 1. Handle Generation
 
 Who generates handles and how?
 
@@ -341,7 +334,7 @@ Who generates handles and how?
 
 Leaning toward orchestrator generates, keeps handlers focused on business logic.
 
-### 3. GC-Only Needs (Proxy Vhosts)
+### 2. GC-Only Needs (Proxy Vhosts)
 
 For needs where the consumer doesn't receive/use a credential (just triggers a side effect on provider):
 
@@ -350,36 +343,15 @@ fort.host.needs.proxy.outline = {
   from = "raishan";
   request = { vhost = "outline.example.com"; upstream = "joker:3000"; };
   nag = "1h";
-  handler = pkgs.writeShellScript "proxy-ack" ''
-    # No-op - just needs to succeed so satisfied=true
-    exit 0
-  '';
+  # No handler - callback payload is interpreted as exit code
 };
 ```
 
-The callback handler is a no-op. The need existing in `/agent/needs` is what keeps the proxy vhost alive.
+When no handler is specified, the callback payload is interpreted as an exit code:
+- `0` (or empty): satisfied, stop nagging
+- `1`: unsatisfied, will nag after interval
 
-### 4. Nag Interval Guidance
-
-What's the right nag interval for different need types?
-
-| Need Type | Suggested Nag | Rationale |
-|-----------|---------------|-----------|
-| OIDC credentials | 15m | Rotation rare, quick recovery |
-| SSL certs | 1h | Rotation planned, longer buffer ok |
-| Git tokens | 30m | Moderate sensitivity |
-| Proxy config | 1h | Side-effect only, less urgent |
-
-### 5. Revocation Semantics
-
-When a provider wants to revoke (not rotate) a credential:
-
-1. Provider sends empty/null callback to consumer
-2. Consumer handler receives empty payload - what does it do?
-3. Consumer marks `satisfied = false`
-4. Consumer nags after interval, provider returns... error? New credential? Nothing?
-
-Need to define the "I no longer have this for you" flow.
+The need existing in `/agent/needs` is what keeps the proxy vhost alive. Provider can "revoke" by sending `1`, triggering re-request.
 
 ---
 
