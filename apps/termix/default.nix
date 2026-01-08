@@ -11,7 +11,7 @@ let
   # Colors are handled by OSC escape sequences on SSH connection (see aspects/dev-sandbox)
   fontCss = ''
     @font-face{font-family:'ProggyClean Nerd Font';src:url('./fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap}
-    .xterm,.xterm-screen,.xterm-rows,[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}
+    .xterm,.xterm-screen,.xterm-rows,[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace !important}
   '';
 
   # Patch script that injects custom font before starting Termix
