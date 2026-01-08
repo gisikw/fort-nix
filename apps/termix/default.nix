@@ -39,7 +39,7 @@ let
     # Terminal container styles
     ".xterm{background-color:${background}!important;color:${foreground}!important;font-family:'ProggyClean Nerd Font',monospace!important}"
     ".xterm-viewport{background-color:${background}!important}"
-    ".xterm-screen{background-color:${background}!important}"
+    ".xterm-screen{background-color:${background}!important;font-family:'ProggyClean Nerd Font',monospace!important}"
     ".xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}"
     "[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}"
     # Cursor
