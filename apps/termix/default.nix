@@ -48,11 +48,11 @@ let
       cp /custom/ProggyCleanNerdFontMono-Regular.ttf /app/html/fonts/
       echo "[fort] Copied ProggyClean font"
 
-      # Find the JS chunk containing terminal themes/fonts
-      CHUNK=$(grep -l 'JetBrains Mono' /app/html/assets/*.js 2>/dev/null | head -1)
+      # Find ALL JS chunks containing terminal themes/fonts (desktop + mobile)
+      CHUNKS=$(grep -l 'Caskaydia\|Dracula' /app/html/assets/*.js 2>/dev/null)
 
-      if [ -n "$CHUNK" ]; then
-        echo "[fort] Patching chunk: $CHUNK"
+      if [ -n "$CHUNKS" ]; then
+        echo "[fort] Found chunks to patch: $(echo $CHUNKS | wc -w)"
 
         # Create patch script
         cat > /tmp/patch.js << 'PATCHJS'
@@ -63,20 +63,13 @@ let
 
       // Add ProggyClean font to TERMINAL_FONTS array
       // First font is Caskaydia - look for [{value:"Caskaydia and prepend our font
-      const fontPattern = /(\[\s*)(\{value:"Caskaydia)/;
+      const fontPattern = /(\[\s*)(\{value:"Caskaydia)/g;
       if (fontPattern.test(content)) {
+        fontPattern.lastIndex = 0; // Reset for replace
         const proggyEntry = '{value:"ProggyClean Nerd Font",label:"ProggyClean Nerd Font",fallback:"\\"ProggyClean Nerd Font\\", monospace"},';
         content = content.replace(fontPattern, '$1' + proggyEntry + '$2');
         console.log('[fort] Added ProggyClean to font list');
         modified = true;
-      } else {
-        // Debug: show context around Caskaydia
-        const idx = content.indexOf('"Caskaydia');
-        if (idx > -1) {
-          console.log('[fort] Debug: Caskaydia context:', content.substring(Math.max(0, idx - 30), idx + 60));
-        } else {
-          console.log('[fort] Debug: Caskaydia not found in chunk');
-        }
       }
 
       // Add @font-face for ProggyClean alongside existing Caskaydia fonts
@@ -102,16 +95,17 @@ let
 
       if (modified) {
         fs.writeFileSync(chunk, content);
-        console.log('[fort] Saved patched chunk');
-      } else {
-        console.log('[fort] Warning: No patterns matched - theme/font may not be available');
+        console.log('[fort] Saved patched chunk: ' + chunk);
       }
       PATCHJS
 
-        node /tmp/patch.js "$CHUNK"
+        for CHUNK in $CHUNKS; do
+          echo "[fort] Patching chunk: $CHUNK"
+          node /tmp/patch.js "$CHUNK"
+        done
         rm /tmp/patch.js
       else
-        echo "[fort] Warning: Could not find JS chunk to patch"
+        echo "[fort] Warning: Could not find JS chunks to patch"
       fi
 
       echo "[fort] Starting Termix..."
