@@ -87,7 +87,52 @@ let
         const proggyFontFace = " @font-face{font-family:'ProggyClean Nerd Font';src:url('./fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap}";
         // Monokai Pro Spectrum color overrides - forces theme colors via CSS !important
         // This ensures consistent theming across desktop, mobile web, and native mobile app
-        const monokaiOverrides = ".xterm-fg-0{color:#222222!important}.xterm-fg-1{color:#fc618d!important}.xterm-fg-2{color:#7bd88f!important}.xterm-fg-3{color:#fce566!important}.xterm-fg-4{color:#fd9353!important}.xterm-fg-5{color:#948ae3!important}.xterm-fg-6{color:#5ad4e6!important}.xterm-fg-7{color:#f7f1ff!important}.xterm-fg-8{color:#69676c!important}.xterm-fg-9{color:#fc618d!important}.xterm-fg-10{color:#7bd88f!important}.xterm-fg-11{color:#fce566!important}.xterm-fg-12{color:#fd9353!important}.xterm-fg-13{color:#948ae3!important}.xterm-fg-14{color:#5ad4e6!important}.xterm-fg-15{color:#f7f1ff!important}.xterm-bg-0{background-color:#222222!important}.xterm-bg-1{background-color:#fc618d!important}.xterm-bg-2{background-color:#7bd88f!important}.xterm-bg-3{background-color:#fce566!important}.xterm-bg-4{background-color:#fd9353!important}.xterm-bg-5{background-color:#948ae3!important}.xterm-bg-6{background-color:#5ad4e6!important}.xterm-bg-7{background-color:#f7f1ff!important}.xterm-bg-8{background-color:#69676c!important}.xterm-bg-9{background-color:#fc618d!important}.xterm-bg-10{background-color:#7bd88f!important}.xterm-bg-11{background-color:#fce566!important}.xterm-bg-12{background-color:#fd9353!important}.xterm-bg-13{background-color:#948ae3!important}.xterm-bg-14{background-color:#5ad4e6!important}.xterm-bg-15{background-color:#f7f1ff!important}";
+        const monokaiOverrides = [
+          // Terminal container styles
+          ".xterm{background-color:#222222!important;color:#f7f1ff!important;font-family:'ProggyClean Nerd Font',monospace!important}",
+          ".xterm-viewport{background-color:#222222!important}",
+          ".xterm-screen{background-color:#222222!important}",
+          // Cursor
+          ".xterm-cursor-block{background-color:#bab6c0!important;color:#222222!important}",
+          ".xterm-cursor-underline{border-bottom-color:#bab6c0!important}",
+          ".xterm-cursor-bar{border-left-color:#bab6c0!important}",
+          // Selection
+          ".xterm-selection div{background-color:#525053!important}",
+          // ANSI foreground colors
+          ".xterm-fg-0{color:#222222!important}",
+          ".xterm-fg-1{color:#fc618d!important}",
+          ".xterm-fg-2{color:#7bd88f!important}",
+          ".xterm-fg-3{color:#fce566!important}",
+          ".xterm-fg-4{color:#fd9353!important}",
+          ".xterm-fg-5{color:#948ae3!important}",
+          ".xterm-fg-6{color:#5ad4e6!important}",
+          ".xterm-fg-7{color:#f7f1ff!important}",
+          ".xterm-fg-8{color:#69676c!important}",
+          ".xterm-fg-9{color:#fc618d!important}",
+          ".xterm-fg-10{color:#7bd88f!important}",
+          ".xterm-fg-11{color:#fce566!important}",
+          ".xterm-fg-12{color:#fd9353!important}",
+          ".xterm-fg-13{color:#948ae3!important}",
+          ".xterm-fg-14{color:#5ad4e6!important}",
+          ".xterm-fg-15{color:#f7f1ff!important}",
+          // ANSI background colors
+          ".xterm-bg-0{background-color:#222222!important}",
+          ".xterm-bg-1{background-color:#fc618d!important}",
+          ".xterm-bg-2{background-color:#7bd88f!important}",
+          ".xterm-bg-3{background-color:#fce566!important}",
+          ".xterm-bg-4{background-color:#fd9353!important}",
+          ".xterm-bg-5{background-color:#948ae3!important}",
+          ".xterm-bg-6{background-color:#5ad4e6!important}",
+          ".xterm-bg-7{background-color:#f7f1ff!important}",
+          ".xterm-bg-8{background-color:#69676c!important}",
+          ".xterm-bg-9{background-color:#fc618d!important}",
+          ".xterm-bg-10{background-color:#7bd88f!important}",
+          ".xterm-bg-11{background-color:#fce566!important}",
+          ".xterm-bg-12{background-color:#fd9353!important}",
+          ".xterm-bg-13{background-color:#948ae3!important}",
+          ".xterm-bg-14{background-color:#5ad4e6!important}",
+          ".xterm-bg-15{background-color:#f7f1ff!important}"
+        ].join("");
         content = content.replace(fontFacePattern, '$1' + proggyFontFace + monokaiOverrides);
         console.log('[fort] Added ProggyClean @font-face');
         console.log('[fort] Added Monokai Pro Spectrum color overrides');
