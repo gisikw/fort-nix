@@ -48,8 +48,16 @@ let
       cp /custom/ProggyCleanNerdFontMono-Regular.ttf /app/html/fonts/
       echo "[fort] Copied ProggyClean font"
 
-      # Find ALL JS chunks containing terminal themes/fonts (desktop + mobile)
-      CHUNKS=$(grep -l 'Caskaydia\|Dracula' /app/html/assets/*.js 2>/dev/null)
+      # Find ALL JS chunks - search for dracula's unique hex color to catch all theme locations
+      CHUNKS=$(grep -l '#282a36\|Caskaydia\|Dracula' /app/html/assets/*.js 2>/dev/null)
+
+      # Debug: show all JS files and which contain theme-related strings
+      echo "[fort] JS files in assets:"
+      ls -la /app/html/assets/*.js 2>/dev/null | wc -l
+      echo "[fort] Files with #282a36 (dracula bg):"
+      grep -l '#282a36' /app/html/assets/*.js 2>/dev/null || echo "none"
+      echo "[fort] Files with termixDark:"
+      grep -l 'termixDark' /app/html/assets/*.js 2>/dev/null || echo "none"
 
       if [ -n "$CHUNKS" ]; then
         echo "[fort] Found chunks to patch: $(echo $CHUNKS | wc -w)"
