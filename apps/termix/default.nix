@@ -4,87 +4,17 @@ let
   fort = rootManifest.fortConfig;
   domain = fort.settings.domain;
 
-  # Monokai Pro Spectrum theme (from iTerm2-Color-Schemes/ghostty)
-  monokaiProSpectrum = {
-    background = "#222222";
-    foreground = "#f7f1ff";
-    cursor = "#bab6c0";
-    cursorAccent = "#222222";
-    selectionBackground = "#525053";
-    selectionForeground = "#f7f1ff";
-    black = "#222222";
-    red = "#fc618d";
-    green = "#7bd88f";
-    yellow = "#fce566";
-    blue = "#fd9353";
-    magenta = "#948ae3";
-    cyan = "#5ad4e6";
-    white = "#f7f1ff";
-    brightBlack = "#69676c";
-    brightRed = "#fc618d";
-    brightGreen = "#7bd88f";
-    brightYellow = "#fce566";
-    brightBlue = "#fd9353";
-    brightMagenta = "#948ae3";
-    brightCyan = "#5ad4e6";
-    brightWhite = "#f7f1ff";
-  };
-
   # Custom font bundled in apps/termix/
   proggyCleanFont = ./ProggyCleanNerdFontMono-Regular.ttf;
 
-  # CSS overrides generated from theme definition above
-  # Maps xterm class selectors to theme colors
-  monokaiCssOverrides = with monokaiProSpectrum; builtins.concatStringsSep "" [
-    # Terminal container styles
-    ".xterm{background-color:${background}!important;color:${foreground}!important;font-family:'ProggyClean Nerd Font',monospace!important}"
-    ".xterm-viewport{background-color:${background}!important}"
-    ".xterm-screen{background-color:${background}!important;font-family:'ProggyClean Nerd Font',monospace!important}"
-    ".xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}"
-    "[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}"
-    # Cursor
-    ".xterm-cursor-block{background-color:${cursor}!important;color:${cursorAccent}!important}"
-    ".xterm-cursor-underline{border-bottom-color:${cursor}!important}"
-    ".xterm-cursor-bar{border-left-color:${cursor}!important}"
-    # Selection
-    ".xterm-selection div{background-color:${selectionBackground}!important}"
-    # ANSI foreground colors (0-7 normal, 8-15 bright)
-    ".xterm-fg-0{color:${black}!important}"
-    ".xterm-fg-1{color:${red}!important}"
-    ".xterm-fg-2{color:${green}!important}"
-    ".xterm-fg-3{color:${yellow}!important}"
-    ".xterm-fg-4{color:${blue}!important}"
-    ".xterm-fg-5{color:${magenta}!important}"
-    ".xterm-fg-6{color:${cyan}!important}"
-    ".xterm-fg-7{color:${white}!important}"
-    ".xterm-fg-8{color:${brightBlack}!important}"
-    ".xterm-fg-9{color:${brightRed}!important}"
-    ".xterm-fg-10{color:${brightGreen}!important}"
-    ".xterm-fg-11{color:${brightYellow}!important}"
-    ".xterm-fg-12{color:${brightBlue}!important}"
-    ".xterm-fg-13{color:${brightMagenta}!important}"
-    ".xterm-fg-14{color:${brightCyan}!important}"
-    ".xterm-fg-15{color:${brightWhite}!important}"
-    # ANSI background colors
-    ".xterm-bg-0{background-color:${black}!important}"
-    ".xterm-bg-1{background-color:${red}!important}"
-    ".xterm-bg-2{background-color:${green}!important}"
-    ".xterm-bg-3{background-color:${yellow}!important}"
-    ".xterm-bg-4{background-color:${blue}!important}"
-    ".xterm-bg-5{background-color:${magenta}!important}"
-    ".xterm-bg-6{background-color:${cyan}!important}"
-    ".xterm-bg-7{background-color:${white}!important}"
-    ".xterm-bg-8{background-color:${brightBlack}!important}"
-    ".xterm-bg-9{background-color:${brightRed}!important}"
-    ".xterm-bg-10{background-color:${brightGreen}!important}"
-    ".xterm-bg-11{background-color:${brightYellow}!important}"
-    ".xterm-bg-12{background-color:${brightBlue}!important}"
-    ".xterm-bg-13{background-color:${brightMagenta}!important}"
-    ".xterm-bg-14{background-color:${brightCyan}!important}"
-    ".xterm-bg-15{background-color:${brightWhite}!important}"
-  ];
+  # Font CSS to append to the stylesheet
+  # Colors are handled by OSC escape sequences on SSH connection (see aspects/dev-sandbox)
+  fontCss = ''
+    @font-face{font-family:'ProggyClean Nerd Font';src:url('./fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap}
+    .xterm,.xterm-screen,.xterm-rows,[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}
+  '';
 
-  # Patch script that injects font and CSS overrides before starting Termix
+  # Patch script that injects custom font before starting Termix
   patchEntrypoint = pkgs.writeTextFile {
     name = "termix-patch-entrypoint";
     executable = true;
@@ -92,41 +22,19 @@ let
       #!/bin/sh
       set -e
 
-      echo "[fort] Patching Termix with custom theme and font..."
+      echo "[fort] Patching Termix with custom font..."
 
       # Copy custom font to static assets
       cp /custom/ProggyCleanNerdFontMono-Regular.ttf /app/html/fonts/
       echo "[fort] Copied ProggyClean font"
 
-      # Find JS chunk containing font-face definitions
-      CHUNK=$(grep -l 'Caskaydia' /app/html/assets/*.js 2>/dev/null | head -1)
-
-      if [ -n "$CHUNK" ]; then
-        echo "[fort] Patching: $CHUNK"
-
-        # Create patch script
-        cat > /tmp/patch.js << 'PATCHJS'
-      const fs = require('fs');
-      const chunk = process.argv[2];
-      const cssOverrides = process.argv[3];
-      let content = fs.readFileSync(chunk, 'utf8');
-
-      // Add @font-face for ProggyClean and CSS overrides alongside existing Caskaydia fonts
-      const fontFacePattern = /(@font-face\s*\{[^}]*Caskaydia[^}]*\})/;
-      if (fontFacePattern.test(content)) {
-        const proggyFontFace = " @font-face{font-family:'ProggyClean Nerd Font';src:url('./fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap}";
-        content = content.replace(fontFacePattern, '$1' + proggyFontFace + cssOverrides);
-        fs.writeFileSync(chunk, content);
-        console.log('[fort] Injected @font-face and CSS overrides');
-      } else {
-        console.log('[fort] Warning: Could not find font-face pattern');
-      }
-      PATCHJS
-
-        node /tmp/patch.js "$CHUNK" '${monokaiCssOverrides}'
-        rm /tmp/patch.js
+      # Append font CSS to the stylesheet
+      CSS_FILE=$(ls /app/html/assets/*.css 2>/dev/null | head -1)
+      if [ -n "$CSS_FILE" ]; then
+        echo '${fontCss}' >> "$CSS_FILE"
+        echo "[fort] Appended font CSS to $CSS_FILE"
       else
-        echo "[fort] Warning: Could not find JS chunk to patch"
+        echo "[fort] Warning: Could not find CSS file to patch"
       fi
 
       echo "[fort] Starting Termix..."
