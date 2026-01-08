@@ -4,6 +4,108 @@ let
   fort = rootManifest.fortConfig;
   domain = fort.settings.domain;
 
+  # Monokai Pro Spectrum theme (from iTerm2-Color-Schemes/ghostty)
+  monokaiProSpectrum = {
+    background = "#222222";
+    foreground = "#f7f1ff";
+    cursor = "#bab6c0";
+    cursorAccent = "#222222";
+    selectionBackground = "#525053";
+    selectionForeground = "#f7f1ff";
+    black = "#222222";
+    red = "#fc618d";
+    green = "#7bd88f";
+    yellow = "#fce566";
+    blue = "#fd9353";
+    magenta = "#948ae3";
+    cyan = "#5ad4e6";
+    white = "#f7f1ff";
+    brightBlack = "#69676c";
+    brightRed = "#fc618d";
+    brightGreen = "#7bd88f";
+    brightYellow = "#fce566";
+    brightBlue = "#fd9353";
+    brightMagenta = "#948ae3";
+    brightCyan = "#5ad4e6";
+    brightWhite = "#f7f1ff";
+  };
+
+  # Custom font bundled in apps/termix/
+  proggyCleanFont = ./ProggyCleanNerdFontMono-Regular.ttf;
+
+  # Patch script that injects theme and font before starting Termix
+  patchEntrypoint = pkgs.writeScript "termix-patch-entrypoint" ''
+    #!/bin/sh
+    set -e
+
+    echo "[fort] Patching Termix with custom theme and font..."
+
+    # Copy custom font to static assets
+    cp /custom/ProggyCleanNerdFontMono-Regular.ttf /app/html/fonts/
+    echo "[fort] Copied ProggyClean font"
+
+    # Find the JS chunk containing terminal themes/fonts
+    CHUNK=$(grep -l 'JetBrains Mono' /app/html/assets/*.js 2>/dev/null | head -1)
+
+    if [ -n "$CHUNK" ]; then
+      echo "[fort] Patching chunk: $CHUNK"
+
+      # Create patch script
+      cat > /tmp/patch.js << 'PATCHJS'
+const fs = require('fs');
+const chunk = process.argv[2];
+let content = fs.readFileSync(chunk, 'utf8');
+let modified = false;
+
+// Add ProggyClean font to TERMINAL_FONTS array
+// Match: [{value:"JetBrains Mono"... and prepend our font
+const fontArrayPattern = /(\[)\s*(\{[^}]*"JetBrains Mono")/;
+if (fontArrayPattern.test(content)) {
+  const proggyEntry = '{value:"ProggyClean Nerd Font",label:"ProggyClean Nerd Font",fallback:"\\"ProggyClean Nerd Font\\", monospace"},';
+  content = content.replace(fontArrayPattern, '$1' + proggyEntry + '$2');
+  console.log('[fort] Added ProggyClean to font list');
+  modified = true;
+}
+
+// Add @font-face for ProggyClean alongside existing Caskaydia fonts
+// Match existing @font-face and append ours
+const fontFacePattern = /(@font-face\s*\{[^}]*Caskaydia[^}]*\})/;
+if (fontFacePattern.test(content)) {
+  const proggyFontFace = " @font-face{font-family:'ProggyClean Nerd Font';src:url('./fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap}";
+  content = content.replace(fontFacePattern, '$1' + proggyFontFace);
+  console.log('[fort] Added ProggyClean @font-face');
+  modified = true;
+}
+
+// Add Monokai Pro Spectrum theme after dracula
+// The compiled JS has theme objects like: dracula:{name:"Dracula",...}
+// We need to find the end of a theme object and add ours after
+const draculaPattern = /(dracula:\s*\{[^}]*name:\s*"Dracula"[^}]*colors:\s*\{[^}]+\}\s*\})/;
+if (draculaPattern.test(content)) {
+  const monokaiTheme = ',monokaiProSpectrum:{name:"Monokai Pro Spectrum",category:"dark",colors:{background:"#222222",foreground:"#f7f1ff",cursor:"#bab6c0",cursorAccent:"#222222",selectionBackground:"#525053",selectionForeground:"#f7f1ff",black:"#222222",red:"#fc618d",green:"#7bd88f",yellow:"#fce566",blue:"#fd9353",magenta:"#948ae3",cyan:"#5ad4e6",white:"#f7f1ff",brightBlack:"#69676c",brightRed:"#fc618d",brightGreen:"#7bd88f",brightYellow:"#fce566",brightBlue:"#fd9353",brightMagenta:"#948ae3",brightCyan:"#5ad4e6",brightWhite:"#f7f1ff"}}';
+  content = content.replace(draculaPattern, '$1' + monokaiTheme);
+  console.log('[fort] Added Monokai Pro Spectrum theme');
+  modified = true;
+}
+
+if (modified) {
+  fs.writeFileSync(chunk, content);
+  console.log('[fort] Saved patched chunk');
+} else {
+  console.log('[fort] Warning: No patterns matched - theme/font may not be available');
+}
+PATCHJS
+
+      node /tmp/patch.js "$CHUNK"
+      rm /tmp/patch.js
+    else
+      echo "[fort] Warning: Could not find JS chunk to patch"
+    fi
+
+    echo "[fort] Starting Termix..."
+    exec /entrypoint.sh
+  '';
+
   bootstrapScript = pkgs.writeShellScript "termix-oidc-bootstrap" ''
     set -euo pipefail
 
@@ -125,7 +227,10 @@ in
       ports = [ "8080:8080" ];
       volumes = [
         "/var/lib/termix:/app/data"
+        "${proggyCleanFont}:/custom/ProggyCleanNerdFontMono-Regular.ttf:ro"
+        "${patchEntrypoint}:/custom/entrypoint.sh:ro"
       ];
+      entrypoint = "/custom/entrypoint.sh";
     };
   };
 
