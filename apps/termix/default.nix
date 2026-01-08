@@ -83,11 +83,12 @@ let
       }
 
       // Add Monokai Pro Spectrum theme after dracula
-      // The compiled JS has theme objects like: dracula:{name:"Dracula",...}
-      // We need to find the end of a theme object and add ours after
-      const draculaPattern = /(dracula:\s*\{[^}]*name:\s*"Dracula"[^}]*colors:\s*\{[^}]+\}\s*\})/;
-      if (draculaPattern.test(content)) {
-        const monokaiTheme = ',monokaiProSpectrum:{name:"Monokai Pro Spectrum",category:"dark",colors:{background:"#222222",foreground:"#f7f1ff",cursor:"#bab6c0",cursorAccent:"#222222",selectionBackground:"#525053",selectionForeground:"#f7f1ff",black:"#222222",red:"#fc618d",green:"#7bd88f",yellow:"#fce566",blue:"#fd9353",magenta:"#948ae3",cyan:"#5ad4e6",white:"#f7f1ff",brightBlack:"#69676c",brightRed:"#fc618d",brightGreen:"#7bd88f",brightYellow:"#fce566",brightBlue:"#fd9353",brightMagenta:"#948ae3",brightCyan:"#5ad4e6",brightWhite:"#f7f1ff"}}';
+      // Use global flag to catch all instances (desktop + mobile may have separate copies)
+      const draculaPattern = /(dracula:\s*\{[^}]*name:\s*"Dracula"[^}]*colors:\s*\{[^}]+\}\s*\})/g;
+      const monokaiTheme = ',monokaiProSpectrum:{name:"Monokai Pro Spectrum",category:"dark",colors:{background:"#222222",foreground:"#f7f1ff",cursor:"#bab6c0",cursorAccent:"#222222",selectionBackground:"#525053",selectionForeground:"#f7f1ff",black:"#222222",red:"#fc618d",green:"#7bd88f",yellow:"#fce566",blue:"#fd9353",magenta:"#948ae3",cyan:"#5ad4e6",white:"#f7f1ff",brightBlack:"#69676c",brightRed:"#fc618d",brightGreen:"#7bd88f",brightYellow:"#fce566",brightBlue:"#fd9353",brightMagenta:"#948ae3",brightCyan:"#5ad4e6",brightWhite:"#f7f1ff"}}';
+      const matches = content.match(draculaPattern);
+      if (matches) {
+        console.log('[fort] Found ' + matches.length + ' dracula theme instance(s)');
         content = content.replace(draculaPattern, '$1' + monokaiTheme);
         console.log('[fort] Added Monokai Pro Spectrum theme');
         modified = true;
