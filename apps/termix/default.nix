@@ -92,6 +92,8 @@ let
           ".xterm{background-color:#222222!important;color:#f7f1ff!important;font-family:'ProggyClean Nerd Font',monospace!important}",
           ".xterm-viewport{background-color:#222222!important}",
           ".xterm-screen{background-color:#222222!important}",
+          ".xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}",
+          "[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace!important}",
           // Cursor
           ".xterm-cursor-block{background-color:#bab6c0!important;color:#222222!important}",
           ".xterm-cursor-underline{border-bottom-color:#bab6c0!important}",
