@@ -62,13 +62,22 @@ let
       let modified = false;
 
       // Add ProggyClean font to TERMINAL_FONTS array
-      // Match: [{value:"JetBrains Mono"... and prepend our font
-      const fontArrayPattern = /(\[)\s*(\{[^}]*"JetBrains Mono")/;
-      if (fontArrayPattern.test(content)) {
-        const proggyEntry = '{value:"ProggyClean Nerd Font",label:"ProggyClean Nerd Font",fallback:"\\"ProggyClean Nerd Font\\", monospace"},';
-        content = content.replace(fontArrayPattern, '$1' + proggyEntry + '$2');
+      // Look for the pattern where JetBrains Mono appears as first font value
+      // The compiled JS has: [{value:"JetBrains Mono",label:"JetBrains Mono",fallback:...},
+      const fontPattern = /(\[\s*\{[^{}]*value:\s*"JetBrains Mono")/;
+      if (fontPattern.test(content)) {
+        const proggyEntry = '[{value:"ProggyClean Nerd Font",label:"ProggyClean Nerd Font",fallback:"\\"ProggyClean Nerd Font\\", monospace"},';
+        content = content.replace(fontPattern, proggyEntry + '{value:"JetBrains Mono"');
         console.log('[fort] Added ProggyClean to font list');
         modified = true;
+      } else {
+        // Debug: show context around JetBrains Mono
+        const idx = content.indexOf('"JetBrains Mono"');
+        if (idx > -1) {
+          console.log('[fort] Debug: JetBrains Mono context:', content.substring(Math.max(0, idx - 50), idx + 80));
+        } else {
+          console.log('[fort] Debug: JetBrains Mono not found in chunk');
+        }
       }
 
       // Add @font-face for ProggyClean alongside existing Caskaydia fonts
