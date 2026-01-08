@@ -62,21 +62,20 @@ let
       let modified = false;
 
       // Add ProggyClean font to TERMINAL_FONTS array
-      // Look for the pattern where JetBrains Mono appears as first font value
-      // The compiled JS has: [{value:"JetBrains Mono",label:"JetBrains Mono",fallback:...},
-      const fontPattern = /(\[\s*\{[^{}]*value:\s*"JetBrains Mono")/;
+      // First font is Caskaydia - look for [{value:"Caskaydia and prepend our font
+      const fontPattern = /(\[\s*)(\{value:"Caskaydia)/;
       if (fontPattern.test(content)) {
-        const proggyEntry = '[{value:"ProggyClean Nerd Font",label:"ProggyClean Nerd Font",fallback:"\\"ProggyClean Nerd Font\\", monospace"},';
-        content = content.replace(fontPattern, proggyEntry + '{value:"JetBrains Mono"');
+        const proggyEntry = '{value:"ProggyClean Nerd Font",label:"ProggyClean Nerd Font",fallback:"\\"ProggyClean Nerd Font\\", monospace"},';
+        content = content.replace(fontPattern, '$1' + proggyEntry + '$2');
         console.log('[fort] Added ProggyClean to font list');
         modified = true;
       } else {
-        // Debug: show context around JetBrains Mono
-        const idx = content.indexOf('"JetBrains Mono"');
+        // Debug: show context around Caskaydia
+        const idx = content.indexOf('"Caskaydia');
         if (idx > -1) {
-          console.log('[fort] Debug: JetBrains Mono context:', content.substring(Math.max(0, idx - 50), idx + 80));
+          console.log('[fort] Debug: Caskaydia context:', content.substring(Math.max(0, idx - 30), idx + 60));
         } else {
-          console.log('[fort] Debug: JetBrains Mono not found in chunk');
+          console.log('[fort] Debug: Caskaydia not found in chunk');
         }
       }
 
