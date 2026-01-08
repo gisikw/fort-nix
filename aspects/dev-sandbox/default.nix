@@ -118,6 +118,15 @@ in
       # Auto-attach to tmux on SSH connection
       # Skip if: already in tmux, not interactive, not SSH session
       if [[ -z "$TMUX" && -n "$SSH_CONNECTION" && $- == *i* ]]; then
+        # Inject Monokai Pro Spectrum colors via OSC escape sequences
+        # Must happen BEFORE tmux attaches, so xterm.js receives them directly
+        # OSC 10=fg, 11=bg, 12=cursor, 4;n=ANSI color n
+        printf '\e]10;#f7f1ff\a\e]11;#222222\a\e]12;#bab6c0\a'
+        printf '\e]4;0;#222222\a\e]4;1;#fc618d\a\e]4;2;#7bd88f\a\e]4;3;#fce566\a'
+        printf '\e]4;4;#fd9353\a\e]4;5;#948ae3\a\e]4;6;#5ad4e6\a\e]4;7;#f7f1ff\a'
+        printf '\e]4;8;#69676c\a\e]4;9;#fc618d\a\e]4;10;#7bd88f\a\e]4;11;#fce566\a'
+        printf '\e]4;12;#fd9353\a\e]4;13;#948ae3\a\e]4;14;#5ad4e6\a\e]4;15;#f7f1ff\a'
+
         # Attach to the most recently used session (by last_attached timestamp)
         LAST_SESSION=$(tmux list-sessions -F '#{session_last_attached} #{session_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         if [[ -n "$LAST_SESSION" ]]; then
