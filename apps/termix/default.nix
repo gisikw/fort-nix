@@ -10,7 +10,7 @@ let
   # Font CSS to append to the stylesheet
   # Colors are handled by OSC escape sequences on SSH connection (see aspects/dev-sandbox)
   fontCss = ''
-    @font-face{font-family:'ProggyClean Nerd Font';src:url('../fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap}
+    @font-face{font-family:'ProggyClean Nerd Font';src:url('../fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:block}
     .xterm,.xterm-screen,.xterm-rows,[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace !important}
   '';
 
