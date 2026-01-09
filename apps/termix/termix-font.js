@@ -28,7 +28,28 @@
     return null;
   }
 
-  // Find terminal starting from .xterm element
+  // Walk hooks chain looking for FitAddon (has fit() and proposeDimensions() methods)
+  function findFitAddonInHooks(fiber) {
+    if (!fiber || !fiber.memoizedState) return null;
+
+    var state = fiber.memoizedState;
+
+    while (state) {
+      // Check both ref-style (.current) and direct storage
+      var val = state.memoizedState;
+      if (val && typeof val.fit === 'function' && typeof val.proposeDimensions === 'function') {
+        return val;
+      }
+      // Also check .current for useRef style
+      if (val && val.current && typeof val.current.fit === 'function') {
+        return val.current;
+      }
+      state = state.next;
+    }
+    return null;
+  }
+
+  // Find terminal and fitAddon starting from .xterm element
   function findTerminal(xtermEl) {
     // Get parent element (xterm creates .xterm inside the ref target)
     var parent = xtermEl.parentElement;
@@ -38,34 +59,51 @@
     if (!fiberKey) return null;
 
     var fiber = parent[fiberKey];
+    var result = { terminal: null, fitAddon: null };
 
     // Walk up fiber tree looking for component with terminal in hooks
     var depth = 0;
     while (fiber && depth < 20) {
-      var terminal = findTerminalInHooks(fiber);
-      if (terminal) return terminal;
+      if (!result.terminal) {
+        result.terminal = findTerminalInHooks(fiber);
+      }
+      if (!result.fitAddon) {
+        result.fitAddon = findFitAddonInHooks(fiber);
+      }
+      // Found both, we're done
+      if (result.terminal && result.fitAddon) {
+        return result;
+      }
       fiber = fiber.return;
       depth++;
     }
 
-    return null;
+    // Return what we found (terminal only for backwards compat)
+    return result.terminal ? result : null;
   }
 
   // Expose for debugging
   window.__fort = {
     FONT: FONT,
     terminals: [],
-    elements: [],
+    fitAddons: [],
     lastError: null,
 
     patch: function() {
       window.__fort.tryPatch();
     },
 
-    setFont: function(terminal) {
+    setFont: function(terminal, fitAddon) {
       if (terminal && terminal.options) {
         terminal.options.fontFamily = FONT;
         console.log('[fort] Set fontFamily on terminal');
+        // Trigger refit to recalculate character metrics
+        if (fitAddon && typeof fitAddon.fit === 'function') {
+          setTimeout(function() {
+            fitAddon.fit();
+            console.log('[fort] Triggered fit after font change');
+          }, 50);
+        }
         return true;
       }
       return false;
@@ -78,12 +116,22 @@
         if (el.__fortPatched) return;
 
         try {
-          var terminal = findTerminal(el);
-          if (terminal) {
+          var result = findTerminal(el);
+          if (result && result.terminal) {
             el.__fortPatched = true;
-            window.__fort.terminals.push(terminal);
-            terminal.options.fontFamily = FONT;
+            window.__fort.terminals.push(result.terminal);
+            if (result.fitAddon) {
+              window.__fort.fitAddons.push(result.fitAddon);
+            }
+            result.terminal.options.fontFamily = FONT;
             console.log('[fort] Set terminal fontFamily');
+            // Trigger refit to recalculate character metrics
+            if (result.fitAddon) {
+              setTimeout(function() {
+                result.fitAddon.fit();
+                console.log('[fort] Triggered fit after font change');
+              }, 50);
+            }
           }
         } catch (e) {
           window.__fort.lastError = e;
