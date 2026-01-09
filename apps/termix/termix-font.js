@@ -49,7 +49,24 @@
     return null;
   }
 
-  // Find terminal and fitAddon starting from .xterm element
+  // Walk hooks chain looking for WebSocket ref
+  function findWebSocketInHooks(fiber) {
+    if (!fiber || !fiber.memoizedState) return null;
+
+    var state = fiber.memoizedState;
+
+    while (state) {
+      var val = state.memoizedState;
+      // Check .current for useRef style - WebSocket has readyState and send
+      if (val && val.current && typeof val.current.send === 'function' && 'readyState' in val.current) {
+        return val.current;
+      }
+      state = state.next;
+    }
+    return null;
+  }
+
+  // Find terminal, fitAddon, and webSocket starting from .xterm element
   function findTerminal(xtermEl) {
     // Get parent element (xterm creates .xterm inside the ref target)
     var parent = xtermEl.parentElement;
@@ -59,7 +76,7 @@
     if (!fiberKey) return null;
 
     var fiber = parent[fiberKey];
-    var result = { terminal: null, fitAddon: null };
+    var result = { terminal: null, fitAddon: null, webSocket: null };
 
     // Walk up fiber tree looking for component with terminal in hooks
     var depth = 0;
@@ -70,8 +87,11 @@
       if (!result.fitAddon) {
         result.fitAddon = findFitAddonInHooks(fiber);
       }
-      // Found both, we're done
-      if (result.terminal && result.fitAddon) {
+      if (!result.webSocket) {
+        result.webSocket = findWebSocketInHooks(fiber);
+      }
+      // Found all three, we're done
+      if (result.terminal && result.fitAddon && result.webSocket) {
         return result;
       }
       fiber = fiber.return;
@@ -87,6 +107,7 @@
     FONT: FONT,
     terminals: [],
     fitAddons: [],
+    webSockets: [],
     elements: [],
     lastError: null,
 
@@ -94,42 +115,32 @@
       window.__fort.tryPatch();
     },
 
-    setFont: function(terminal, fitAddon) {
-      if (terminal && terminal.options) {
-        terminal.options.fontFamily = FONT;
-        console.log('[fort] Set fontFamily on terminal');
-        // Trigger refit to recalculate character metrics
-        if (fitAddon && typeof fitAddon.fit === 'function') {
-          setTimeout(function() {
-            fitAddon.fit();
-            console.log('[fort] Triggered fit after font change');
-          }, 50);
-        }
-        return true;
-      }
-      return false;
-    },
-
     findTerminal: findTerminal,
 
-    // Trigger resize by toggling the w-screen class (inline style changes don't work)
-    triggerResize: function(xtermEl) {
-      var wScreen = document.querySelector('.w-screen');
-      if (!wScreen) {
-        console.log('[fort] No .w-screen element found');
-        return;
+    // Full refit sequence: measure char cells, fit to container, notify backend
+    refit: function(terminal, fitAddon, webSocket) {
+      if (!terminal || !terminal._core) return;
+
+      // 1. Remeasure character cell dimensions with new font
+      if (terminal._core._charSizeService && terminal._core._charSizeService.measure) {
+        terminal._core._charSizeService.measure();
+        console.log('[fort] Remeasured char size');
       }
 
-      wScreen.classList.remove('w-screen');
-      wScreen.classList.add('w-screen-fort-temp');
-      // Force reflow
-      void wScreen.offsetWidth;
+      // 2. Refit terminal to container with new cell dimensions
+      if (fitAddon && fitAddon.fit) {
+        fitAddon.fit();
+        console.log('[fort] Fitted terminal:', terminal.cols, 'x', terminal.rows);
+      }
 
-      setTimeout(function() {
-        wScreen.classList.remove('w-screen-fort-temp');
-        wScreen.classList.add('w-screen');
-        console.log('[fort] Toggled w-screen class');
-      }, 50);
+      // 3. Notify backend of new size
+      if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+        webSocket.send(JSON.stringify({
+          type: 'resize',
+          data: { cols: terminal.cols, rows: terminal.rows }
+        }));
+        console.log('[fort] Sent resize to backend');
+      }
     },
 
     tryPatch: function() {
@@ -145,11 +156,17 @@
             if (result.fitAddon) {
               window.__fort.fitAddons.push(result.fitAddon);
             }
+            if (result.webSocket) {
+              window.__fort.webSockets.push(result.webSocket);
+            }
+
+            // Set font
             result.terminal.options.fontFamily = FONT;
             console.log('[fort] Set terminal fontFamily');
-            // Trigger ResizeObserver to use their blessed performFit path
+
+            // Wait for font to load, then do full refit
             setTimeout(function() {
-              window.__fort.triggerResize(el);
+              window.__fort.refit(result.terminal, result.fitAddon, result.webSocket);
             }, 50);
           }
         } catch (e) {
