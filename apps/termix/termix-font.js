@@ -1,12 +1,54 @@
 (function() {
   var FONT = "'ProggyClean Nerd Font', monospace";
 
+  // Find React fiber key on an element
+  function getFiberKey(el) {
+    return Object.keys(el).find(function(k) {
+      return k.startsWith('__reactFiber$');
+    });
+  }
+
+  // Search fiber tree for terminal instance
+  function findTerminalInFiber(fiber, depth) {
+    if (!fiber || depth > 50) return null;
+
+    // Check memoizedState chain
+    var state = fiber.memoizedState;
+    while (state) {
+      // Terminal might be in state directly
+      if (state.memoizedState && state.memoizedState.options && state.memoizedState._core) {
+        return state.memoizedState;
+      }
+      // Or in a ref
+      if (state.memoizedState && state.memoizedState.current) {
+        var ref = state.memoizedState.current;
+        if (ref && ref.options && ref._core) {
+          return ref;
+        }
+      }
+      state = state.next;
+    }
+
+    // Check stateNode
+    if (fiber.stateNode && fiber.stateNode.options && fiber.stateNode._core) {
+      return fiber.stateNode;
+    }
+
+    // Recurse into child
+    var childResult = findTerminalInFiber(fiber.child, depth + 1);
+    if (childResult) return childResult;
+
+    // Recurse into sibling
+    return findTerminalInFiber(fiber.sibling, depth + 1);
+  }
+
   // Expose for debugging
   window.__fort = {
     FONT: FONT,
     terminals: [],
     elements: [],
     lastError: null,
+    lastFiber: null,
 
     // Manual trigger to try patching again
     patch: function() {
@@ -23,54 +65,58 @@
       return false;
     },
 
-    // Inspect an element for terminal instance
-    inspect: function(el) {
-      var results = { keys: [], terminalFound: null };
-      var node = el || document.querySelector('.xterm');
-      while (node) {
-        var keys = Object.keys(node);
-        results.keys.push({ element: node.tagName + '.' + node.className, props: keys });
-        for (var i = 0; i < keys.length; i++) {
-          try {
-            var val = node[keys[i]];
-            if (val && val.options && val._core) {
-              results.terminalFound = { key: keys[i], terminal: val };
-              return results;
-            }
-          } catch (e) {}
-        }
-        node = node.parentElement;
+    // Get fiber from element
+    getFiber: function(el) {
+      var key = getFiberKey(el);
+      return key ? el[key] : null;
+    },
+
+    // Inspect fiber tree for terminal
+    inspectFiber: function(el) {
+      el = el || document.querySelector('.xterm');
+      // Walk up to find element with fiber
+      while (el && !getFiberKey(el)) {
+        el = el.parentElement;
       }
-      return results;
+      if (!el) return { error: 'No fiber found' };
+
+      var fiber = el[getFiberKey(el)];
+      window.__fort.lastFiber = fiber;
+      return findTerminalInFiber(fiber, 0);
     },
 
     tryPatch: function() {
       document.querySelectorAll('.xterm').forEach(function(el) {
-        window.__fort.elements.push(el);
         if (el.__fortPatched) return;
+        window.__fort.elements.push(el);
 
-        // Walk up DOM tree looking for terminal instance
+        // Walk up to find element with React fiber
         var node = el;
-        while (node) {
-          var keys = Object.keys(node);
-          for (var i = 0; i < keys.length; i++) {
-            try {
-              var val = node[keys[i]];
-              // xterm Terminal instances have .options and ._core
-              if (val && val.options && val._core) {
-                el.__fortPatched = true;
-                window.__fort.terminals.push(val);
-                val.options.fontFamily = FONT;
-                console.log('[fort] Set terminal fontFamily');
-                return;
-              }
-            } catch (e) {
-              window.__fort.lastError = e;
-            }
-          }
+        while (node && !getFiberKey(node)) {
           node = node.parentElement;
         }
-        console.log('[fort] Could not find terminal instance for element');
+
+        if (!node) {
+          console.log('[fort] No React fiber found');
+          return;
+        }
+
+        try {
+          var fiber = node[getFiberKey(node)];
+          var terminal = findTerminalInFiber(fiber, 0);
+
+          if (terminal) {
+            el.__fortPatched = true;
+            window.__fort.terminals.push(terminal);
+            terminal.options.fontFamily = FONT;
+            console.log('[fort] Set terminal fontFamily via fiber');
+            return;
+          }
+        } catch (e) {
+          window.__fort.lastError = e;
+        }
+
+        console.log('[fort] Could not find terminal in fiber tree');
       });
     }
   };
