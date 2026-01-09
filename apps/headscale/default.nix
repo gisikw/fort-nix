@@ -12,6 +12,10 @@ in
       };
     })
     {
+      # Ensure nginx waits for headscale at boot to avoid 502s
+      systemd.services.nginx.after = [ "headscale.service" ];
+    }
+    {
       systemd.tmpfiles.rules = [
         "f /var/lib/headscale/extra-records.json 0640 headscale headscale -"
       ];
