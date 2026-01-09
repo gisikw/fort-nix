@@ -87,6 +87,7 @@
     FONT: FONT,
     terminals: [],
     fitAddons: [],
+    elements: [],
     lastError: null,
 
     patch: function() {
@@ -111,6 +112,19 @@
 
     findTerminal: findTerminal,
 
+    // Trigger ResizeObserver by briefly changing container size
+    triggerResize: function(xtermEl) {
+      var container = xtermEl.parentElement;
+      if (!container) return;
+
+      var original = container.style.width;
+      container.style.width = (container.offsetWidth - 1) + 'px';
+      setTimeout(function() {
+        container.style.width = original;
+        console.log('[fort] Triggered resize observer');
+      }, 10);
+    },
+
     tryPatch: function() {
       document.querySelectorAll('.xterm').forEach(function(el) {
         if (el.__fortPatched) return;
@@ -120,18 +134,16 @@
           if (result && result.terminal) {
             el.__fortPatched = true;
             window.__fort.terminals.push(result.terminal);
+            window.__fort.elements.push(el);
             if (result.fitAddon) {
               window.__fort.fitAddons.push(result.fitAddon);
             }
             result.terminal.options.fontFamily = FONT;
             console.log('[fort] Set terminal fontFamily');
-            // Trigger refit to recalculate character metrics
-            if (result.fitAddon) {
-              setTimeout(function() {
-                result.fitAddon.fit();
-                console.log('[fort] Triggered fit after font change');
-              }, 50);
-            }
+            // Trigger ResizeObserver to use their blessed performFit path
+            setTimeout(function() {
+              window.__fort.triggerResize(el);
+            }, 50);
           }
         } catch (e) {
           window.__fort.lastError = e;
