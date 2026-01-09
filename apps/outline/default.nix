@@ -15,7 +15,7 @@ let
 in
 {
   systemd.tmpfiles.rules = [
-    "d /var/lib/fort-authy/outline 0755 outline outline -"
+    "d /var/lib/fort-auth/outline 0755 outline outline -"
     "f /var/lib/fort-auth/outline/client-id 0600 outline outline -"
     "f /var/lib/fort-auth/outline/client-secret 0600 outline outline -"
   ];
