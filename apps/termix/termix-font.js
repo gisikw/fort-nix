@@ -112,17 +112,24 @@
 
     findTerminal: findTerminal,
 
-    // Trigger ResizeObserver by briefly changing container size
+    // Trigger resize by toggling the w-screen class (inline style changes don't work)
     triggerResize: function(xtermEl) {
-      var container = xtermEl.parentElement;
-      if (!container) return;
+      var wScreen = document.querySelector('.w-screen');
+      if (!wScreen) {
+        console.log('[fort] No .w-screen element found');
+        return;
+      }
 
-      var original = container.style.width;
-      container.style.width = (container.offsetWidth - 1) + 'px';
+      wScreen.classList.remove('w-screen');
+      wScreen.classList.add('w-screen-fort-temp');
+      // Force reflow
+      void wScreen.offsetWidth;
+
       setTimeout(function() {
-        container.style.width = original;
-        console.log('[fort] Triggered resize observer');
-      }, 10);
+        wScreen.classList.remove('w-screen-fort-temp');
+        wScreen.classList.add('w-screen');
+        console.log('[fort] Toggled w-screen class');
+      }, 50);
     },
 
     tryPatch: function() {
