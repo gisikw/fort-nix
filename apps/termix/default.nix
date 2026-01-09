@@ -7,18 +7,16 @@ let
   # Custom font bundled in apps/termix/
   proggyCleanFont = ./ProggyCleanNerdFontMono-Regular.ttf;
 
-  # Font CSS to load the custom font (no font-family override - that's handled by JS)
+  # Font CSS to load the custom font with CSS override
   # Colors are handled by OSC escape sequences on SSH connection (see aspects/dev-sandbox)
   fontCss = ''
     @font-face{font-family:'ProggyClean Nerd Font';src:url('../fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:block}
+    .xterm,.xterm-screen,.xterm-rows,[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace !important}
   '';
 
-  # JavaScript to inject that sets xterm.js fontFamily properly (minified for sed injection)
-  # This finds the terminal via React fiber and sets the option, triggering proper remeasurement
-  fontJs = "(function(){var FONT=\"'ProggyClean Nerd Font', monospace\";function patchTerminal(el){var key=Object.keys(el).find(function(k){return k.startsWith('__reactFiber')});if(!key)return false;var fiber=el[key];while(fiber){var state=fiber.memoizedState;while(state){if(state.memoizedState&&state.memoizedState.options){state.memoizedState.options.fontFamily=FONT;return true}state=state.next}if(fiber.stateNode&&fiber.stateNode._core){fiber.stateNode.options.fontFamily=FONT;return true}fiber=fiber.return}return false}function tryPatch(){var els=document.querySelectorAll('.xterm');for(var i=0;i<els.length;i++){patchTerminal(els[i])}}if(document.readyState==='complete')tryPatch();else window.addEventListener('load',tryPatch);var observer=new MutationObserver(function(mutations){mutations.forEach(function(m){m.addedNodes.forEach(function(n){if(n.classList&&n.classList.contains('xterm'))patchTerminal(n);else if(n.querySelectorAll){n.querySelectorAll('.xterm').forEach(patchTerminal)}})})});observer.observe(document.body||document.documentElement,{childList:true,subtree:true})})();";
-
-  # Write font JS to a file for injection
-  fontJsFile = pkgs.writeText "termix-font.js" fontJs;
+  # Font JS file - patches xterm terminal instances to use custom font
+  # Debug handles exposed at window.__fort
+  fontJsFile = ./termix-font.js;
 
   # Patch script that injects custom font before starting Termix
   patchEntrypoint = pkgs.writeTextFile {
