@@ -7,11 +7,10 @@ let
   # Custom font bundled in apps/termix/
   proggyCleanFont = ./ProggyCleanNerdFontMono-Regular.ttf;
 
-  # Font CSS to load the custom font with CSS override
+  # Font CSS to load the custom font (no override - JS sets fontFamily on xterm instance)
   # Colors are handled by OSC escape sequences on SSH connection (see aspects/dev-sandbox)
   fontCss = ''
     @font-face{font-family:'ProggyClean Nerd Font';src:url('../fonts/ProggyCleanNerdFontMono-Regular.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:block}
-    .xterm,.xterm-screen,.xterm-rows,[class*='xterm-dom-renderer-owner'] .xterm-rows{font-family:'ProggyClean Nerd Font',monospace !important}
   '';
 
   # Font JS file - patches xterm terminal instances to use custom font
