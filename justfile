@@ -248,6 +248,7 @@ _deploy-gitops host addr:
 
   max_attempts=90  # 7.5 minutes at 5s intervals
   attempt=0
+  last_state=""
 
   # For manual-confirm hosts, keep calling deploy until target SHA is active
   # For auto-deploy hosts (no deploy capability), just poll status
@@ -270,7 +271,10 @@ _deploy-gitops host addr:
         exit 0
       fi
     else
-      echo "[Fort] Waiting for {{host}} to become reachable... (attempt $attempt)"
+      if [[ "$last_state" != "unreachable" ]]; then
+        echo "[Fort] Waiting for {{host}} to become reachable..."
+        last_state="unreachable"
+      fi
       sleep 5
       continue
     fi
@@ -284,36 +288,51 @@ _deploy-gitops host addr:
 
         case "$deploy_status" in
           deployed|confirmed)
-            echo "[Fort] Confirmation accepted, waiting for switch... (attempt $attempt)"
-            sleep 5
+            if [[ "$last_state" != "switching" ]]; then
+              echo "[Fort] Waiting for switch..."
+              last_state="switching"
+            fi
             ;;
           sha_mismatch)
-            pending=$(echo "$deploy_body" | jq -r '.pending // empty')
-            echo "[Fort] Waiting for comin to fetch... current=${current:-unknown} comin=${pending:-unknown} (attempt $attempt)"
-            sleep 5
+            if [[ "$last_state" != "fetching" ]]; then
+              pending=$(echo "$deploy_body" | jq -r '.pending // empty')
+              echo "[Fort] Waiting for comin to fetch... (comin has ${pending:-unknown})"
+              last_state="fetching"
+            fi
             ;;
           building)
-            echo "[Fort] Waiting for build to complete... (attempt $attempt)"
-            sleep 5
+            if [[ "$last_state" != "building" ]]; then
+              echo "[Fort] Waiting for build..."
+              last_state="building"
+            fi
             ;;
           *)
-            echo "[Fort] Deploy response: ${deploy_status} (attempt $attempt)"
-            sleep 5
+            if [[ "$last_state" != "$deploy_status" ]]; then
+              echo "[Fort] Deploy status: ${deploy_status}"
+              last_state="$deploy_status"
+            fi
             ;;
         esac
+        sleep 5
       else
         # Check if it's a 404 (no deploy capability) vs other error
         if echo "$deploy_response" | grep -q "404\|not found\|unknown capability"; then
           echo "[Fort] No deploy capability, polling status..."
           has_deploy_capability=false
         else
-          echo "[Fort] Deploy call failed, retrying... (attempt $attempt)"
+          if [[ "$last_state" != "retrying" ]]; then
+            echo "[Fort] Deploy call failed, retrying..."
+            last_state="retrying"
+          fi
           sleep 5
         fi
       fi
     else
       # No deploy capability - just poll status
-      echo "[Fort] Waiting for activation... current=${current:-unknown} (attempt $attempt)"
+      if [[ "$last_state" != "polling" ]]; then
+        echo "[Fort] Waiting for activation... (current: ${current:-unknown})"
+        last_state="polling"
+      fi
       sleep 5
     fi
   done
