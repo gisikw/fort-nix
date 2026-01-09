@@ -17,6 +17,9 @@ let
   # This finds the terminal via React fiber and sets the option, triggering proper remeasurement
   fontJs = "(function(){var FONT=\"'ProggyClean Nerd Font', monospace\";function patchTerminal(el){var key=Object.keys(el).find(function(k){return k.startsWith('__reactFiber')});if(!key)return false;var fiber=el[key];while(fiber){var state=fiber.memoizedState;while(state){if(state.memoizedState&&state.memoizedState.options){state.memoizedState.options.fontFamily=FONT;return true}state=state.next}if(fiber.stateNode&&fiber.stateNode._core){fiber.stateNode.options.fontFamily=FONT;return true}fiber=fiber.return}return false}function tryPatch(){var els=document.querySelectorAll('.xterm');for(var i=0;i<els.length;i++){patchTerminal(els[i])}}if(document.readyState==='complete')tryPatch();else window.addEventListener('load',tryPatch);var observer=new MutationObserver(function(mutations){mutations.forEach(function(m){m.addedNodes.forEach(function(n){if(n.classList&&n.classList.contains('xterm'))patchTerminal(n);else if(n.querySelectorAll){n.querySelectorAll('.xterm').forEach(patchTerminal)}})})});observer.observe(document.body||document.documentElement,{childList:true,subtree:true})})();";
 
+  # Write font JS to a file for injection
+  fontJsFile = pkgs.writeText "termix-font.js" fontJs;
+
   # Patch script that injects custom font before starting Termix
   patchEntrypoint = pkgs.writeTextFile {
     name = "termix-patch-entrypoint";
@@ -31,6 +34,10 @@ let
       cp /custom/ProggyCleanNerdFontMono-Regular.ttf /app/html/fonts/
       echo "[fort] Copied ProggyClean font"
 
+      # Copy font JS to static assets
+      cp /custom/termix-font.js /app/html/assets/
+      echo "[fort] Copied font JS"
+
       # Append font CSS to the stylesheet
       CSS_FILE=$(ls /app/html/assets/*.css 2>/dev/null | head -1)
       if [ -n "$CSS_FILE" ]; then
@@ -40,12 +47,11 @@ let
         echo "[fort] Warning: Could not find CSS file to patch"
       fi
 
-      # Inject font JS into HTML (before closing </head>)
+      # Inject font JS reference into HTML (before closing </head>)
       HTML_FILE="/app/html/index.html"
       if [ -f "$HTML_FILE" ]; then
-        SCRIPT_TAG="<script>${fontJs}</script>"
-        sed -i "s|</head>|$SCRIPT_TAG</head>|" "$HTML_FILE"
-        echo "[fort] Injected font JS into $HTML_FILE"
+        sed -i 's|</head>|<script src="/assets/termix-font.js"></script></head>|' "$HTML_FILE"
+        echo "[fort] Injected font JS reference into $HTML_FILE"
       else
         echo "[fort] Warning: Could not find index.html to patch"
       fi
@@ -177,6 +183,7 @@ in
       volumes = [
         "/var/lib/termix:/app/data"
         "${proggyCleanFont}:/custom/ProggyCleanNerdFontMono-Regular.ttf:ro"
+        "${fontJsFile}:/custom/termix-font.js:ro"
         "${patchEntrypoint}:/custom/entrypoint.sh:ro"
       ];
       entrypoint = "/custom/entrypoint.sh";
