@@ -147,13 +147,15 @@ in
   };
 
   # Persist the home directory across reboots (for impermanent systems)
+  # Mode 0710 ensures ACL mask includes execute bit (needed for silverbullet traversal)
   environment.persistence."/persist/system".directories = [
-    { directory = homeDir; user = user; group = "users"; mode = "0700"; }
+    { directory = homeDir; user = user; group = "users"; mode = "0710"; }
   ];
 
   # Create Projects directory structure
+  # Mode 0710 on homeDir ensures ACL mask includes execute bit
   systemd.tmpfiles.rules = [
-    "d ${homeDir} 0700 ${user} users -"
+    "d ${homeDir} 0710 ${user} users -"
     "d ${homeDir}/.ssh 0700 ${user} users -"
     "d ${homeDir}/Projects 0755 ${user} users -"
     "d /var/lib/fort/dev-sandbox 0755 ${user} users -"
