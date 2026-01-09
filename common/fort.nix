@@ -143,6 +143,8 @@ in
         let
           authProxySock = "/run/fort-auth/${svc.name}.sock";
           envFile = "/var/lib/fort-auth/${svc.name}/oauth2-proxy.env";
+          subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+          publicUrl = "https://${subdomain}.${domain}";
         in lib.optionalAttrs (svc.sso.mode != "none" && svc.sso.mode != "oidc") {
           "oauth2-proxy-${svc.name}" = {
             wantedBy = [ "multi-user.target" ];
@@ -178,8 +180,13 @@ in
                   --oidc-issuer-url=https://id.${domain} \
                   --upstream=http://127.0.0.1:${toString svc.port} \
                   --http-address=unix://${authProxySock} \
+                  --redirect-url=${publicUrl}/oauth2/callback \
                   --client-secret-file=/var/lib/fort-auth/${svc.name}/client-secret \
                   --cookie-secret-file=/var/lib/fort-auth/${svc.name}/cookie-secret \
+                  --cookie-secure=true \
+                  --cookie-samesite=lax \
+                  --cookie-name=_oauth2_proxy_${svc.name} \
+                  --skip-auth-regex='^/(favicon\.ico|service_worker\.js|\.client/.*|manifest\.json)$' \
                   --pass-user-headers \
                   --email-domain=* \
                   --skip-provider-button=true \
