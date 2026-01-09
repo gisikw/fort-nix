@@ -6,7 +6,7 @@ in
 {
   virtualisation.oci-containers = {
     containers.super-productivity = {
-      image = "containers.${fort.settings.domain}/johannesjo/super-productivity:latest";
+      image = "containers.${fort.settings.domain}/johannesjo/super-productivity:v16.8.1";
       ports = [ "4578:80" ];
     };
   };

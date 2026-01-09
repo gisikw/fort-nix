@@ -162,7 +162,7 @@ in
 {
   virtualisation.oci-containers = {
     containers.sillytavern = {
-      image = "containers.${fort.settings.domain}/ghcr.io/sillytavern/sillytavern:latest";
+      image = "containers.${fort.settings.domain}/ghcr.io/sillytavern/sillytavern:1.15.0";
       hostname = "sillytavern.${fort.settings.domain}";
       ports = [ "8000:8000" ];
       environment = {
