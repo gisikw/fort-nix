@@ -10,6 +10,7 @@ rec {
       subdomain = "exocortex";
       dataDir = "/home/dev/Projects/exocortex/notes";
     }
+    "vdirsyncer-auth"
   ];
 
   aspects = [
