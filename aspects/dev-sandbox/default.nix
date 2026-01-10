@@ -252,15 +252,15 @@ in
       path = ${homeDir}/.local/share/vdirsyncer/calendars/*
       type = discover
 
-      [default]
-      default_calendar = google
-
       [locale]
       timeformat = %H:%M
       dateformat = %Y-%m-%d
       longdateformat = %Y-%m-%d
       datetimeformat = %Y-%m-%d %H:%M
       longdatetimeformat = %Y-%m-%d %H:%M
+
+      [default]
+      highlight_event_days = True
       EOF
 
       chown ${user}:users ${homeDir}/.config/khal/config
