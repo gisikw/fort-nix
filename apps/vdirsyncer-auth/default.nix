@@ -28,8 +28,9 @@ in
   # Allow dev user to read the token file
   users.users.dev.extraGroups = [ group ];
 
+  # Mode 0770: group write needed for token refresh (vdirsyncer writes temp files)
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 0750 ${user} ${group}"
+    "d ${dataDir} 0770 ${user} ${group}"
   ];
 
   age.secrets.oauth-client-id = {
