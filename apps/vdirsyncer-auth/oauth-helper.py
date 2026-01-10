@@ -128,7 +128,7 @@ class OAuthHandler(BaseHTTPRequestHandler):
             os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
             with open(TOKEN_FILE, "w") as f:
                 json.dump(token_data, f, indent=2)
-            os.chmod(TOKEN_FILE, 0o600)
+            os.chmod(TOKEN_FILE, 0o640)  # Group-readable for dev user
             print(f"Token written to {TOKEN_FILE}")
         except Exception as e:
             self.send_error(500, f"Failed to write token: {e}")

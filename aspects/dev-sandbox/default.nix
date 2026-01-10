@@ -76,6 +76,10 @@ let
 
     # Fort control plane
     fort-agent-call
+
+    # Calendar
+    vdirsyncer
+    khal
   ];
 in
 {
@@ -160,6 +164,10 @@ in
     "d ${homeDir}/Projects 0755 ${user} users -"
     "d /var/lib/fort/dev-sandbox 0755 ${user} users -"
     "d /var/lib/fort-git 0755 root root -"
+    # vdirsyncer/khal directories
+    "d ${homeDir}/.config/vdirsyncer 0700 ${user} users -"
+    "d ${homeDir}/.config/khal 0700 ${user} users -"
+    "d ${homeDir}/.local/share/vdirsyncer 0700 ${user} users -"
   ];
 
   # Request RW git token from forge via control plane
@@ -183,6 +191,80 @@ in
     owner = user;
     group = "users";
     mode = "0600";
+  };
+
+  # Generate vdirsyncer config with secrets at boot
+  # Runs as root to read secrets, then chowns to dev
+  systemd.services.vdirsyncer-config = {
+    description = "Generate vdirsyncer config";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "agenix.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      # Read secrets (only root can read these)
+      CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
+      CLIENT_SECRET=$(cat ${config.age.secrets.oauth-client-secret.path} | tr -d '\n')
+
+      # Ensure directories exist
+      mkdir -p ${homeDir}/.config/vdirsyncer
+      mkdir -p ${homeDir}/.config/khal
+      mkdir -p ${homeDir}/.local/share/vdirsyncer/status
+
+      cat > ${homeDir}/.config/vdirsyncer/config << EOF
+      [general]
+      status_path = "${homeDir}/.local/share/vdirsyncer/status/"
+
+      [pair google_calendar]
+      a = "google_calendar_remote"
+      b = "google_calendar_local"
+      collections = ["from a", "from b"]
+      metadata = ["color"]
+
+      [storage google_calendar_remote]
+      type = "google_calendar"
+      token_file = "/var/lib/vdirsyncer/token"
+      client_id = "$CLIENT_ID"
+      client_secret = "$CLIENT_SECRET"
+
+      [storage google_calendar_local]
+      type = "filesystem"
+      path = "${homeDir}/.local/share/vdirsyncer/calendars/"
+      fileext = ".ics"
+      EOF
+
+      chown ${user}:users ${homeDir}/.config/vdirsyncer/config
+      chmod 600 ${homeDir}/.config/vdirsyncer/config
+
+      # Generate khal config
+      cat > ${homeDir}/.config/khal/config << EOF
+      [calendars]
+
+      [[google]]
+      path = ${homeDir}/.local/share/vdirsyncer/calendars/*
+      type = discover
+
+      [default]
+      default_calendar = google
+
+      [locale]
+      timeformat = %H:%M
+      dateformat = %Y-%m-%d
+      longdateformat = %Y-%m-%d
+      datetimeformat = %Y-%m-%d %H:%M
+      longdatetimeformat = %Y-%m-%d %H:%M
+      EOF
+
+      chown ${user}:users ${homeDir}/.config/khal/config
+      chmod 600 ${homeDir}/.config/khal/config
+
+      # Fix ownership of directories
+      chown -R ${user}:users ${homeDir}/.config/vdirsyncer
+      chown -R ${user}:users ${homeDir}/.config/khal
+      chown -R ${user}:users ${homeDir}/.local/share/vdirsyncer
+    '';
   };
 
   # Git credential helper for Forgejo access
