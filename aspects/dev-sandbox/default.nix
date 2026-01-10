@@ -253,6 +253,8 @@ in
       type = discover
 
       [locale]
+      local_timezone = America/Chicago
+      default_timezone = America/Chicago
       timeformat = %H:%M
       dateformat = %Y-%m-%d
       longdateformat = %Y-%m-%d
@@ -303,6 +305,37 @@ in
       echo "Running initial calendar discovery..."
       vdirsyncer discover
       echo "Discovery complete"
+    '';
+  };
+
+  # Periodic calendar sync (every 15 minutes)
+  systemd.timers.vdirsyncer-sync = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2m";
+      OnUnitActiveSec = "15m";
+    };
+  };
+
+  systemd.services.vdirsyncer-sync = {
+    description = "Sync calendars with Google";
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      Group = "vdirsyncer";
+    };
+    path = with pkgs; [ vdirsyncer coreutils ];
+    script = ''
+      # Skip if no token yet
+      if [ ! -f /var/lib/vdirsyncer/token ]; then
+        echo "No OAuth token, skipping sync"
+        exit 0
+      fi
+
+      vdirsyncer sync
+
+      # Touch marker file for freshness tracking
+      touch ${homeDir}/.local/share/vdirsyncer/.last_sync
     '';
   };
 
