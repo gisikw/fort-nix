@@ -11,7 +11,13 @@ This skill covers the fort-agent system for secure inter-host communication. Hos
 
 **Client (calling a capability):**
 ```bash
-fort <host> <capability> [request-json]
+fort <host> <capability> [request-json]  # request-json defaults to '{}'
+```
+
+Examples:
+```bash
+fort drhorrible status                    # No args needed for simple calls
+fort joker journal '{"unit": "nginx"}'    # Pass JSON when capability needs params
 ```
 
 **Provider (exposing a capability):**
