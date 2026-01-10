@@ -1,4 +1,4 @@
-{ subdomain ? "notes", dataDir ? "/var/lib/flatnotes", rootManifest, ... }:
+{ subdomain ? "notes", dataDir ? "/var/lib/flatnotes", dataUser ? "root", dataGroup ? "root", rootManifest, ... }:
 { pkgs, lib, ... }:
 let
   fort = rootManifest.fortConfig;
@@ -22,7 +22,7 @@ in
 
   # Ensure data directory and secret key exist
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 0755 root root -"
+    "d ${dataDir} 0755 ${dataUser} ${dataGroup} -"
   ];
 
   system.activationScripts.flatnotesSecretKey = ''

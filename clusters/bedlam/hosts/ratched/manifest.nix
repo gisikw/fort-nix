@@ -9,6 +9,8 @@ rec {
       name = "flatnotes";
       subdomain = "exocortex";
       dataDir = "/home/dev/Projects/exocortex/notes";
+      dataUser = "dev";
+      dataGroup = "users";
     }
     "vdirsyncer-auth"
   ];
@@ -32,7 +34,7 @@ rec {
 
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
-        "d /home/dev/Projects/exocortex/notes 0755 dev users -"
+        # notes subdir owned by flatnotes app via dataUser/dataGroup params
       ];
     };
 }
