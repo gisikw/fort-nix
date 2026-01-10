@@ -20,7 +20,7 @@ fort.host.capabilities.my-capability = {
 
 ## Handle Generation
 
-When `needsGC = true`, `fort-agent-wrapper`:
+When `needsGC = true`, `fort-provider`:
 
 1. Executes the handler
 2. Computes SHA256 of response body
@@ -43,7 +43,7 @@ If not using `fort.host.needs`, track handles manually:
 
 ```bash
 # Make request
-response=$(fort-agent-call provider my-capability '{}')
+response=$(fort provider my-capability)
 handle=$(echo "$response" | jq -r '.handle')
 body=$(echo "$response" | jq -r '.body')
 
@@ -89,7 +89,7 @@ The provider runs a timer that:
 Check holdings on a host:
 
 ```bash
-fort-agent-call hostname holdings '{}'
+fort hostname holdings
 ```
 
 Check handle state on provider:

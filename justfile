@@ -238,7 +238,7 @@ _deploy-direct host addr:
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
     "mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json"
 
-# GitOps deploy via fort-agent-call (no master key needed)
+# GitOps deploy via fort CLI (no master key needed)
 _deploy-gitops host addr:
   #!/usr/bin/env bash
   set -euo pipefail
@@ -262,7 +262,7 @@ _deploy-gitops host addr:
     fi
 
     # Check current status first
-    if status_json=$(fort-agent-call {{host}} status '{}' 2>/dev/null | jq -r '.body'); then
+    if status_json=$(fort {{host}} status 2>/dev/null | jq -r '.body'); then
       current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
 
       # Already deployed?
@@ -282,7 +282,7 @@ _deploy-gitops host addr:
     # Keep trying deploy capability until we reach target SHA
     # (Even after "deployed" response, the wrong generation might have been confirmed)
     if [[ "$has_deploy_capability" == "true" ]]; then
-      if deploy_response=$(fort-agent-call {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>&1); then
+      if deploy_response=$(fort {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>&1); then
         deploy_body=$(echo "$deploy_response" | jq -r '.body')
         deploy_status=$(echo "$deploy_body" | jq -r '.status // .error // empty')
 

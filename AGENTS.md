@@ -67,7 +67,7 @@ After deploying a new app with a subdomain, refresh the service registry so DNS 
 
 ```bash
 just deploy <host>                                           # Wait for host deploy
-fort-agent-call drhorrible restart '{"unit": "fort-service-registry"}'  # Refresh DNS
+fort drhorrible restart '{"unit": "fort-service-registry"}'  # Refresh DNS
 ```
 
 Use restart **without** delay unless the service would kill the response (nginx, fort-agent, tailscale).
@@ -373,7 +373,7 @@ Use `just deploy <host>` like any other host - it handles the confirmation autom
 ## Dev Sandbox Constraints
 
 The dev-sandbox environment has limited local privileges:
-- **No sudo access** - use `fort-agent-call` to restart services or run privileged operations on hosts
+- **No sudo access** - use `fort` to restart services or run privileged operations on hosts
 - **No interactive SSH** - construct one-shot commands or use agent calls
 - **Age key for secrets** - can decrypt secrets on `main` branch only
 
@@ -396,17 +396,17 @@ Common issues:
 
 ## Inter-Host Agent Calls
 
-Agents in the dev-sandbox can query and control other hosts using `fort-agent-call`. This enables debugging, deployment, and cluster management without SSH access.
+Agents in the dev-sandbox can query and control other hosts using `fort`. This enables debugging, deployment, and cluster management without SSH access.
 
 ```bash
 # Check a host's status (uptime, failed units, deploy info)
-fort-agent-call drhorrible status '{}'
+fort drhorrible status
 
 # Get a host's manifest (apps, aspects, roles, exposed services)
-fort-agent-call joker manifest '{}'
+fort joker manifest
 
 # List GC handles held by a host
-fort-agent-call ursula holdings '{}'
+fort ursula holdings
 ```
 
 **Output format**: JSON envelope with `body`, `status`, `handle`, `ttl` fields.
@@ -419,17 +419,17 @@ These capabilities are restricted to the `dev-sandbox` principal for operational
 
 ```bash
 # Trigger deployment on manual-confirmation hosts (forge/beacon)
-fort-agent-call drhorrible deploy '{"sha": "5563ac2"}'
+fort drhorrible deploy '{"sha": "5563ac2"}'
 
 # Fetch journal logs for a service
-fort-agent-call joker journal '{"unit": "nginx", "lines": 50}'
-fort-agent-call joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
+fort joker journal '{"unit": "nginx", "lines": 50}'
+fort joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
 
 # Restart a service (immediate - preferred, fails if restart fails)
-fort-agent-call joker restart '{"unit": "fort-service-registry"}'
+fort joker restart '{"unit": "fort-service-registry"}'
 
 # Restart with delay (only for nginx/fort-agent/tailscale - avoids killing response)
-fort-agent-call joker restart '{"unit": "nginx", "delay": 2}'
+fort joker restart '{"unit": "nginx", "delay": 2}'
 ```
 
 | Capability | Request | Notes |

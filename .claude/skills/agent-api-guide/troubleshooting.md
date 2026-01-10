@@ -56,7 +56,7 @@ Then rebuild. RBAC is computed from `fort.host.needs` declarations.
 **Debug:**
 ```bash
 # Check what capabilities exist
-fort-agent-call hostname manifest '{}' | jq '.body.capabilities'
+fort hostname manifest | jq '.body.capabilities'
 
 # Check handler directory on host
 ls /etc/fort-agent/handlers/
@@ -72,7 +72,7 @@ ls /etc/fort-agent/handlers/
 **Debug:**
 ```bash
 # Check wrapper logs
-journalctl -u fort-agent-wrapper -n 50
+journalctl -u fort-agent -n 50
 
 # Test handler directly on host
 echo '{}' | /etc/fort-agent/handlers/my-capability
@@ -136,7 +136,7 @@ echo -e "$canonical" | ssh-keygen -Y sign \
   -f /var/lib/fort/dev-sandbox/agent-key \
   -n fort-agent -
 
-# This produces an SSH signature block that fort-agent-call base64-encodes
+# This produces an SSH signature block that fort base64-encodes
 ```
 
 ## Nginx Layer Issues
@@ -151,7 +151,7 @@ cat /etc/nginx/sites-enabled/*agent* 2>/dev/null || grep -r agent /etc/nginx/
 ls -la /run/fort-agent/fcgi.sock
 
 # Wrapper service
-systemctl status fort-agent-wrapper
+systemctl status fort-agent
 ```
 
 ## Capability Not Showing Up
@@ -160,7 +160,7 @@ If you added a capability but it's not available:
 
 1. **Rebuild happened?** Check deploy timestamp:
    ```bash
-   fort-agent-call hostname status '{}' | jq '.body.deploy'
+   fort hostname status | jq '.body.deploy'
    ```
 
 2. **Handler installed?**

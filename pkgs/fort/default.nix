@@ -1,10 +1,10 @@
 { pkgs, domain }:
 
 let
-  script = pkgs.writeShellScript "fort-agent-call" ''
+  script = pkgs.writeShellScript "fort" ''
     set -euo pipefail
 
-    # Usage: fort-agent-call <host> <capability> [request-json]
+    # Usage: fort <host> <capability> [request-json]
     # Exit codes: 0=success, 1=http error, 2=auth error
     #
     # Output (stdout): JSON envelope with body, handle, ttl, status
@@ -16,7 +16,7 @@ let
     # }
 
     usage() {
-      echo "Usage: fort-agent-call <host> <capability> [request-json]" >&2
+      echo "Usage: fort <host> <capability> [request-json]" >&2
       echo "  host: target hostname" >&2
       echo "  capability: agent endpoint (e.g., status, ssl-cert)" >&2
       echo "  request-json: optional JSON body (default: {})" >&2
@@ -136,7 +136,7 @@ let
   '';
 in
 pkgs.stdenv.mkDerivation {
-  pname = "fort-agent-call";
+  pname = "fort";
   version = "0.1.0";
 
   dontUnpack = true;
@@ -154,8 +154,8 @@ pkgs.stdenv.mkDerivation {
   ];
 
   installPhase = ''
-    install -Dm755 ${script} $out/bin/fort-agent-call
-    wrapProgram $out/bin/fort-agent-call \
+    install -Dm755 ${script} $out/bin/fort
+    wrapProgram $out/bin/fort \
       --prefix PATH : ${pkgs.lib.makeBinPath [
         pkgs.curl
         pkgs.coreutils
@@ -168,7 +168,7 @@ pkgs.stdenv.mkDerivation {
   '';
 
   meta = with pkgs.lib; {
-    description = "CLI client for fort agent protocol";
+    description = "Fort control plane CLI";
     license = licenses.mit;
     platforms = platforms.linux;
   };

@@ -293,13 +293,13 @@ for need in $(jq -c '.[]' /var/lib/fort/needs.json); do
     capability=$(echo "$need" | jq -r '.capability')
     request=$(echo "$need" | jq -c '.request')
 
-    if response=$(fort-agent-call "$provider" "$capability" "$request"); then
+    if response=$(fort "$provider" "$capability" "$request"); then
       # Store response and handle
       store_dir=$(echo "$need" | jq -r '.store // empty')
       if [ -n "$store_dir" ]; then
         mkdir -p "$store_dir"
         echo "$response" > "$store_dir/response.json"
-        # Handle extracted from response headers by fort-agent-call
+        # Handle extracted from response headers by fort
         echo "$FORT_HANDLE" > "$store_dir/handle"
         add_to_holdings "$FORT_HANDLE"
       fi
@@ -314,7 +314,7 @@ for need in $(jq -c '.[]' /var/lib/fort/needs.json); do
 done
 ```
 
-Retries, backoff, etc. are implementation details of `fort-agent-call`, not the fulfillment abstraction.
+Retries, backoff, etc. are implementation details of `fort`, not the fulfillment abstraction.
 
 ## Relationship to Agent
 

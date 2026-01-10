@@ -81,8 +81,8 @@ From the dev-sandbox:
 
 ```bash
 # Check what capabilities a host exposes
-fort-agent-call drhorrible manifest '{}' | jq '.body.capabilities'
+fort drhorrible manifest | jq '.body.capabilities'
 
 # Call your capability
-fort-agent-call hostname my-capability '{"key": "value"}'
+fort hostname my-capability '{"key": "value"}'
 ```

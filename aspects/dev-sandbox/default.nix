@@ -14,7 +14,7 @@ let
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
   beads = import ../../pkgs/beads { inherit pkgs; };
-  fort-agent-call = import ../../pkgs/fort-agent-call { inherit pkgs domain; };
+  fort = import ../../pkgs/fort { inherit pkgs domain; };
 
   # Transform script for git-token: extracts token from JSON response
   gitTokenTransform = pkgs.writeShellScript "git-token-transform" ''
@@ -75,7 +75,7 @@ let
     beads
 
     # Fort control plane
-    fort-agent-call
+    fort
 
     # Calendar
     vdirsyncer
@@ -184,7 +184,7 @@ in
     };
   };
 
-  # Agent key for fort-agent-call signing (readable by dev user)
+  # Agent key for fort signing (readable by dev user)
   age.secrets.dev-sandbox-agent-key = {
     file = ./agent-key.age;
     path = agentKeyPath;

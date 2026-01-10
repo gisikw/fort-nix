@@ -1,6 +1,6 @@
 # Writing Handlers
 
-Handlers are scripts that process capability requests. They're executed by `fort-agent-wrapper` (the FastCGI server).
+Handlers are scripts that process capability requests. They're executed by `fort-provider` (the FastCGI server).
 
 ## Handler Contract
 
@@ -124,7 +124,7 @@ echo '{"service": "test"}' | /etc/fort-agent/handlers/my-capability
 Check logs on the host:
 
 ```bash
-journalctl -u fort-agent-wrapper -n 50
+journalctl -u fort-agent -n 50
 ```
 
 ## Handler Location at Runtime

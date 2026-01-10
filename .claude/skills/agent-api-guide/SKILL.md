@@ -11,7 +11,7 @@ This skill covers the fort-agent system for secure inter-host communication. Hos
 
 **Client (calling a capability):**
 ```bash
-fort-agent-call <host> <capability> [request-json]
+fort <host> <capability> [request-json]
 ```
 
 **Provider (exposing a capability):**
@@ -39,8 +39,8 @@ fort.host.needs.my-capability.my-id = {
 | Path | Purpose |
 |------|---------|
 | `common/fort-agent.nix` | Nix module defining options and config generation |
-| `pkgs/fort-agent-call/` | Client script (Bash) |
-| `pkgs/fort-agent-wrapper/` | Server (Go FastCGI) |
+| `pkgs/fort/` | Client CLI (Bash) |
+| `pkgs/fort-provider/` | Server (Go FastCGI) |
 | `/etc/fort-agent/` | Runtime config on hosts |
 | `/var/lib/fort-agent/` | GC handles and state |
 

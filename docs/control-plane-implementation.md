@@ -6,9 +6,9 @@ Audit of current state vs. `docs/control-plane-interfaces.md` spec, with impleme
 
 ### Working Infrastructure
 
-**Control Plane Core (current naming):**
-- `fort-agent-wrapper` (`pkgs/fort-agent-wrapper/`) - Go FastCGI, handles auth + RBAC + dispatch
-- `fort-agent-call` (`pkgs/fort-agent-call/`) - bash CLI, SSH signing + request
+**Control Plane Core:**
+- `fort-provider` (`pkgs/fort-provider/`) - Go FastCGI, handles auth + RBAC + dispatch
+- `fort` (`pkgs/fort/`) - bash CLI, SSH signing + request
 - Nix module (`common/fort-agent.nix`) - `fort.host.needs`, `fort.host.capabilities`
 - nginx integration - `/agent/*` location with VPN-only access
 
@@ -145,10 +145,10 @@ Note: `service-registry` does a lot:
 
 Rename existing components to target naming convention.
 
-**1.1 Rename packages**
-- `pkgs/fort-agent-wrapper/` → `pkgs/fort-provider/`
-- `pkgs/fort-agent-call/` → `pkgs/fort/`
-- Update CLI to make request arg optional (default `{}`)
+**1.1 Rename packages** ✓
+- `pkgs/fort-agent-wrapper/` → `pkgs/fort-provider/` ✓
+- `pkgs/fort-agent-call/` → `pkgs/fort/` ✓
+- CLI request arg already optional (defaults to `{}`) ✓
 
 **1.2 Rename Nix module**
 - `common/fort-agent.nix` → `common/fort.nix` (or merge into existing)
@@ -164,7 +164,7 @@ Rename existing components to target naming convention.
 
 **1.5 Update AGENTS.md**
 - Document new `fort` CLI usage
-- Update `fort-agent-call` references
+- Update `fort` CLI references ✓
 
 Files: `pkgs/`, `common/`, nginx configs, AGENTS.md
 

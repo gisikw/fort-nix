@@ -166,7 +166,7 @@ in
     postDeploymentCommand = postDeployScript;
 
     # Manual deploy mode: build automatically, but require explicit confirmation to switch
-    # Triggered via fort-agent-call <host> deploy '{"sha": "..."}'
+    # Triggered via fort <host> deploy '{"sha": "..."}'
     deployConfirmer.mode = if manualDeploy then "manual" else "without";
   };
 

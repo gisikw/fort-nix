@@ -33,7 +33,9 @@
       "Bash(curl:*)",
       "WebFetch(domain:termix.gisi.network)",
       "Bash(fort-agent-call:*)",
-      "Bash(systemctl cat:*)"
+      "Bash(systemctl cat:*)",
+      "Bash(ls:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []

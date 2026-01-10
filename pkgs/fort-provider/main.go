@@ -1,4 +1,4 @@
-// Fort Agent FastCGI Wrapper
+// Fort Provider - FastCGI capability handler
 //
 // Authenticates incoming requests using SSH signatures, enforces RBAC,
 // and dispatches to handler scripts.

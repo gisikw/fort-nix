@@ -352,11 +352,11 @@ let
   # Generate capabilities.json with needsGC and ttl settings (includes mandatory)
   capabilitiesJson = builtins.toJSON allCapabilities;
 
-  # Import the agent wrapper
-  fortAgentWrapper = import ../pkgs/fort-agent-wrapper { inherit pkgs; };
+  # Import the provider (FastCGI handler)
+  fortProvider = import ../pkgs/fort-provider { inherit pkgs; };
 
-  # Import fort-agent-call for fulfill service
-  fortAgentCall = import ../pkgs/fort-agent-call { inherit pkgs domain; };
+  # Import fort CLI for fulfill service
+  fortCli = import ../pkgs/fort { inherit pkgs domain; };
 
   # Fulfill script - reads needs.json and calls providers
   fortFulfillScript = pkgs.writeShellScript "fort-fulfill" ''
@@ -424,7 +424,7 @@ let
           log "[$id] Using identity: $identity_origin"
         fi
 
-        if result=$(env $call_env ${fortAgentCall}/bin/fort-agent-call "$provider" "$capability" "$request" 2>&1); then
+        if result=$(env $call_env ${fortCli}/bin/fort "$provider" "$capability" "$request" 2>&1); then
           status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
           handle=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.handle // empty')
           body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')
@@ -634,7 +634,7 @@ in
 
         serviceConfig = {
           Type = "simple";
-          ExecStart = "${fortAgentWrapper}/bin/fort-agent-wrapper";
+          ExecStart = "${fortProvider}/bin/fort-provider";
           StandardInput = "socket";
           StandardOutput = "socket";
           StandardError = "journal";
@@ -709,7 +709,7 @@ in
           ExecStart = fortFulfillScript;
         };
 
-        path = [ fortAgentCall pkgs.jq pkgs.coreutils pkgs.systemd ];
+        path = [ fortCli pkgs.jq pkgs.coreutils pkgs.systemd ];
       };
 
       # Retry timer - periodically re-attempts unfulfilled needs
@@ -729,7 +729,7 @@ in
           ExecStart = fortFulfillScript;
         };
 
-        path = [ fortAgentCall pkgs.jq pkgs.coreutils pkgs.systemd ];
+        path = [ fortCli pkgs.jq pkgs.coreutils pkgs.systemd ];
       };
     })
 
