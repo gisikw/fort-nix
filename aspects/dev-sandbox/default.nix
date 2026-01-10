@@ -203,7 +203,13 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
     };
+    path = with pkgs; [ coreutils ];
     script = ''
+      # Ensure token file is group-readable (dev user is in vdirsyncer group)
+      if [ -f /var/lib/vdirsyncer/token ]; then
+        chmod 640 /var/lib/vdirsyncer/token
+      fi
+
       # Read secrets (only root can read these)
       CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
       CLIENT_SECRET=$(cat ${config.age.secrets.oauth-client-secret.path} | tr -d '\n')
@@ -264,6 +270,39 @@ in
       chown -R ${user}:users ${homeDir}/.config/vdirsyncer
       chown -R ${user}:users ${homeDir}/.config/khal
       chown -R ${user}:users ${homeDir}/.local/share/vdirsyncer
+    '';
+  };
+
+  # Bootstrap: run vdirsyncer discover if calendars not yet set up
+  systemd.services.vdirsyncer-bootstrap = {
+    description = "Initial vdirsyncer calendar discovery";
+    after = [ "vdirsyncer-config.service" "network-online.target" ];
+    requires = [ "vdirsyncer-config.service" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = user;
+      Group = "vdirsyncer";  # Need vdirsyncer group to read token
+    };
+    path = with pkgs; [ vdirsyncer ];
+    script = ''
+      # Skip if already discovered (status dir has content)
+      if [ -d "${homeDir}/.local/share/vdirsyncer/status" ] && [ "$(ls -A ${homeDir}/.local/share/vdirsyncer/status 2>/dev/null)" ]; then
+        echo "Calendars already discovered, skipping"
+        exit 0
+      fi
+
+      # Skip if no token yet
+      if [ ! -f /var/lib/vdirsyncer/token ]; then
+        echo "No OAuth token yet, skipping discovery"
+        exit 0
+      fi
+
+      echo "Running initial calendar discovery..."
+      vdirsyncer discover
+      echo "Discovery complete"
     '';
   };
 
