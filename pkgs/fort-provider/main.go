@@ -354,12 +354,17 @@ func armorSignature(sig []byte) string {
 
 // executeHandler runs the handler script and manages response/persistence
 func (h *AgentHandler) executeHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte, capConfig CapabilityConfig) {
-	// For async capabilities, record the request in provider state
 	isAsync := capConfig.Mode == "async" || capConfig.NeedsGC
-	if isAsync {
-		h.recordProviderRequest(capability, origin, json.RawMessage(body))
-	}
 
+	if isAsync {
+		h.executeAsyncHandler(w, handlerPath, capability, origin, body, capConfig)
+	} else {
+		h.executeRpcHandler(w, handlerPath, capability, origin, body)
+	}
+}
+
+// executeRpcHandler runs a synchronous RPC-style handler (single request/response)
+func (h *AgentHandler) executeRpcHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte) {
 	cmd := exec.Command(handlerPath)
 	cmd.Stdin = strings.NewReader(string(body))
 	cmd.Env = append(os.Environ(),
@@ -379,19 +384,106 @@ func (h *AgentHandler) executeHandler(w http.ResponseWriter, handlerPath, capabi
 		return
 	}
 
-	// For async capabilities, update state with response and persist
-	if isAsync {
-		h.updateProviderResponse(capability, origin, json.RawMessage(output))
-		if err := h.saveProviderState(); err != nil {
-			// Log but don't fail the request - state persistence is best-effort
-			fmt.Fprintf(os.Stderr, "warning: failed to save provider state: %v\n", err)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(output)
+}
+
+// AsyncHandlerInput is the aggregate input format for async handlers
+// Key is origin, value contains request and previous response (if any)
+type AsyncHandlerInput map[string]struct {
+	Request  json.RawMessage `json:"request"`
+	Response json.RawMessage `json:"response,omitempty"`
+}
+
+// AsyncHandlerOutput is the aggregate output format from async handlers
+// Key is origin, value is the response for that origin
+type AsyncHandlerOutput map[string]json.RawMessage
+
+// executeAsyncHandler runs an async handler with aggregate state
+func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte, capConfig CapabilityConfig) {
+	// Record the new/updated request in state
+	h.recordProviderRequest(capability, origin, json.RawMessage(body))
+
+	// Build aggregate input from all state entries for this capability
+	state := h.getProviderState(capability)
+	input := make(AsyncHandlerInput)
+	for key, entry := range state {
+		input[key] = struct {
+			Request  json.RawMessage `json:"request"`
+			Response json.RawMessage `json:"response,omitempty"`
+		}{
+			Request:  entry.Request,
+			Response: entry.Response,
 		}
 	}
 
-	// If capability needs GC, compute handle and persist
+	inputBytes, err := json.Marshal(input)
+	if err != nil {
+		h.errorResponse(w, http.StatusInternalServerError, "failed to marshal handler input")
+		return
+	}
+
+	// Invoke handler with aggregate input
+	cmd := exec.Command(handlerPath)
+	cmd.Stdin = bytes.NewReader(inputBytes)
+	cmd.Env = append(os.Environ(),
+		"FORT_ORIGIN="+origin,
+		"FORT_CAPABILITY="+capability,
+		"FORT_MODE=async",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			h.errorResponse(w, http.StatusInternalServerError,
+				fmt.Sprintf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr))))
+		} else {
+			h.errorResponse(w, http.StatusInternalServerError,
+				fmt.Sprintf("handler exec failed: %v", err))
+		}
+		return
+	}
+
+	// Parse aggregate output
+	var handlerOutput AsyncHandlerOutput
+	if err := json.Unmarshal(output, &handlerOutput); err != nil {
+		h.errorResponse(w, http.StatusInternalServerError,
+			fmt.Sprintf("handler returned invalid JSON: %v", err))
+		return
+	}
+
+	// Process responses and detect changes
+	var changedOrigins []string
+	for respOrigin, response := range handlerOutput {
+		previousResponse := state[respOrigin].Response
+		if !bytes.Equal(previousResponse, response) {
+			changedOrigins = append(changedOrigins, respOrigin)
+		}
+		h.updateProviderResponse(capability, respOrigin, response)
+	}
+
+	// Persist updated state
+	if err := h.saveProviderState(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to save provider state: %v\n", err)
+	}
+
+	// Log changed origins for debugging (callback dispatch is fort-c8y.12)
+	if len(changedOrigins) > 0 {
+		fmt.Fprintf(os.Stderr, "[%s] responses changed for: %v\n", capability, changedOrigins)
+	}
+
+	// Get response for the triggering origin
+	triggerResponse, ok := handlerOutput[origin]
+	if !ok {
+		// Handler didn't return response for this origin - use empty object
+		triggerResponse = json.RawMessage("{}")
+	}
+
+	// If capability needs GC, compute handle for the triggering origin's response
 	if capConfig.NeedsGC {
-		handle := computeHandle(output)
-		if err := h.persistHandle(handle, output, capConfig.TTL); err != nil {
+		handle := computeHandle(triggerResponse)
+		if err := h.persistHandle(handle, triggerResponse, capConfig.TTL); err != nil {
 			h.errorResponse(w, http.StatusInternalServerError,
 				fmt.Sprintf("failed to persist handle: %v", err))
 			return
@@ -405,7 +497,7 @@ func (h *AgentHandler) executeHandler(w http.ResponseWriter, handlerPath, capabi
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(output)
+	w.Write(triggerResponse)
 }
 
 // computeHandle generates a content-addressed handle for the response
