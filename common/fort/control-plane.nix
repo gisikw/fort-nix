@@ -348,7 +348,7 @@ let
   fortFulfillScript = pkgs.writeShellScript "fort-fulfill" ''
     set -euo pipefail
 
-    NEEDS_FILE="/var/lib/fort/needs.json"
+    NEEDS_FILE="/etc/fort/needs.json"
     HOLDINGS_FILE="/var/lib/fort/holdings.json"
     HANDLES_DIR="/var/lib/fort/handles"
     FULFILLMENT_STATE_FILE="/var/lib/fort/fulfillment-state.json"
@@ -666,7 +666,7 @@ in
       system.activationScripts.fortNeedsJson = {
         deps = [ "fortHostManifest" ];
         text = ''
-          install -Dm0644 ${pkgs.writeText "needs.json" needsJson} /var/lib/fort/needs.json
+          install -Dm0644 ${pkgs.writeText "needs.json" needsJson} /etc/fort/needs.json
         '';
       };
 
