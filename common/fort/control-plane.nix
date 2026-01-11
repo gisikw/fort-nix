@@ -781,5 +781,49 @@ in
         '';
       };
     })
+
+    # Generate systemd trigger units for capabilities with triggers.systemd
+    # For each capability with systemd triggers:
+    # 1. Create a oneshot service that runs the trigger logic
+    # 2. Add OnSuccess= to each trigger unit to invoke our service
+    (let
+      # Filter to capabilities that have systemd triggers
+      capsWithTriggers = lib.filterAttrs
+        (name: cfg: cfg.triggers.systemd or [] != [])
+        config.fort.host.capabilities;
+
+      # Generate trigger services for each capability
+      triggerServices = lib.mapAttrs' (capName: cfg:
+        lib.nameValuePair "fort-provider-trigger-${capName}" {
+          description = "Fort provider systemd trigger for ${capName}";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${fortProvider}/bin/fort-provider --trigger ${capName}";
+          };
+        }
+      ) capsWithTriggers;
+
+      # Build a map of unit -> list of trigger services
+      # This handles multiple capabilities that may trigger on the same unit
+      unitToTriggers = lib.foldl' (acc: capName:
+        let
+          cfg = capsWithTriggers.${capName};
+          triggerService = "fort-provider-trigger-${capName}.service";
+        in lib.foldl' (acc': unit:
+          let unitName = lib.removeSuffix ".service" unit;
+          in acc' // {
+            ${unitName} = (acc'.${unitName} or []) ++ [ triggerService ];
+          }
+        ) acc cfg.triggers.systemd
+      ) {} (builtins.attrNames capsWithTriggers);
+
+      # Generate OnSuccess drop-ins for trigger units
+      triggerDropIns = lib.mapAttrs (unitName: triggerServices':
+        { unitConfig.OnSuccess = triggerServices'; }
+      ) unitToTriggers;
+
+    in lib.mkIf (capsWithTriggers != {}) {
+      systemd.services = triggerServices // triggerDropIns;
+    })
   ];
 }

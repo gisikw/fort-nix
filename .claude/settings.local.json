@@ -38,7 +38,9 @@
       "Bash(mv:*)",
       "Bash(fort ratched status '{}')",
       "Bash(nix-shell:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(just deploy:*)"
     ],
     "deny": [],
     "ask": []

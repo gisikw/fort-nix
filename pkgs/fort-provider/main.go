@@ -104,6 +104,16 @@ type AgentHandler struct {
 }
 
 func main() {
+	// Check for --trigger mode (systemd trigger invocation)
+	if len(os.Args) >= 3 && os.Args[1] == "--trigger" {
+		capability := os.Args[2]
+		if err := runTrigger(capability); err != nil {
+			fmt.Fprintf(os.Stderr, "trigger failed: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	handler, err := NewAgentHandler()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize: %v\n", err)
@@ -905,4 +915,131 @@ func (h *AgentHandler) sendCallback(origin, path string, response json.RawMessag
 
 	// TODO: Implement actual callback dispatch using fort CLI or direct HTTP
 	// The callback needs to be signed with this host's key, which fort CLI handles
+}
+
+// runTrigger runs a capability handler in response to a systemd trigger
+// This is invoked via: fort-provider --trigger <capability>
+func runTrigger(capability string) error {
+	fmt.Fprintf(os.Stderr, "[trigger] starting for capability: %s\n", capability)
+
+	// Load capabilities config
+	capData, err := os.ReadFile(capabilitiesFile)
+	if err != nil {
+		return fmt.Errorf("read capabilities.json: %w", err)
+	}
+	var capabilities map[string]CapabilityConfig
+	if err := json.Unmarshal(capData, &capabilities); err != nil {
+		return fmt.Errorf("parse capabilities.json: %w", err)
+	}
+
+	if _, ok := capabilities[capability]; !ok {
+		return fmt.Errorf("capability %q not found in config", capability)
+	}
+
+	// Load provider state
+	var providerState ProviderState
+	stateData, err := os.ReadFile(providerStateFile)
+	if err == nil {
+		if err := json.Unmarshal(stateData, &providerState); err != nil {
+			return fmt.Errorf("parse provider-state.json: %w", err)
+		}
+	} else {
+		providerState = make(ProviderState)
+	}
+
+	// Get state for this capability
+	state := providerState[capability]
+	if state == nil || len(state) == 0 {
+		fmt.Fprintf(os.Stderr, "[trigger] %s: no state entries, nothing to do\n", capability)
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "[trigger] %s: processing %d entries\n", capability, len(state))
+
+	// Build aggregate input from all state entries
+	input := make(AsyncHandlerInput)
+	for key, entry := range state {
+		input[key] = struct {
+			Request  json.RawMessage `json:"request"`
+			Response json.RawMessage `json:"response,omitempty"`
+		}{
+			Request:  entry.Request,
+			Response: entry.Response,
+		}
+	}
+
+	inputBytes, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("marshal input: %w", err)
+	}
+
+	// Invoke handler
+	handlerPath := filepath.Join(handlersDir, capability)
+	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
+		return fmt.Errorf("handler not found: %s", handlerPath)
+	}
+
+	cmd := exec.Command(handlerPath)
+	cmd.Stdin = bytes.NewReader(inputBytes)
+	cmd.Env = append(os.Environ(),
+		"FORT_CAPABILITY="+capability,
+		"FORT_MODE=async",
+		"FORT_TRIGGER=systemd",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return fmt.Errorf("handler exec failed: %w", err)
+	}
+
+	// Parse aggregate output
+	var handlerOutput AsyncHandlerOutput
+	if err := json.Unmarshal(output, &handlerOutput); err != nil {
+		return fmt.Errorf("handler returned invalid JSON: %w", err)
+	}
+
+	// Process responses and detect changes
+	var changedKeys []string
+	for key, response := range handlerOutput {
+		previousResponse := state[key].Response
+		if !bytes.Equal(previousResponse, response) {
+			changedKeys = append(changedKeys, key)
+			fmt.Fprintf(os.Stderr, "[trigger] %s: response changed for %s\n", capability, key)
+		}
+
+		// Update state entry
+		entry := state[key]
+		entry.Response = response
+		entry.UpdatedAt = time.Now().Unix()
+		state[key] = entry
+	}
+	providerState[capability] = state
+
+	// Persist updated state
+	stateBytes, err := json.MarshalIndent(providerState, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal provider state: %w", err)
+	}
+	if err := os.WriteFile(providerStateFile, stateBytes, 0644); err != nil {
+		return fmt.Errorf("write provider state: %w", err)
+	}
+
+	// Dispatch callbacks for changed responses only
+	if len(changedKeys) > 0 {
+		fmt.Fprintf(os.Stderr, "[trigger] %s: dispatching callbacks for %d changed entries\n", capability, len(changedKeys))
+		// Create a temporary handler to dispatch callbacks
+		h := &AgentHandler{
+			providerState: providerState,
+			capabilities:  capabilities,
+		}
+		h.dispatchCallbacks(capability, changedKeys, handlerOutput)
+	} else {
+		fmt.Fprintf(os.Stderr, "[trigger] %s: no responses changed\n", capability)
+	}
+
+	fmt.Fprintf(os.Stderr, "[trigger] %s: complete\n", capability)
+	return nil
 }
