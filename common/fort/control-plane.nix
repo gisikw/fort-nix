@@ -659,17 +659,14 @@ in
         };
       };
 
-      # Control plane endpoint locations
-      # /fort/ is the primary path; /agent/ kept for transition compatibility (see fort-c8y.22)
+      # Control plane endpoint - VPN-only access for cluster-internal communication
       services.nginx.virtualHosts."${hostName}.fort.${domain}" = {
         locations."/fort/" = {
           extraConfig = ''
-            # VPN-only access (cluster-internal)
             if ($is_vpn = 0) {
               return 444;
             }
 
-            # FastCGI to the provider
             fastcgi_pass unix:${fcgiSocket};
             include ${pkgs.nginx}/conf/fastcgi_params;
             fastcgi_param SCRIPT_NAME $uri;
@@ -678,25 +675,7 @@ in
             fastcgi_param CONTENT_LENGTH $content_length;
             fastcgi_param QUERY_STRING $query_string;
 
-            # Pass auth headers for signature verification
-            fastcgi_param HTTP_X_FORT_ORIGIN $http_x_fort_origin;
-            fastcgi_param HTTP_X_FORT_TIMESTAMP $http_x_fort_timestamp;
-            fastcgi_param HTTP_X_FORT_SIGNATURE $http_x_fort_signature;
-          '';
-        };
-        # Deprecated: kept for transition (remove via fort-c8y.22)
-        locations."/agent/" = {
-          extraConfig = ''
-            if ($is_vpn = 0) {
-              return 444;
-            }
-            fastcgi_pass unix:${fcgiSocket};
-            include ${pkgs.nginx}/conf/fastcgi_params;
-            fastcgi_param SCRIPT_NAME $uri;
-            fastcgi_param REQUEST_METHOD $request_method;
-            fastcgi_param CONTENT_TYPE $content_type;
-            fastcgi_param CONTENT_LENGTH $content_length;
-            fastcgi_param QUERY_STRING $query_string;
+            # Auth headers for signature verification
             fastcgi_param HTTP_X_FORT_ORIGIN $http_x_fort_origin;
             fastcgi_param HTTP_X_FORT_TIMESTAMP $http_x_fort_timestamp;
             fastcgi_param HTTP_X_FORT_SIGNATURE $http_x_fort_signature;
