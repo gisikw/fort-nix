@@ -630,6 +630,7 @@ in
         description = "Fort Control Plane Provider";
         requires = [ "fort-provider.socket" ];
         after = [ "fort-provider.socket" ];
+        restartTriggers = [ fortProvider ];  # Restart when binary changes
 
         serviceConfig = {
           Type = "simple";
