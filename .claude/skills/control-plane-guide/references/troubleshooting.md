@@ -1,4 +1,4 @@
-# Troubleshooting Agent Calls
+# Troubleshooting Control Plane Issues
 
 ## Common Errors
 
@@ -13,14 +13,14 @@
 
 1. **Unknown origin**: Caller not in `hosts.json`
    - Check `/etc/fort/hosts.json` on target
-   - Verify caller has `agentKey` in principals or is a cluster host
+   - Verify caller has key in principals or is a cluster host
 
 2. **Invalid signature**: Key mismatch
    - Verify `FORT_SSH_KEY` points to correct private key
    - Check that public key in `hosts.json` matches
 
 3. **Timestamp drift**: Clocks out of sync
-   - Wrapper rejects if drift > 5 minutes
+   - Provider rejects if drift > 5 minutes
    - Check `timedatectl` on both hosts
 
 ### "not authorized for capability" (403)
@@ -84,7 +84,7 @@ For dev-sandbox callers:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `FORT_SSH_KEY` | `/var/lib/fort/dev-sandbox/agent-key` | Path to signing key |
+| `FORT_SSH_KEY` | `/var/lib/fort/dev-sandbox/key` | Path to signing key |
 | `FORT_ORIGIN` | `dev-sandbox` | Caller identity |
 
 For host-to-host callers:
@@ -133,7 +133,7 @@ canonical="POST\n/fort/status\n${timestamp}\n${body_hash}"
 
 # Sign it
 echo -e "$canonical" | ssh-keygen -Y sign \
-  -f /var/lib/fort/dev-sandbox/agent-key \
+  -f /var/lib/fort/dev-sandbox/key \
   -n fort -
 
 # This produces an SSH signature block that fort base64-encodes
@@ -141,7 +141,7 @@ echo -e "$canonical" | ssh-keygen -Y sign \
 
 ## Nginx Layer Issues
 
-The agent endpoint is served via nginx FastCGI. Check:
+The control plane endpoint is served via nginx FastCGI. Check:
 
 ```bash
 # Nginx config

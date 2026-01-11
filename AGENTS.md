@@ -440,7 +440,7 @@ fort joker restart '{"unit": "nginx", "delay": 2}'
 
 **Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
 
-For detailed guidance on adding capabilities, writing handlers, and the GC protocol, see the `agent-api-guide` skill.
+For detailed guidance on adding capabilities, writing handlers, and the GC protocol, see the `control-plane-guide` skill.
 
 ## Impermanence
 

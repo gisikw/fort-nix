@@ -1,6 +1,6 @@
 # Adding Capabilities
 
-Capabilities are endpoints that a host exposes for other hosts to call.
+Capabilities are endpoints a host exposes for other hosts to call.
 
 ## Basic Structure
 
@@ -48,11 +48,11 @@ RBAC is computed automatically from the cluster topology:
 2. At eval time, `control-plane.nix` adds Host A to `rbac.json` for `my-capability` on Host B
 3. Only Host A can call `/fort/my-capability` on Host B
 
-This means **capabilities don't need explicit ACLs** - the topology IS the authorization.
+**Capabilities don't need explicit ACLs** - the topology IS the authorization.
 
 ## Standard Capabilities
 
-These are always available on all hosts (defined in `common/fort/control-plane.nix`):
+Always available on all hosts (defined in `common/fort/control-plane.nix`):
 
 ```nix
 fort.host.capabilities = {

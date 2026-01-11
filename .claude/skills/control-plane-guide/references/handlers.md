@@ -1,6 +1,6 @@
 # Writing Handlers
 
-Handlers are scripts that process capability requests. They're executed by `fort-provider` (the FastCGI server).
+Handlers are scripts that process capability requests, executed by `fort-provider` (the FastCGI server).
 
 ## Handler Contract
 
