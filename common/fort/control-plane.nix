@@ -431,7 +431,8 @@ let
       id=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.id')
       capability=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.capability')
       from=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.from')
-      request=$(echo "$need" | ${pkgs.jq}/bin/jq -c '.request // {}')
+      # Inject need ID into request so provider can identify callback target
+      request=$(echo "$need" | ${pkgs.jq}/bin/jq -c --arg id "$id" '(.request // {}) + {"_fort_need_id": $id}')
       handler=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.handler')
       nag_seconds=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.nag_seconds // 900')
 

@@ -402,10 +402,11 @@ type AsyncHandlerOutput map[string]json.RawMessage
 
 // executeAsyncHandler runs an async handler with aggregate state
 func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte, capConfig CapabilityConfig) {
-	// Record the new/updated request in state
-	h.recordProviderRequest(capability, origin, json.RawMessage(body))
+	// Record the new/updated request in state, get the state key for this request
+	triggerKey := h.recordProviderRequest(capability, origin, json.RawMessage(body))
 
 	// Build aggregate input from all state entries for this capability
+	// Keys are in "origin:needID" format
 	state := h.getProviderState(capability)
 	input := make(AsyncHandlerInput)
 	for key, entry := range state {
@@ -445,7 +446,7 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 		return
 	}
 
-	// Parse aggregate output
+	// Parse aggregate output (keys are "origin:needID" format)
 	var handlerOutput AsyncHandlerOutput
 	if err := json.Unmarshal(output, &handlerOutput); err != nil {
 		h.errorResponse(w, http.StatusInternalServerError,
@@ -454,13 +455,13 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 	}
 
 	// Process responses and detect changes
-	var changedOrigins []string
-	for respOrigin, response := range handlerOutput {
-		previousResponse := state[respOrigin].Response
+	var changedKeys []string
+	for key, response := range handlerOutput {
+		previousResponse := state[key].Response
 		if !bytes.Equal(previousResponse, response) {
-			changedOrigins = append(changedOrigins, respOrigin)
+			changedKeys = append(changedKeys, key)
 		}
-		h.updateProviderResponse(capability, respOrigin, response)
+		h.updateProviderResponse(capability, key, response)
 	}
 
 	// Persist updated state
@@ -468,19 +469,20 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 		fmt.Fprintf(os.Stderr, "warning: failed to save provider state: %v\n", err)
 	}
 
-	// Log changed origins for debugging (callback dispatch is fort-c8y.12)
-	if len(changedOrigins) > 0 {
-		fmt.Fprintf(os.Stderr, "[%s] responses changed for: %v\n", capability, changedOrigins)
+	// Dispatch callbacks for changed responses (fire-and-forget)
+	if len(changedKeys) > 0 {
+		fmt.Fprintf(os.Stderr, "[%s] responses changed for: %v\n", capability, changedKeys)
+		h.dispatchCallbacks(capability, changedKeys, handlerOutput)
 	}
 
-	// Get response for the triggering origin
-	triggerResponse, ok := handlerOutput[origin]
+	// Get response for the triggering request (using full key, not just origin)
+	triggerResponse, ok := handlerOutput[triggerKey]
 	if !ok {
-		// Handler didn't return response for this origin - use empty object
+		// Handler didn't return response for this key - use empty object
 		triggerResponse = json.RawMessage("{}")
 	}
 
-	// If capability needs GC, compute handle for the triggering origin's response
+	// If capability needs GC, compute handle for the triggering request's response
 	if capConfig.NeedsGC {
 		handle := computeHandle(triggerResponse)
 		if err := h.persistHandle(handle, triggerResponse, capConfig.TTL); err != nil {
@@ -495,8 +497,9 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 		}
 	}
 
+	// Return 202 Accepted for async capabilities (response may still be in flight via callbacks)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusAccepted)
 	w.Write(triggerResponse)
 }
 
@@ -681,30 +684,62 @@ func (h *AgentHandler) updateFulfillmentState(needID string, satisfied bool) err
 	return nil
 }
 
+// extractNeedID extracts _fort_need_id from a request, returns empty string if not present
+func extractNeedID(request json.RawMessage) string {
+	var req map[string]interface{}
+	if err := json.Unmarshal(request, &req); err != nil {
+		return ""
+	}
+	if needID, ok := req["_fort_need_id"].(string); ok {
+		return needID
+	}
+	return ""
+}
+
+// makeStateKey creates the provider state key from origin and request
+// Format: "origin:needID" if needID present, otherwise just "origin"
+func makeStateKey(origin string, request json.RawMessage) string {
+	needID := extractNeedID(request)
+	if needID != "" {
+		return origin + ":" + needID
+	}
+	return origin
+}
+
+// parseStateKey splits a state key into origin and needID
+func parseStateKey(key string) (origin, needID string) {
+	parts := strings.SplitN(key, ":", 2)
+	origin = parts[0]
+	if len(parts) > 1 {
+		needID = parts[1]
+	}
+	return
+}
+
 // recordProviderRequest records an async capability request from an origin
-// The key is "origin:needID" where needID comes from the request or is derived
-func (h *AgentHandler) recordProviderRequest(capability, origin string, request json.RawMessage) {
+// The key is "origin:needID" where needID comes from _fort_need_id in request
+func (h *AgentHandler) recordProviderRequest(capability, origin string, request json.RawMessage) string {
 	// Ensure capability map exists
 	if h.providerState[capability] == nil {
 		h.providerState[capability] = make(map[string]ProviderStateEntry)
 	}
 
-	// Key is just origin for now - could be origin:needID if request contains need identifier
-	key := origin
+	key := makeStateKey(origin, request)
 
 	h.providerState[capability][key] = ProviderStateEntry{
 		Request:   request,
 		UpdatedAt: time.Now().Unix(),
 	}
+
+	return key
 }
 
-// updateProviderResponse updates the response for an origin's request
-func (h *AgentHandler) updateProviderResponse(capability, origin string, response json.RawMessage) {
+// updateProviderResponse updates the response for a state key
+func (h *AgentHandler) updateProviderResponse(capability, key string, response json.RawMessage) {
 	if h.providerState[capability] == nil {
 		return
 	}
 
-	key := origin
 	if entry, ok := h.providerState[capability][key]; ok {
 		entry.Response = response
 		entry.UpdatedAt = time.Now().Unix()
@@ -732,4 +767,42 @@ func (h *AgentHandler) getProviderState(capability string) map[string]ProviderSt
 		return make(map[string]ProviderStateEntry)
 	}
 	return h.providerState[capability]
+}
+
+// dispatchCallbacks sends responses to consumer callback endpoints (fire-and-forget)
+// changedKeys is a list of state keys (origin:needID format) that have new responses
+func (h *AgentHandler) dispatchCallbacks(capability string, changedKeys []string, responses AsyncHandlerOutput) {
+	for _, key := range changedKeys {
+		origin, needID := parseStateKey(key)
+		if needID == "" {
+			// No need ID, can't construct callback path
+			fmt.Fprintf(os.Stderr, "[callback] skipping %s: no need ID\n", key)
+			continue
+		}
+
+		response, ok := responses[key]
+		if !ok {
+			continue
+		}
+
+		// Construct callback URL: https://<origin>.fort.<domain>/fort/needs/<capability>/<name>
+		// needID format is "<capability>-<name>", extract name
+		name := strings.TrimPrefix(needID, capability+"-")
+		callbackPath := fmt.Sprintf("/fort/needs/%s/%s", capability, name)
+
+		// Fire-and-forget callback in goroutine
+		go h.sendCallback(origin, callbackPath, response)
+	}
+}
+
+// sendCallback POSTs a response to a consumer's callback endpoint
+// This is fire-and-forget - errors are logged but not retried
+func (h *AgentHandler) sendCallback(origin, path string, response json.RawMessage) {
+	// Use the fort CLI to send the callback (it handles signing)
+	// fort <host> callback <path> <body> - but we don't have a callback command yet
+	// For now, just log that we would send a callback
+	fmt.Fprintf(os.Stderr, "[callback] would POST to %s%s: %s\n", origin, path, string(response))
+
+	// TODO: Implement actual callback dispatch using fort CLI or direct HTTP
+	// The callback needs to be signed with this host's key, which fort CLI handles
 }

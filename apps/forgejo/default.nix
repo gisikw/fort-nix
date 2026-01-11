@@ -11,8 +11,9 @@ let
   mirrorNames = builtins.attrNames forgeConfig.mirrors;
 
   # Handler for git-token capability (async aggregate mode)
-  # Input: {origin -> {request: {access}, response?}}
-  # Output: {origin -> {token, username}}
+  # Input: {key -> {request: {access, _fort_need_id?}, response?}}
+  #   key format: "origin:needID" or just "origin" for legacy requests
+  # Output: {key -> {token, username}}
   # Creates Forgejo deploy tokens on-demand with appropriate access levels
   gitTokenHandler = pkgs.writeShellScript "handler-git-token" ''
     set -euo pipefail
@@ -21,28 +22,31 @@ let
     input=$(${pkgs.coreutils}/bin/cat)
     ${pkgs.coreutils}/bin/mkdir -p "${tokenDir}"
 
-    # Process each origin and build aggregate output
+    # Process each key and build aggregate output
     output='{}'
 
-    for origin in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
-      # Extract request for this origin
-      access=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg o "$origin" '.[$o].request.access // "ro"')
+    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
+      # Extract origin from key (format: "origin:needID" or just "origin")
+      origin=$(echo "$key" | ${pkgs.coreutils}/bin/cut -d: -f1)
+
+      # Extract request for this key
+      access=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg k "$key" '.[$k].request.access // "ro"')
 
       # Validate access level
       if [ "$access" != "ro" ] && [ "$access" != "rw" ]; then
-        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg o "$origin" \
-          '.[$o] = {"error": "access must be ro or rw"}')
+        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+          '.[$k] = {"error": "access must be ro or rw"}')
         continue
       fi
 
       # RBAC: Only hosts with dev-sandbox aspect can request rw access
       if [ "$access" = "rw" ] && [ "$origin" != "ratched" ]; then
-        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg o "$origin" \
-          '.[$o] = {"error": "rw access requires dev-sandbox host (ratched)"}')
+        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+          '.[$k] = {"error": "rw access requires dev-sandbox host (ratched)"}')
         continue
       fi
 
-      # Token storage (idempotent - reuse existing token)
+      # Token storage (idempotent - reuse existing token per origin+access)
       token_file="${tokenDir}/$origin-$access"
 
       # Generate token if not exists
@@ -63,8 +67,8 @@ let
           if [ -s "$token_file" ]; then
             token=$(${pkgs.coreutils}/bin/cat "$token_file")
           else
-            output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg o "$origin" \
-              '.[$o] = {"error": "failed to generate token"}')
+            output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+              '.[$k] = {"error": "failed to generate token"}')
             continue
           fi
         fi
@@ -73,10 +77,10 @@ let
         ${pkgs.coreutils}/bin/chmod 600 "$token_file"
       fi
 
-      # Add token to output
+      # Add token to output (keyed by original key, not origin)
       token=$(${pkgs.coreutils}/bin/cat "$token_file")
-      output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg o "$origin" --arg t "$token" \
-        '.[$o] = {"token": $t, "username": "forge-admin"}')
+      output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --arg t "$token" \
+        '.[$k] = {"token": $t, "username": "forge-admin"}')
     done
 
     # Return aggregate output
