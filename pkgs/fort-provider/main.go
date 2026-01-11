@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -34,14 +35,16 @@ import (
 )
 
 const (
-	configDir          = "/etc/fort"
-	hostsFile          = configDir + "/hosts.json"
-	rbacFile           = configDir + "/rbac.json"
-	capabilitiesFile   = configDir + "/capabilities.json"
-	handlersDir        = configDir + "/handlers"
-	handlesDir         = "/var/lib/fort/handles"
-	maxTimestampDrift  = 5 * time.Minute
-	signatureNamespace = "fort-agent" // Keep for signing compatibility during rollout
+	configDir             = "/etc/fort"
+	hostsFile             = configDir + "/hosts.json"
+	rbacFile              = configDir + "/rbac.json"
+	capabilitiesFile      = configDir + "/capabilities.json"
+	needsFile             = configDir + "/needs.json"
+	handlersDir           = configDir + "/handlers"
+	handlesDir            = "/var/lib/fort/handles"
+	fulfillmentStateFile  = "/var/lib/fort/fulfillment-state.json"
+	maxTimestampDrift     = 5 * time.Minute
+	signatureNamespace    = "fort-agent" // Keep for signing compatibility during rollout
 )
 
 // HostInfo contains public key info for a peer host
@@ -55,11 +58,28 @@ type CapabilityConfig struct {
 	TTL     int  `json:"ttl"` // seconds, 0 means no expiry
 }
 
+// NeedConfig contains configuration for a declared need
+type NeedConfig struct {
+	ID         string                 `json:"id"`
+	Capability string                 `json:"capability"`
+	From       string                 `json:"from"`
+	Request    map[string]interface{} `json:"request"`
+	Handler    string                 `json:"handler"`
+	NagSeconds int                    `json:"nag_seconds"`
+}
+
+// FulfillmentState tracks the state of a need
+type FulfillmentState struct {
+	Satisfied  bool  `json:"satisfied"`
+	LastSought int64 `json:"last_sought"`
+}
+
 // AgentHandler implements http.Handler for the agent FastCGI
 type AgentHandler struct {
-	hosts        map[string]HostInfo        // hostname -> pubkey
-	rbac         map[string][]string        // capability -> allowed hostnames
+	hosts        map[string]HostInfo         // hostname -> pubkey
+	rbac         map[string][]string         // capability -> allowed hostnames
 	capabilities map[string]CapabilityConfig // capability -> config
+	needs        map[string]NeedConfig       // need id -> config
 }
 
 func main() {
@@ -88,6 +108,7 @@ func NewAgentHandler() (*AgentHandler, error) {
 		hosts:        make(map[string]HostInfo),
 		rbac:         make(map[string][]string),
 		capabilities: make(map[string]CapabilityConfig),
+		needs:        make(map[string]NeedConfig),
 	}
 
 	// Load hosts.json
@@ -115,6 +136,18 @@ func NewAgentHandler() (*AgentHandler, error) {
 		}
 	}
 
+	// Load needs.json (optional - array of needs, indexed by id)
+	needsData, err := os.ReadFile(needsFile)
+	if err == nil {
+		var needsList []NeedConfig
+		if err := json.Unmarshal(needsData, &needsList); err != nil {
+			return nil, fmt.Errorf("parse needs.json: %w", err)
+		}
+		for _, need := range needsList {
+			h.needs[need.ID] = need
+		}
+	}
+
 	// Ensure handles directory exists
 	os.MkdirAll(handlesDir, 0700)
 
@@ -122,8 +155,15 @@ func NewAgentHandler() (*AgentHandler, error) {
 }
 
 func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Extract capability from path: /fort/<capability> or /agent/<capability> (deprecated)
 	path := r.URL.Path
+
+	// Route: /fort/needs/<type>/<id> - callback from provider fulfilling a need
+	if strings.HasPrefix(path, "/fort/needs/") {
+		h.handleCallback(w, r, path)
+		return
+	}
+
+	// Route: /fort/<capability> or /agent/<capability> (deprecated) - capability call
 	var capability string
 	switch {
 	case strings.HasPrefix(path, "/fort/"):
@@ -361,4 +401,145 @@ func (h *AgentHandler) errorResponse(w http.ResponseWriter, status int, message 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+// handleCallback processes POST /fort/needs/<type>/<id> - provider fulfilling a need
+func (h *AgentHandler) handleCallback(w http.ResponseWriter, r *http.Request, path string) {
+	// Parse path: /fort/needs/<capability>/<name> -> need id "<capability>-<name>"
+	suffix := strings.TrimPrefix(path, "/fort/needs/")
+	parts := strings.SplitN(suffix, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		h.errorResponse(w, http.StatusNotFound, "invalid callback path")
+		return
+	}
+	capability := parts[0]
+	name := parts[1]
+	needID := capability + "-" + name
+
+	// Read request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.errorResponse(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	// Extract and validate auth headers
+	origin := r.Header.Get("X-Fort-Origin")
+	timestampStr := r.Header.Get("X-Fort-Timestamp")
+	signatureB64 := r.Header.Get("X-Fort-Signature")
+
+	if origin == "" || timestampStr == "" || signatureB64 == "" {
+		h.errorResponse(w, http.StatusUnauthorized, "missing auth headers")
+		return
+	}
+
+	// Validate timestamp
+	timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+	if err != nil {
+		h.errorResponse(w, http.StatusUnauthorized, "invalid timestamp")
+		return
+	}
+	requestTime := time.Unix(timestamp, 0)
+	drift := time.Since(requestTime)
+	if drift < 0 {
+		drift = -drift
+	}
+	if drift > maxTimestampDrift {
+		h.errorResponse(w, http.StatusUnauthorized, "timestamp drift too large")
+		return
+	}
+
+	// Look up origin's public key
+	hostInfo, ok := h.hosts[origin]
+	if !ok {
+		h.errorResponse(w, http.StatusUnauthorized, "unknown origin")
+		return
+	}
+
+	// Verify signature
+	if err := h.verifySignature(r.Method, path, timestampStr, body, signatureB64, origin, hostInfo.Pubkey); err != nil {
+		h.errorResponse(w, http.StatusUnauthorized, fmt.Sprintf("signature verification failed: %v", err))
+		return
+	}
+
+	// Look up the need configuration
+	need, ok := h.needs[needID]
+	if !ok {
+		h.errorResponse(w, http.StatusNotFound, "need not found")
+		return
+	}
+
+	// Verify caller is the declared provider for this need
+	if origin != need.From {
+		h.errorResponse(w, http.StatusForbidden, fmt.Sprintf("caller %s is not the declared provider %s", origin, need.From))
+		return
+	}
+
+	// Determine satisfaction based on handler or payload
+	var satisfied bool
+
+	if need.Handler != "" {
+		// Handler specified: invoke it with payload on stdin
+		cmd := exec.Command(need.Handler)
+		cmd.Stdin = strings.NewReader(string(body))
+		cmd.Env = append(os.Environ(),
+			"FORT_ORIGIN="+origin,
+			"FORT_NEED_ID="+needID,
+			"FORT_CAPABILITY="+capability,
+		)
+
+		if err := cmd.Run(); err != nil {
+			// Handler failed - need becomes unsatisfied
+			satisfied = false
+		} else {
+			// Handler succeeded - need is satisfied
+			satisfied = true
+		}
+	} else {
+		// No handler: interpret payload directly
+		// Non-empty payload = satisfied, empty = unsatisfied (revocation)
+		satisfied = len(bytes.TrimSpace(body)) > 0
+	}
+
+	// Update fulfillment state
+	if err := h.updateFulfillmentState(needID, satisfied); err != nil {
+		h.errorResponse(w, http.StatusInternalServerError, fmt.Sprintf("failed to update state: %v", err))
+		return
+	}
+
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"need_id":   needID,
+		"satisfied": satisfied,
+	})
+}
+
+// updateFulfillmentState updates the fulfillment state for a need
+func (h *AgentHandler) updateFulfillmentState(needID string, satisfied bool) error {
+	// Read current state
+	state := make(map[string]FulfillmentState)
+	data, err := os.ReadFile(fulfillmentStateFile)
+	if err == nil {
+		json.Unmarshal(data, &state)
+	}
+
+	// Update state for this need
+	entry := state[needID]
+	entry.Satisfied = satisfied
+	// Keep last_sought unchanged - that's managed by the consumer
+	state[needID] = entry
+
+	// Write back
+	newData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal state: %w", err)
+	}
+
+	if err := os.WriteFile(fulfillmentStateFile, newData, 0644); err != nil {
+		return fmt.Errorf("write state: %w", err)
+	}
+
+	return nil
 }
