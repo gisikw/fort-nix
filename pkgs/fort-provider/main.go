@@ -43,6 +43,7 @@ const (
 	handlersDir           = configDir + "/handlers"
 	handlesDir            = "/var/lib/fort/handles"
 	fulfillmentStateFile  = "/var/lib/fort/fulfillment-state.json"
+	providerStateFile     = "/var/lib/fort/provider-state.json"
 	maxTimestampDrift     = 5 * time.Minute
 	signatureNamespace    = "fort-agent" // Keep for signing compatibility during rollout
 )
@@ -54,9 +55,28 @@ type HostInfo struct {
 
 // CapabilityConfig contains settings for a capability
 type CapabilityConfig struct {
-	NeedsGC bool `json:"needsGC"`
-	TTL     int  `json:"ttl"` // seconds, 0 means no expiry
+	NeedsGC       bool           `json:"needsGC"`
+	TTL           int            `json:"ttl"` // seconds, 0 means no expiry
+	Mode          string         `json:"mode"`          // "rpc" or "async"
+	CacheResponse bool           `json:"cacheResponse"` // persist responses for reuse
+	Triggers      TriggerConfig  `json:"triggers"`      // boot/systemd triggers
 }
+
+// TriggerConfig defines when to automatically invoke a capability handler
+type TriggerConfig struct {
+	Initialize bool     `json:"initialize"` // run on boot
+	Systemd    []string `json:"systemd"`    // units that trigger re-run
+}
+
+// ProviderStateEntry tracks state for a single origin:need request
+type ProviderStateEntry struct {
+	Request   json.RawMessage `json:"request"`             // original request payload
+	Response  json.RawMessage `json:"response,omitempty"`  // handler response (if fulfilled)
+	UpdatedAt int64           `json:"updated_at"`          // unix timestamp of last update
+}
+
+// ProviderState is the full provider state: capability -> origin:need -> entry
+type ProviderState map[string]map[string]ProviderStateEntry
 
 // NeedConfig contains configuration for a declared need
 type NeedConfig struct {
@@ -76,10 +96,11 @@ type FulfillmentState struct {
 
 // AgentHandler implements http.Handler for the agent FastCGI
 type AgentHandler struct {
-	hosts        map[string]HostInfo         // hostname -> pubkey
-	rbac         map[string][]string         // capability -> allowed hostnames
-	capabilities map[string]CapabilityConfig // capability -> config
-	needs        map[string]NeedConfig       // need id -> config
+	hosts         map[string]HostInfo         // hostname -> pubkey
+	rbac          map[string][]string         // capability -> allowed hostnames
+	capabilities  map[string]CapabilityConfig // capability -> config
+	needs         map[string]NeedConfig       // need id -> config
+	providerState ProviderState               // async capability state
 }
 
 func main() {
@@ -105,10 +126,11 @@ func main() {
 // NewAgentHandler loads configuration and returns a ready handler
 func NewAgentHandler() (*AgentHandler, error) {
 	h := &AgentHandler{
-		hosts:        make(map[string]HostInfo),
-		rbac:         make(map[string][]string),
-		capabilities: make(map[string]CapabilityConfig),
-		needs:        make(map[string]NeedConfig),
+		hosts:         make(map[string]HostInfo),
+		rbac:          make(map[string][]string),
+		capabilities:  make(map[string]CapabilityConfig),
+		needs:         make(map[string]NeedConfig),
+		providerState: make(ProviderState),
 	}
 
 	// Load hosts.json
@@ -145,6 +167,14 @@ func NewAgentHandler() (*AgentHandler, error) {
 		}
 		for _, need := range needsList {
 			h.needs[need.ID] = need
+		}
+	}
+
+	// Load provider state (optional - persists across restarts)
+	stateData, err := os.ReadFile(providerStateFile)
+	if err == nil {
+		if err := json.Unmarshal(stateData, &h.providerState); err != nil {
+			return nil, fmt.Errorf("parse provider-state.json: %w", err)
 		}
 	}
 
@@ -324,6 +354,12 @@ func armorSignature(sig []byte) string {
 
 // executeHandler runs the handler script and manages response/persistence
 func (h *AgentHandler) executeHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte, capConfig CapabilityConfig) {
+	// For async capabilities, record the request in provider state
+	isAsync := capConfig.Mode == "async" || capConfig.NeedsGC
+	if isAsync {
+		h.recordProviderRequest(capability, origin, json.RawMessage(body))
+	}
+
 	cmd := exec.Command(handlerPath)
 	cmd.Stdin = strings.NewReader(string(body))
 	cmd.Env = append(os.Environ(),
@@ -341,6 +377,15 @@ func (h *AgentHandler) executeHandler(w http.ResponseWriter, handlerPath, capabi
 				fmt.Sprintf("handler exec failed: %v", err))
 		}
 		return
+	}
+
+	// For async capabilities, update state with response and persist
+	if isAsync {
+		h.updateProviderResponse(capability, origin, json.RawMessage(output))
+		if err := h.saveProviderState(); err != nil {
+			// Log but don't fail the request - state persistence is best-effort
+			fmt.Fprintf(os.Stderr, "warning: failed to save provider state: %v\n", err)
+		}
 	}
 
 	// If capability needs GC, compute handle and persist
@@ -542,4 +587,57 @@ func (h *AgentHandler) updateFulfillmentState(needID string, satisfied bool) err
 	}
 
 	return nil
+}
+
+// recordProviderRequest records an async capability request from an origin
+// The key is "origin:needID" where needID comes from the request or is derived
+func (h *AgentHandler) recordProviderRequest(capability, origin string, request json.RawMessage) {
+	// Ensure capability map exists
+	if h.providerState[capability] == nil {
+		h.providerState[capability] = make(map[string]ProviderStateEntry)
+	}
+
+	// Key is just origin for now - could be origin:needID if request contains need identifier
+	key := origin
+
+	h.providerState[capability][key] = ProviderStateEntry{
+		Request:   request,
+		UpdatedAt: time.Now().Unix(),
+	}
+}
+
+// updateProviderResponse updates the response for an origin's request
+func (h *AgentHandler) updateProviderResponse(capability, origin string, response json.RawMessage) {
+	if h.providerState[capability] == nil {
+		return
+	}
+
+	key := origin
+	if entry, ok := h.providerState[capability][key]; ok {
+		entry.Response = response
+		entry.UpdatedAt = time.Now().Unix()
+		h.providerState[capability][key] = entry
+	}
+}
+
+// saveProviderState persists the provider state to disk
+func (h *AgentHandler) saveProviderState() error {
+	data, err := json.MarshalIndent(h.providerState, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal provider state: %w", err)
+	}
+
+	if err := os.WriteFile(providerStateFile, data, 0644); err != nil {
+		return fmt.Errorf("write provider state: %w", err)
+	}
+
+	return nil
+}
+
+// getProviderState returns the current state for a capability (for async handlers)
+func (h *AgentHandler) getProviderState(capability string) map[string]ProviderStateEntry {
+	if h.providerState[capability] == nil {
+		return make(map[string]ProviderStateEntry)
+	}
+	return h.providerState[capability]
 }
