@@ -86,6 +86,16 @@ let
       fi
     '';
 
+    # Return list of declared needs (for GC enumeration)
+    needs = let
+      needsList = lib.concatLists (lib.mapAttrsToList (capability:
+        lib.mapAttrsToList (name: _: "${capability}/${name}")
+      ) config.fort.host.needs);
+      needsListJson = builtins.toJSON needsList;
+    in pkgs.writeShellScript "handler-needs" ''
+      echo '{"needs":${needsListJson}}'
+    '';
+
     # Fetch journalctl output for a unit (debug capability)
     journal = pkgs.writeShellScript "handler-journal" ''
       set -euo pipefail
@@ -169,6 +179,7 @@ let
     status = { needsGC = false; ttl = 0; };
     manifest = { needsGC = false; ttl = 0; };
     holdings = { needsGC = false; ttl = 0; };
+    needs = { needsGC = false; ttl = 0; };
     # Debug capabilities - restricted to dev-sandbox principal
     journal = { needsGC = false; ttl = 0; allowed = [ "dev-sandbox" ]; };
     restart = { needsGC = false; ttl = 0; allowed = [ "dev-sandbox" ]; };
@@ -523,6 +534,7 @@ in
           install -Dm0755 ${mandatoryHandlers.status} /etc/fort/handlers/status
           install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort/handlers/manifest
           install -Dm0755 ${mandatoryHandlers.holdings} /etc/fort/handlers/holdings
+          install -Dm0755 ${mandatoryHandlers.needs} /etc/fort/handlers/needs
           install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
           install -Dm0755 ${mandatoryHandlers.restart} /etc/fort/handlers/restart
 
