@@ -181,7 +181,107 @@ func NewAgentHandler() (*AgentHandler, error) {
 	// Ensure handles directory exists
 	os.MkdirAll(handlesDir, 0700)
 
+	// Run boot-time initialization for capabilities with triggers.initialize = true
+	h.initializeCapabilities()
+
 	return h, nil
+}
+
+// initializeCapabilities runs handlers for capabilities with triggers.initialize = true
+func (h *AgentHandler) initializeCapabilities() {
+	for capName, capConfig := range h.capabilities {
+		if !capConfig.Triggers.Initialize {
+			continue
+		}
+
+		// Get existing state for this capability
+		state := h.getProviderState(capName)
+		if len(state) == 0 {
+			fmt.Fprintf(os.Stderr, "[init] %s: no persisted state, skipping\n", capName)
+			continue
+		}
+
+		fmt.Fprintf(os.Stderr, "[init] %s: initializing with %d entries\n", capName, len(state))
+
+		// Build aggregate input from all state entries
+		input := make(AsyncHandlerInput)
+		for key, entry := range state {
+			input[key] = struct {
+				Request  json.RawMessage `json:"request"`
+				Response json.RawMessage `json:"response,omitempty"`
+			}{
+				Request:  entry.Request,
+				Response: entry.Response,
+			}
+		}
+
+		inputBytes, err := json.Marshal(input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[init] %s: failed to marshal input: %v\n", capName, err)
+			continue
+		}
+
+		// Invoke handler
+		handlerPath := filepath.Join(handlersDir, capName)
+		if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "[init] %s: handler not found at %s\n", capName, handlerPath)
+			continue
+		}
+
+		cmd := exec.Command(handlerPath)
+		cmd.Stdin = bytes.NewReader(inputBytes)
+		cmd.Env = append(os.Environ(),
+			"FORT_CAPABILITY="+capName,
+			"FORT_MODE=async",
+			"FORT_TRIGGER=initialize",
+		)
+
+		output, err := cmd.Output()
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				fmt.Fprintf(os.Stderr, "[init] %s: handler failed: %s\n", capName, strings.TrimSpace(string(exitErr.Stderr)))
+			} else {
+				fmt.Fprintf(os.Stderr, "[init] %s: handler exec failed: %v\n", capName, err)
+			}
+			continue
+		}
+
+		// Parse aggregate output
+		var handlerOutput AsyncHandlerOutput
+		if err := json.Unmarshal(output, &handlerOutput); err != nil {
+			fmt.Fprintf(os.Stderr, "[init] %s: handler returned invalid JSON: %v\n", capName, err)
+			continue
+		}
+
+		// Process responses and detect changes
+		var changedKeys []string
+		for key, response := range handlerOutput {
+			previousResponse := state[key].Response
+			if !bytes.Equal(previousResponse, response) {
+				changedKeys = append(changedKeys, key)
+			}
+			h.updateProviderResponse(capName, key, response)
+		}
+
+		// Persist updated state
+		if err := h.saveProviderState(); err != nil {
+			fmt.Fprintf(os.Stderr, "[init] %s: warning: failed to save provider state: %v\n", capName, err)
+		}
+
+		// Dispatch callbacks for all entries (at boot, we want to ensure all consumers have current data)
+		if len(handlerOutput) > 0 {
+			// At boot, dispatch callbacks for ALL entries, not just changed ones
+			// This ensures consumers get current state even if provider restarted
+			allKeys := make([]string, 0, len(handlerOutput))
+			for key := range handlerOutput {
+				allKeys = append(allKeys, key)
+			}
+			fmt.Fprintf(os.Stderr, "[init] %s: dispatching callbacks for %d entries\n", capName, len(allKeys))
+			h.dispatchCallbacks(capName, allKeys, handlerOutput)
+		}
+
+		fmt.Fprintf(os.Stderr, "[init] %s: initialization complete\n", capName)
+	}
 }
 
 func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
