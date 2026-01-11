@@ -9,8 +9,8 @@ Audit of current state vs. `docs/control-plane-interfaces.md` spec, with impleme
 **Control Plane Core:**
 - `fort-provider` (`pkgs/fort-provider/`) - Go FastCGI, handles auth + RBAC + dispatch
 - `fort` (`pkgs/fort/`) - bash CLI, SSH signing + request
-- Nix module (`common/fort-agent.nix`) - `fort.host.needs`, `fort.host.capabilities`
-- nginx integration - `/agent/*` location with VPN-only access
+- Nix module (`common/fort/control-plane.nix`) - `fort.host.needs`, `fort.host.capabilities`
+- nginx integration - `/fort/*` location with VPN-only access
 
 **Target Naming Convention:**
 - `/fort/*` - path prefix for all control plane endpoints
@@ -69,8 +69,8 @@ Note: `service-registry` does a lot:
 
 **Consumer Side:**
 1. Callback handlers - spec calls for `handler` script invoked on callback, current impl uses `store` + `restart`
-2. Callback endpoints - no `/agent/needs/<type>/<id>` route (will become `/fort/needs/...`)
-3. Needs enumeration - no `POST /agent/needs` endpoint (will become `/fort/needs`)
+2. Callback endpoints - no `/fort/needs/<type>/<id>` route
+3. Needs enumeration - no `POST /fort/needs` endpoint
 4. Nag-based retry - current impl just retries on timer, doesn't track `satisfied` state
 5. Consumer state file - no `/var/lib/fort/consumer-state.json`
 
@@ -150,20 +150,20 @@ Rename existing components to target naming convention.
 - `pkgs/fort-agent-call/` → `pkgs/fort/` ✓
 - CLI request arg already optional (defaults to `{}`) ✓
 
-**1.2 Rename Nix module**
-- `common/fort-agent.nix` → `common/fort.nix` (or merge into existing)
+**1.2 Rename Nix module** ✓
+- `common/fort-agent.nix` → `common/fort/control-plane.nix` ✓
 
-**1.3 Rename paths**
-- `/agent/*` → `/fort/*` (nginx location)
-- `/etc/fort-agent/` → `/etc/fort/`
-- `/var/lib/fort-agent/` → `/var/lib/fort/` (consolidate)
+**1.3 Rename paths** ✓
+- `/agent/*` → `/fort/*` (nginx location) ✓
+- `/etc/fort-agent/` → `/etc/fort/` ✓
+- `/var/lib/fort-agent/` → `/var/lib/fort/` ✓
 
-**1.4 Rename services**
-- `fort-fulfill.service` → `fort-consumer.service`
-- `fort-fulfill-retry.timer` → `fort-consumer-retry.timer`
+**1.4 Rename services** ✓
+- `fort-fulfill.service` → `fort-consumer.service` ✓
+- `fort-fulfill-retry.timer` → `fort-consumer-retry.timer` ✓
 
-**1.5 Update AGENTS.md**
-- Document new `fort` CLI usage
+**1.5 Update AGENTS.md** ✓
+- Document new `fort` CLI usage ✓
 - Update `fort` CLI references ✓
 
 Files: `pkgs/`, `common/`, nginx configs, AGENTS.md
@@ -198,7 +198,7 @@ Add callback support to receive provider-initiated updates.
 - Change `providers` to `from` (single provider)
 - Remove `identity` (handle in handler if needed)
 
-Files: `common/fort.nix`, `pkgs/fort-provider/`
+Files: `common/fort/control-plane.nix`, `pkgs/fort-provider/`
 
 ### Phase 3: Provider Orchestration
 
@@ -235,7 +235,7 @@ Add async capability mode with aggregate handlers.
 - For each `triggers.systemd` unit, create path/timer watcher
 - On trigger: re-invoke handler, diff responses, callback changes
 
-Files: `common/fort.nix`, `pkgs/fort-provider/`, new `fort-provider-*` services
+Files: `common/fort/control-plane.nix`, `pkgs/fort-provider/`, new `fort-provider-*` services
 
 ### Phase 4: GC Implementation
 
@@ -254,7 +254,7 @@ Implement garbage collection for orphaned state.
 - Network failures = assume still in use
 - Host removed from cluster = immediate cleanup
 
-Files: `common/fort.nix`, `fort-provider-gc` service
+Files: `common/fort/control-plane.nix`, `fort-provider-gc` service
 
 ### Phase 5: Migration
 

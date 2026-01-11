@@ -5,7 +5,7 @@ description: Guide for the inter-host agent API system. Use when adding capabili
 
 # Agent API Guide
 
-This skill covers the fort-agent system for secure inter-host communication. Hosts can expose capabilities that other hosts call via signed HTTP requests.
+This skill covers the fort control plane for secure inter-host communication. Hosts can expose capabilities that other hosts call via signed HTTP requests.
 
 ## Quick Reference
 
@@ -44,11 +44,11 @@ fort.host.needs.my-capability.my-id = {
 
 | Path | Purpose |
 |------|---------|
-| `common/fort-agent.nix` | Nix module defining options and config generation |
+| `common/fort/control-plane.nix` | Nix module defining options and config generation |
 | `pkgs/fort/` | Client CLI (Bash) |
 | `pkgs/fort-provider/` | Server (Go FastCGI) |
-| `/etc/fort-agent/` | Runtime config on hosts |
-| `/var/lib/fort-agent/` | GC handles and state |
+| `/etc/fort/` | Runtime config on hosts |
+| `/var/lib/fort/` | GC handles and state |
 
 ## Detailed Documentation
 
@@ -72,4 +72,4 @@ All hosts expose these capabilities:
 - Requests signed with SSH keys (`ssh-keygen -Y sign`)
 - RBAC computed at eval time from cluster topology
 - Only hosts that `fort.host.needs` a capability can call it
-- Config files: `/etc/fort-agent/hosts.json`, `/etc/fort-agent/rbac.json`
+- Config files: `/etc/fort/hosts.json`, `/etc/fort/rbac.json`

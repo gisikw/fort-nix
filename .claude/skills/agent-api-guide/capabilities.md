@@ -45,14 +45,14 @@ fort.host.capabilities.oidc-register = {
 RBAC is computed automatically from the cluster topology:
 
 1. Host A declares `fort.host.needs.my-capability.foo.providers = ["host-b"]`
-2. At eval time, `fort-agent.nix` adds Host A to `rbac.json` for `my-capability` on Host B
-3. Only Host A can call `/agent/my-capability` on Host B
+2. At eval time, `control-plane.nix` adds Host A to `rbac.json` for `my-capability` on Host B
+3. Only Host A can call `/fort/my-capability` on Host B
 
 This means **capabilities don't need explicit ACLs** - the topology IS the authorization.
 
 ## Standard Capabilities
 
-These are always available on all hosts (defined in `fort-agent.nix`):
+These are always available on all hosts (defined in `common/fort/control-plane.nix`):
 
 ```nix
 fort.host.capabilities = {
@@ -73,7 +73,7 @@ fort.host.capabilities = {
 
 ## Adding New Standard Capabilities
 
-If a capability should be on ALL hosts, add it to `common/fort-agent.nix`. If it's specific to an app or aspect, define it in that module.
+If a capability should be on ALL hosts, add it to `common/fort/control-plane.nix`. If it's specific to an app or aspect, define it in that module.
 
 ## Testing a Capability
 

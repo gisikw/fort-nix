@@ -36,9 +36,9 @@ fort.host.needs.oidc.outline = {
 | `nag` | duration | Period of acceptable absence - re-request if unsatisfied for this long |
 
 The need is identified by `<type>.<id>` (e.g., `oidc.outline`):
-- `<type>` maps directly to the capability name on the provider (`/agent/capabilities/oidc`)
+- `<type>` maps directly to the capability name on the provider (`/fort/oidc`)
 - `<id>` distinguishes multiple needs of the same type on one host
-- The callback endpoint is derived from both: `/agent/needs/oidc/outline`
+- The callback endpoint is derived from both: `/fort/needs/oidc/outline`
 
 ### Declaring a Callback Handler
 
@@ -86,7 +86,7 @@ At build time, all `fort.needs.*` declarations across enabled apps/aspects are c
 }
 ```
 
-The capability is derived from the need type: `oidc/outline` → `/agent/capabilities/oidc`.
+The capability is derived from the need type: `oidc/outline` → `/fort/oidc`.
 
 ### Fulfill Service (Runtime)
 
@@ -103,7 +103,7 @@ The capability is derived from the need type: `oidc/outline` → `/agent/capabil
 
 When the provider calls back:
 
-1. Agent receives `POST /agent/needs/<type>/<name>` with payload
+1. Agent receives `POST /fort/needs/<type>/<name>` with payload
 2. Agent invokes the callback handler script with payload on stdin
 3. If handler exits 0, agent sets `satisfied = true` for that need
 4. If handler exits non-zero, `satisfied` remains false (nag will retry)
@@ -114,7 +114,7 @@ A null/empty callback (revocation) sets `satisfied = false`, triggering re-reque
 
 ### Needs Enumeration
 
-`POST /agent/needs` returns all active need paths this host is listening for:
+`POST /fort/needs` returns all active need paths this host is listening for:
 
 ```json
 {
@@ -163,7 +163,7 @@ fort.host.capabilities.journal = {
 };
 ```
 
-The capability name (`oidc`) corresponds directly to the need type. Exposed at `/agent/capabilities/oidc`.
+The capability name (`oidc`) corresponds directly to the need type. Exposed at `/fort/oidc`.
 
 **Capability options:**
 
@@ -292,7 +292,7 @@ Handlers are responsible for their own diff logic - the orchestrator just passes
 Consumer → Provider:
 
 ```
-POST /agent/capabilities/oidc HTTP/1.1
+POST /fort/oidc HTTP/1.1
 Host: drhorrible.fort.example.com
 X-Fort-Origin: joker
 X-Fort-Timestamp: 1704672000
@@ -318,7 +318,7 @@ HTTP/1.1 202 Accepted
 Provider → Consumer:
 
 ```
-POST /agent/needs/oidc/outline HTTP/1.1
+POST /fort/needs/oidc/outline HTTP/1.1
 Host: joker.fort.example.com
 X-Fort-Origin: drhorrible
 X-Fort-Timestamp: 1704672005
@@ -343,7 +343,7 @@ HTTP/1.1 200 OK
 Requester → Host:
 
 ```
-POST /agent/needs HTTP/1.1
+POST /fort/needs HTTP/1.1
 ...
 
 {}
@@ -368,7 +368,7 @@ Response:
 
 Provider periodically:
 
-1. For each origin in provider state, query `POST /agent/needs`
+1. For each origin in provider state, query `POST /fort/needs`
 2. For entries where `need` is not in the response:
    - If host responded: remove from provider state
    - If host unreachable: skip (don't delete on network failure)
@@ -398,7 +398,7 @@ When no handler is specified, the callback payload is interpreted as a status:
 - `OK`: satisfied, stop nagging
 - empty: unsatisfied/revoked, will nag after interval
 
-The need existing in `/agent/needs` is what keeps the proxy vhost alive. Provider can "revoke" by sending empty payload, triggering re-request.
+The need existing in `/fort/needs` is what keeps the proxy vhost alive. Provider can "revoke" by sending empty payload, triggering re-request.
 
 ---
 

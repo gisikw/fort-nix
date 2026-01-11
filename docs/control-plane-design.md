@@ -10,14 +10,14 @@ The **agent** is a generic capability-exposure mechanism. Every host runs one. I
 
 ## Core Concept
 
-Every host exposes an HTTP API at `https://<host>.fort.<domain>/agent/`. Capabilities are endpoints. Access is controlled by origin-based RBAC computed at eval time.
+Every host exposes an HTTP API at `https://<host>.fort.<domain>/fort/`. Capabilities are endpoints. Access is controlled by origin-based RBAC computed at eval time.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Eval Time (Nix)                         │
 │                                                                 │
 │  Host config includes:                                          │
-│    - What capabilities I expose (handlers in /etc/fort-agent/)  │
+│    - What capabilities I expose (handlers in /etc/fort/)  │
 │    - Who can call each capability (RBAC from cluster topology)  │
 │                                                                 │
 │  This is COMPUTED, not configured. Nix knows everything.        │
@@ -28,7 +28,7 @@ Every host exposes an HTTP API at `https://<host>.fort.<domain>/agent/`. Capabil
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Host Agent                              │
 │                                                                 │
-│  POST /agent/<capability>                                       │
+│  POST /fort/<capability>                                       │
 │    - Verify caller identity (SSH signature)                     │
 │    - Check RBAC (is caller allowed to invoke this?)             │
 │    - Dispatch to handler script                                 │
@@ -44,10 +44,10 @@ Every agent exposes these (no RBAC, cluster-internal only):
 
 | Endpoint | What It Does |
 |----------|--------------|
-| `POST /agent/status` | Returns health, uptime, version |
-| `POST /agent/manifest` | Returns this host's declared configuration |
-| `POST /agent/holdings` | Returns handles this host is currently using |
-| `POST /agent/release` | Release handles, trigger GC (see below) |
+| `POST /fort/status` | Returns health, uptime, version |
+| `POST /fort/manifest` | Returns this host's declared configuration |
+| `POST /fort/holdings` | Returns handles this host is currently using |
+| `POST /fort/release` | Release handles, trigger GC (see below) |
 
 ### The Release Endpoint
 
@@ -55,7 +55,7 @@ Two modes with different auth:
 
 **Self-release (no RBAC):** Host announces it's done with handles.
 ```http
-POST /agent/release
+POST /fort/release
 { "handles": ["sha256:abc...", "sha256:def..."] }  # Specific handles
 { "handles": [] }                                   # "Re-check my holdings now"
 { "handles": [...], "force": "ignore-grace" }       # Skip grace period (fresh boot, lost state)
@@ -64,7 +64,7 @@ Removes handles from holdings, notifies relevant providers.
 
 **Admin sweep (RBAC: admin only):** Trigger cluster-wide GC.
 ```http
-POST /agent/release
+POST /fort/release
 { "scope": "cluster" }                             # Sweep all hosts
 { "scope": "cluster", "force": "ignore-grace" }    # Skip grace period
 { "scope": "cluster", "force": "gc-unreachable" }  # Include unreachable hosts
@@ -76,7 +76,7 @@ For emergency rotation when credentials may be compromised.
 Hosts declare additional capabilities based on their role. These are just handler scripts:
 
 ```
-/etc/fort-agent/handlers/
+/etc/fort/handlers/
 ├── status              # Mandatory
 ├── manifest            # Mandatory
 ├── holdings            # Mandatory
@@ -94,7 +94,7 @@ The agent doesn't know or care what these do. It just does auth, checks RBAC, an
 
 **Request:**
 ```http
-POST /agent/some-capability HTTP/1.1
+POST /fort/some-capability HTTP/1.1
 Host: drhorrible.fort.gisi.network
 X-Fort-Origin: ursula
 X-Fort-Timestamp: 1704067200
@@ -125,7 +125,7 @@ Some capabilities create server-side state that should be garbage-collected when
 
 **Contract:**
 1. Provider returns `X-Fort-Handle` header with response
-2. Caller stores the handle and returns it from `/agent/holdings`
+2. Caller stores the handle and returns it from `/fort/holdings`
 3. Provider periodically checks holdings; if handle absent (with 200 response), eligible for GC
 
 **GC Rules (Two Generals Safe):**
@@ -143,7 +143,7 @@ We only revoke on **positive absence**, never on failure to reach.
 Computed at eval time from cluster topology:
 
 ```nix
-# Written to /etc/fort-agent/rbac.json
+# Written to /etc/fort/rbac.json
 {
   "oidc-register": ["ursula", "joker", "lordhenry"],
   "proxy-configure": ["ursula", "minos"],
@@ -158,9 +158,9 @@ The manifest IS the authorization. Handlers assume the caller is already validat
 CGI-style handlers behind nginx:
 
 ```nginx
-location /agent/ {
+location /fort/ {
     # Auth + RBAC checked by fcgi wrapper
-    fastcgi_pass unix:/run/fort-agent/fcgi.sock;
+    fastcgi_pass unix:/run/fort/fcgi.sock;
     fastcgi_param SCRIPT_NAME $uri;
 }
 ```

@@ -5,7 +5,7 @@ Some capabilities create server-side state (OIDC clients, tokens, etc.). The GC 
 ## Overview
 
 1. **Provider** creates state with a handle (content-addressed SHA256)
-2. **Consumer** stores the handle and reports it via `/agent/holdings`
+2. **Consumer** stores the handle and reports it via `/fort/holdings`
 3. **Provider** periodically checks holdings; if handle absent, eligible for GC
 
 ## Enabling GC
@@ -25,8 +25,8 @@ When `needsGC = true`, `fort-provider`:
 1. Executes the handler
 2. Computes SHA256 of response body
 3. Creates handle: `sha256:<hex-digest>`
-4. Stores response at `/var/lib/fort-agent/handles/sha256-<hex>/response`
-5. Stores metadata at `/var/lib/fort-agent/handles/sha256-<hex>/.meta`
+4. Stores response at `/var/lib/fort/handles/sha256-<hex>/response`
+5. Stores metadata at `/var/lib/fort/handles/sha256-<hex>/.meta`
 6. Returns `X-Fort-Handle` and `X-Fort-TTL` headers
 
 ## Consumer Side
@@ -35,7 +35,7 @@ Consumers using `fort.host.needs` automatically:
 
 1. Store the response at the configured `store` path
 2. Track the handle in `/var/lib/fort/holdings.json`
-3. Report holdings when queried via `/agent/holdings`
+3. Report holdings when queried via `/fort/holdings`
 
 ## Manual Consumer
 
@@ -59,8 +59,8 @@ mv tmp /var/lib/fort/holdings.json
 
 The provider runs a timer that:
 
-1. Lists all handles in `/var/lib/fort-agent/handles/`
-2. For each handle, queries consumers via `/agent/holdings`
+1. Lists all handles in `/var/lib/fort/handles/`
+2. For each handle, queries consumers via `/fort/holdings`
 3. If handle present in holdings: renew TTL
 4. If handle absent AND TTL expired: delete state
 
@@ -95,6 +95,6 @@ fort hostname holdings
 Check handle state on provider:
 
 ```bash
-ls -la /var/lib/fort-agent/handles/
-cat /var/lib/fort-agent/handles/sha256-abc123/.meta
+ls -la /var/lib/fort/handles/
+cat /var/lib/fort/handles/sha256-abc123/.meta
 ```

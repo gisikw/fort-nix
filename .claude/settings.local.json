@@ -35,7 +35,8 @@
       "Bash(fort-agent-call:*)",
       "Bash(systemctl cat:*)",
       "Bash(ls:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(fort ratched status '{}')"
     ],
     "deny": [],
     "ask": []

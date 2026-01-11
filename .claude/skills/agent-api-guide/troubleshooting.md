@@ -12,7 +12,7 @@
 **Causes & fixes:**
 
 1. **Unknown origin**: Caller not in `hosts.json`
-   - Check `/etc/fort-agent/hosts.json` on target
+   - Check `/etc/fort/hosts.json` on target
    - Verify caller has `agentKey` in principals or is a cluster host
 
 2. **Invalid signature**: Key mismatch
@@ -59,7 +59,7 @@ Then rebuild. RBAC is computed from `fort.host.needs` declarations.
 fort hostname manifest | jq '.body.capabilities'
 
 # Check handler directory on host
-ls /etc/fort-agent/handlers/
+ls /etc/fort/handlers/
 ```
 
 ### Handler failures (500)
@@ -71,11 +71,11 @@ ls /etc/fort-agent/handlers/
 
 **Debug:**
 ```bash
-# Check wrapper logs
-journalctl -u fort-agent -n 50
+# Check provider logs
+journalctl -u fort-provider -n 50
 
 # Test handler directly on host
-echo '{}' | /etc/fort-agent/handlers/my-capability
+echo '{}' | /etc/fort/handlers/my-capability
 ```
 
 ## Environment Variables
@@ -98,7 +98,7 @@ For host-to-host callers:
 
 ```bash
 # On target host
-cat /etc/fort-agent/rbac.json | jq '.'
+cat /etc/fort/rbac.json | jq '.'
 
 # Shows which callers can access which capabilities
 # {
@@ -111,7 +111,7 @@ cat /etc/fort-agent/rbac.json | jq '.'
 
 ```bash
 # On target host
-cat /etc/fort-agent/hosts.json | jq '.'
+cat /etc/fort/hosts.json | jq '.'
 
 # Shows known callers and their public keys
 # {
@@ -129,12 +129,12 @@ To understand the signing process:
 timestamp=$(date +%s)
 body='{}'
 body_hash=$(echo -n "$body" | sha256sum | cut -d' ' -f1)
-canonical="POST\n/agent/status\n${timestamp}\n${body_hash}"
+canonical="POST\n/fort/status\n${timestamp}\n${body_hash}"
 
 # Sign it
 echo -e "$canonical" | ssh-keygen -Y sign \
   -f /var/lib/fort/dev-sandbox/agent-key \
-  -n fort-agent -
+  -n fort -
 
 # This produces an SSH signature block that fort base64-encodes
 ```
@@ -145,13 +145,13 @@ The agent endpoint is served via nginx FastCGI. Check:
 
 ```bash
 # Nginx config
-cat /etc/nginx/sites-enabled/*agent* 2>/dev/null || grep -r agent /etc/nginx/
+grep -r '/fort/' /etc/nginx/ 2>/dev/null | head
 
 # FastCGI socket
-ls -la /run/fort-agent/fcgi.sock
+ls -la /run/fort/fcgi.sock
 
-# Wrapper service
-systemctl status fort-agent
+# Provider service
+systemctl status fort-provider
 ```
 
 ## Capability Not Showing Up
@@ -165,10 +165,10 @@ If you added a capability but it's not available:
 
 2. **Handler installed?**
    ```bash
-   ls /etc/fort-agent/handlers/
+   ls /etc/fort/handlers/
    ```
 
 3. **Capability in config?**
    ```bash
-   cat /etc/fort-agent/capabilities.json
+   cat /etc/fort/capabilities.json
    ```

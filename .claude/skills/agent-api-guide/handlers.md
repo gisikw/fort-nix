@@ -60,7 +60,7 @@ Handlers run as root by default (via systemd). If your handler needs:
 
 - **Secrets**: Read from `/run/agenix/` or `/var/lib/<app>/`
 - **Network**: Make HTTP calls to local services
-- **State**: Write to `/var/lib/fort-agent/` or app-specific directories
+- **State**: Write to `/var/lib/fort/` or app-specific directories
 
 ## Idempotency
 
@@ -118,15 +118,15 @@ pocket-id-admin create-client \
 Test locally by piping JSON:
 
 ```bash
-echo '{"service": "test"}' | /etc/fort-agent/handlers/my-capability
+echo '{"service": "test"}' | /etc/fort/handlers/my-capability
 ```
 
 Check logs on the host:
 
 ```bash
-journalctl -u fort-agent -n 50
+journalctl -u fort-provider -n 50
 ```
 
 ## Handler Location at Runtime
 
-Handlers are installed to `/etc/fort-agent/handlers/<capability-name>` during NixOS activation.
+Handlers are installed to `/etc/fort/handlers/<capability-name>` during NixOS activation.
