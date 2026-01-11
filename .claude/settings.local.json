@@ -36,7 +36,9 @@
       "Bash(systemctl cat:*)",
       "Bash(ls:*)",
       "Bash(mv:*)",
-      "Bash(fort ratched status '{}')"
+      "Bash(fort ratched status '{}')",
+      "Bash(nix-shell:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

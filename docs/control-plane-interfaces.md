@@ -64,7 +64,7 @@ Callback handlers must be **idempotent** - calling with the same payload multipl
 
 ### Needs Aggregation (Build Time)
 
-At build time, all `fort.needs.*` declarations across enabled apps/aspects are collected into `/etc/fort/needs.json`:
+At build time, all `fort.needs.*` declarations across enabled apps/aspects are collected into `/var/lib/fort/needs.json`:
 
 ```json
 {
@@ -92,7 +92,7 @@ The capability is derived from the need type: `oidc/outline` → `/fort/oidc`.
 
 `fort-fulfill.service` runs on a timer and:
 
-1. Reads `/etc/fort/needs.json`
+1. Reads `/var/lib/fort/needs.json`
 2. Reads `/var/lib/fort/fulfillment-state.json` (tracks `{need_id → {satisfied, last_sought}}`)
 3. For each need where `!satisfied && (now - last_sought) > nag_seconds`:
    - Updates `last_sought` to now
@@ -126,7 +126,7 @@ A null/empty callback (revocation) sets `satisfied = false`, triggering re-reque
 }
 ```
 
-This is deterministic from the Nix config - it's just the keys of `/etc/fort/needs.json`. Providers use this for GC (see Reconciliation).
+This is deterministic from the Nix config - it's just the keys of `/var/lib/fort/needs.json`. Providers use this for GC (see Reconciliation).
 
 ---
 
@@ -406,6 +406,8 @@ The need existing in `/fort/needs` is what keeps the proxy vhost alive. Provider
 
 | Component | State | Location |
 |-----------|-------|----------|
-| Consumer: declared needs | `/etc/fort/needs.json` | Build-time, read-only |
+| Consumer: declared needs | `/var/lib/fort/needs.json` | Build-time, read-only |
 | Consumer: fulfillment state | `/var/lib/fort/fulfillment-state.json` | `{need_id → {satisfied, last_sought}}` |
+| Consumer: holdings | `/var/lib/fort/holdings.json` | `{handles: [{id, handle}]}` for GC |
+| Consumer: handles | `/var/lib/fort/handles/<id>` | Individual handle files |
 | Provider: capability state | `/var/lib/fort/provider-state.json` | `{capability → {origin:need → {request, response?, updated_at}}}` |

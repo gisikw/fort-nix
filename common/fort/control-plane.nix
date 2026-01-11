@@ -351,6 +351,7 @@ let
     NEEDS_FILE="/var/lib/fort/needs.json"
     HOLDINGS_FILE="/var/lib/fort/holdings.json"
     HANDLES_DIR="/var/lib/fort/handles"
+    FULFILLMENT_STATE_FILE="/var/lib/fort/fulfillment-state.json"
 
     log() { echo "[fort-fulfill] $*"; }
 
@@ -362,6 +363,15 @@ let
 
     # Ensure handles directory exists
     ${pkgs.coreutils}/bin/mkdir -p "$HANDLES_DIR"
+
+    # Load fulfillment state (or init empty)
+    if [ -f "$FULFILLMENT_STATE_FILE" ]; then
+      fulfillment_state=$(${pkgs.coreutils}/bin/cat "$FULFILLMENT_STATE_FILE")
+    else
+      fulfillment_state='{}'
+    fi
+
+    now=$(${pkgs.coreutils}/bin/date +%s)
 
     # Track holdings for final output
     declare -A HOLDINGS
@@ -377,16 +387,38 @@ let
       from=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.from')
       request=$(echo "$need" | ${pkgs.jq}/bin/jq -c '.request // {}')
       handler=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.handler')
+      nag_seconds=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.nag_seconds // 900')
 
       handle_path="$HANDLES_DIR/$id"
 
-      # Check if already fulfilled (handle file exists and non-empty)
+      # Get current state for this need
+      need_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" '.[$id] // {satisfied: false, last_sought: 0}')
+      satisfied=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.satisfied')
+      last_sought=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.last_sought')
+
+      # Load existing handle for holdings tracking
       if [ -f "$handle_path" ] && [ -s "$handle_path" ]; then
         handle=$(${pkgs.coreutils}/bin/cat "$handle_path")
-        log "[$id] Already fulfilled (handle: $handle)"
         HOLDINGS["$id"]="$handle"
+      fi
+
+      # Check if already satisfied
+      if [ "$satisfied" = "true" ]; then
+        log "[$id] Already satisfied"
         continue
       fi
+
+      # Check nag interval
+      elapsed=$((now - last_sought))
+      if [ "$elapsed" -lt "$nag_seconds" ]; then
+        remaining=$((nag_seconds - elapsed))
+        log "[$id] Within nag interval (''${remaining}s remaining)"
+        continue
+      fi
+
+      # Update last_sought before requesting
+      fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" --argjson now "$now" \
+        '.[$id] = (.[$id] // {}) | .[$id].last_sought = $now | .[$id].satisfied = false')
 
       log "[$id] Calling $from/$capability..."
 
@@ -402,6 +434,10 @@ let
           if echo "$body" | "$handler"; then
             log "[$id] Handler completed successfully"
 
+            # Mark satisfied in state
+            fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" \
+              '.[$id].satisfied = true')
+
             # Store handle if returned
             if [ -n "$handle" ]; then
               ${pkgs.coreutils}/bin/mkdir -p "$HANDLES_DIR"
@@ -410,7 +446,7 @@ let
               log "[$id] Stored handle at $handle_path"
             fi
           else
-            log "[$id] Handler failed, will retry later"
+            log "[$id] Handler failed, will retry after nag interval"
           fi
         else
           log "[$id] Provider $from returned HTTP $status"
@@ -419,6 +455,10 @@ let
         log "[$id] Provider $from failed: $result"
       fi
     done <<< "$needs"
+
+    # Write fulfillment state
+    echo "$fulfillment_state" | ${pkgs.jq}/bin/jq '.' > "$FULFILLMENT_STATE_FILE"
+    log "Updated fulfillment state"
 
     # Write holdings.json
     # Disable strict unset checking - associative arrays can be tricky with set -u
