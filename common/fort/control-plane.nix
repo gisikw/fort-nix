@@ -174,22 +174,39 @@ let
     '';
   };
 
-  # Mandatory capabilities config (no GC needed for these)
+  # Mandatory capabilities config (all RPC - synchronous request-response)
   mandatoryCapabilities = {
-    status = { needsGC = false; ttl = 0; };
-    manifest = { needsGC = false; ttl = 0; };
-    holdings = { needsGC = false; ttl = 0; };
-    needs = { needsGC = false; ttl = 0; };
+    status = { mode = "rpc"; };
+    manifest = { mode = "rpc"; };
+    holdings = { mode = "rpc"; };
+    needs = { mode = "rpc"; };
     # Debug capabilities - restricted to dev-sandbox principal
-    journal = { needsGC = false; ttl = 0; allowed = [ "dev-sandbox" ]; };
-    restart = { needsGC = false; ttl = 0; allowed = [ "dev-sandbox" ]; };
+    journal = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
+    restart = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
+  };
+
+  # Helper to derive needsGC and ttl from mode
+  # RPC mode: synchronous, no GC needed
+  # Async mode: asynchronous with handles, needs GC
+  modeToGcConfig = mode: {
+    needsGC = mode == "async";
+    ttl = if mode == "async" then 86400 else 0;  # 24h default for async
   };
 
   # All capabilities = mandatory + user-defined
-  allCapabilities = mandatoryCapabilities // lib.mapAttrs (name: cfg: {
-    needsGC = cfg.needsGC;
-    ttl = cfg.ttl;
-  }) config.fort.host.capabilities;
+  # Mandatory capabilities use the new mode schema directly
+  # User-defined capabilities are transformed to include derived needsGC/ttl
+  allCapabilities = lib.mapAttrs (name: cfg:
+    (modeToGcConfig cfg.mode) // {
+      inherit (cfg) mode;
+      cacheResponse = cfg.cacheResponse or false;
+      triggers = cfg.triggers or { initialize = false; systemd = []; };
+    } // lib.optionalAttrs (cfg ? allowed) { inherit (cfg) allowed; }
+  ) mandatoryCapabilities // lib.mapAttrs (name: cfg:
+    (modeToGcConfig cfg.mode) // {
+      inherit (cfg) mode cacheResponse triggers;
+    } // lib.optionalAttrs (cfg.allowed != null) { inherit (cfg) allowed; }
+  ) config.fort.host.capabilities;
 
   # All hosts AND principals with agentKeys allowed to call mandatory endpoints
   principalNames = builtins.attrNames (lib.filterAttrs (name: cfg: cfg ? agentKey) principals);
@@ -263,17 +280,46 @@ let
       description = "Path to handler script";
     };
 
-    needsGC = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Whether this capability needs garbage collection (adds handle wrapper)";
+    mode = lib.mkOption {
+      type = lib.types.enum [ "rpc" "async" ];
+      default = "async";
+      description = ''
+        Execution mode for this capability:
+        - "rpc": Synchronous request-response. No GC, no handles.
+        - "async": Asynchronous with state. Returns handles, requires GC.
+      '';
+      example = "rpc";
     };
 
-    ttl = lib.mkOption {
-      type = lib.types.int;
-      default = 86400;
-      description = "Time-to-live in seconds for GC-able responses (only used if needsGC = true)";
-      example = 3600;
+    cacheResponse = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Whether to cache/persist responses for the handler to reuse.
+        Useful for capabilities that need to return the same response
+        to multiple callers or across restarts.
+      '';
+    };
+
+    triggers = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          initialize = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Run this capability handler on boot";
+          };
+
+          systemd = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ ];
+            description = "List of systemd unit names that trigger re-running the handler";
+            example = [ "pocket-id.service" ];
+          };
+        };
+      };
+      default = { };
+      description = "Trigger configuration for automatic handler invocation";
     };
 
     satisfies = lib.mkOption {
@@ -539,20 +585,35 @@ in
         RBAC rules are derived automatically from cluster topology.
 
         Examples:
+          # Simple RPC capability (synchronous request-response)
           fort.host.capabilities.ssl-cert = {
             handler = ./handlers/ssl-cert;
+            mode = "rpc";
             description = "Return cluster SSL certificates";
           };
 
+          # Async capability with GC (creates handles, needs garbage collection)
           fort.host.capabilities.oidc-register = {
             handler = ./handlers/oidc-register;
-            needsGC = true;  # Creates GC-able state
+            mode = "async";  # Default - returns handles, needs GC
             description = "Register OIDC client in pocket-id";
+          };
+
+          # Capability with triggers (auto-run on boot and service restart)
+          fort.host.capabilities.token-sync = {
+            handler = ./handlers/token-sync;
+            mode = "rpc";
+            triggers = {
+              initialize = true;
+              systemd = [ "pocket-id.service" ];
+            };
+            description = "Sync deploy tokens to hosts";
           };
       '';
       example = {
         ssl-cert = {
           handler = ./handlers/ssl-cert;
+          mode = "rpc";
           description = "Return cluster SSL certificates";
         };
       };

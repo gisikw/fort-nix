@@ -171,6 +171,7 @@ in
   # Expose deploy capability for on-demand deployments
   fort.host.capabilities.deploy = {
     handler = deployHandler;
+    mode = "rpc";  # Synchronous deploy trigger
     description = "Trigger deployment after verifying expected SHA";
     allowed = [ "dev-sandbox" ];
   };
