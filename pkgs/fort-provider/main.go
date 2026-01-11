@@ -114,6 +114,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Check for --gc mode (garbage collection sweep)
+	if len(os.Args) >= 2 && os.Args[1] == "--gc" {
+		if err := runGC(); err != nil {
+			fmt.Fprintf(os.Stderr, "gc failed: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	handler, err := NewAgentHandler()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize: %v\n", err)
@@ -1041,5 +1050,253 @@ func runTrigger(capability string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "[trigger] %s: complete\n", capability)
+	return nil
+}
+
+// runGC performs garbage collection sweep for async capabilities
+// This is invoked via: fort-provider --gc
+func runGC() error {
+	fmt.Fprintf(os.Stderr, "[gc] starting garbage collection sweep\n")
+
+	// Load capabilities config
+	capData, err := os.ReadFile(capabilitiesFile)
+	if err != nil {
+		return fmt.Errorf("read capabilities.json: %w", err)
+	}
+	var capabilities map[string]CapabilityConfig
+	if err := json.Unmarshal(capData, &capabilities); err != nil {
+		return fmt.Errorf("parse capabilities.json: %w", err)
+	}
+
+	// Load provider state
+	var providerState ProviderState
+	stateData, err := os.ReadFile(providerStateFile)
+	if err == nil {
+		if err := json.Unmarshal(stateData, &providerState); err != nil {
+			return fmt.Errorf("parse provider-state.json: %w", err)
+		}
+	} else {
+		// No state file = nothing to GC
+		fmt.Fprintf(os.Stderr, "[gc] no provider state, nothing to clean\n")
+		return nil
+	}
+
+	if len(providerState) == 0 {
+		fmt.Fprintf(os.Stderr, "[gc] provider state empty, nothing to clean\n")
+		return nil
+	}
+
+	// Track which capabilities had entries removed (need handler re-invocation)
+	modifiedCapabilities := make(map[string]bool)
+	totalRemoved := 0
+
+	// For each capability that needs GC (async mode)
+	for capName, capConfig := range capabilities {
+		if capConfig.Mode == "rpc" && !capConfig.NeedsGC {
+			continue // RPC mode without needsGC doesn't need garbage collection
+		}
+
+		state := providerState[capName]
+		if state == nil || len(state) == 0 {
+			continue // No state for this capability
+		}
+
+		fmt.Fprintf(os.Stderr, "[gc] %s: checking %d entries\n", capName, len(state))
+
+		// Collect unique origins from state entries
+		origins := make(map[string]bool)
+		for key := range state {
+			origin, _ := parseStateKey(key)
+			origins[origin] = true
+		}
+
+		// Query each origin for their declared needs
+		originNeeds := make(map[string]map[string]bool) // origin -> set of need paths
+		originReachable := make(map[string]bool)
+
+		for origin := range origins {
+			needs, err := queryOriginNeeds(origin)
+			if err != nil {
+				// Network failure - assume still in use, skip this origin
+				fmt.Fprintf(os.Stderr, "[gc] %s: origin %s unreachable (%v), skipping\n", capName, origin, err)
+				originReachable[origin] = false
+				continue
+			}
+			originReachable[origin] = true
+			originNeeds[origin] = needs
+			fmt.Fprintf(os.Stderr, "[gc] %s: origin %s has %d declared needs\n", capName, origin, len(needs))
+		}
+
+		// Check each state entry against declared needs
+		var keysToRemove []string
+		for key := range state {
+			origin, needID := parseStateKey(key)
+
+			// Skip if origin was unreachable
+			if !originReachable[origin] {
+				continue
+			}
+
+			// Convert need_id "<capability>-<name>" to path "<capability>/<name>"
+			needPath := needIDToPath(needID)
+
+			// Check if need is still declared
+			if needs, ok := originNeeds[origin]; ok {
+				if !needs[needPath] {
+					// Positive absence: origin responded 200 but need not in list
+					fmt.Fprintf(os.Stderr, "[gc] %s: removing orphaned entry %s (need %s not declared by %s)\n",
+						capName, key, needPath, origin)
+					keysToRemove = append(keysToRemove, key)
+				}
+			}
+		}
+
+		// Remove orphaned entries
+		for _, key := range keysToRemove {
+			delete(state, key)
+			totalRemoved++
+		}
+
+		if len(keysToRemove) > 0 {
+			providerState[capName] = state
+			modifiedCapabilities[capName] = true
+		}
+	}
+
+	// Persist updated state
+	if totalRemoved > 0 {
+		fmt.Fprintf(os.Stderr, "[gc] removed %d orphaned entries, saving state\n", totalRemoved)
+		stateBytes, err := json.MarshalIndent(providerState, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal provider state: %w", err)
+		}
+		if err := os.WriteFile(providerStateFile, stateBytes, 0644); err != nil {
+			return fmt.Errorf("write provider state: %w", err)
+		}
+	}
+
+	// Invoke handlers for modified capabilities (so they can clean up resources)
+	for capName := range modifiedCapabilities {
+		fmt.Fprintf(os.Stderr, "[gc] %s: invoking handler for cleanup\n", capName)
+		if err := invokeHandlerForGC(capName, capabilities[capName], providerState[capName]); err != nil {
+			fmt.Fprintf(os.Stderr, "[gc] %s: handler invocation failed: %v\n", capName, err)
+			// Continue with other capabilities, don't fail the whole GC
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "[gc] complete, removed %d entries\n", totalRemoved)
+	return nil
+}
+
+// queryOriginNeeds queries a host's /fort/needs endpoint and returns set of declared need paths
+func queryOriginNeeds(origin string) (map[string]bool, error) {
+	// Use fort CLI to query the needs endpoint
+	cmd := exec.Command("fort", origin, "needs", "{}")
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("fort command failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return nil, fmt.Errorf("fort command exec failed: %w", err)
+	}
+
+	// Parse the response envelope
+	var envelope struct {
+		Body   json.RawMessage `json:"body"`
+		Status int             `json:"status"`
+	}
+	if err := json.Unmarshal(output, &envelope); err != nil {
+		return nil, fmt.Errorf("parse fort response: %w", err)
+	}
+
+	// Check for successful response
+	if envelope.Status < 200 || envelope.Status >= 300 {
+		return nil, fmt.Errorf("origin returned HTTP %d", envelope.Status)
+	}
+
+	// Parse the needs list from body
+	var needsResponse struct {
+		Needs []string `json:"needs"`
+	}
+	if err := json.Unmarshal(envelope.Body, &needsResponse); err != nil {
+		return nil, fmt.Errorf("parse needs response: %w", err)
+	}
+
+	// Convert to set for O(1) lookup
+	needsSet := make(map[string]bool)
+	for _, need := range needsResponse.Needs {
+		needsSet[need] = true
+	}
+
+	return needsSet, nil
+}
+
+// needIDToPath converts a need ID (e.g., "oidc-outline") to path format (e.g., "oidc/outline")
+func needIDToPath(needID string) string {
+	// Need ID format: "<capability>-<name>"
+	// Path format: "<capability>/<name>"
+	idx := strings.Index(needID, "-")
+	if idx == -1 {
+		return needID // No hyphen, return as-is
+	}
+	return needID[:idx] + "/" + needID[idx+1:]
+}
+
+// invokeHandlerForGC invokes a capability handler after GC cleanup
+// This allows the handler to clean up external resources (e.g., delete OIDC clients)
+func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[string]ProviderStateEntry) error {
+	handlerPath := filepath.Join(handlersDir, capName)
+	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
+		return fmt.Errorf("handler not found: %s", handlerPath)
+	}
+
+	// Build aggregate input from remaining state entries
+	input := make(AsyncHandlerInput)
+	for key, entry := range state {
+		input[key] = struct {
+			Request  json.RawMessage `json:"request"`
+			Response json.RawMessage `json:"response,omitempty"`
+		}{
+			Request:  entry.Request,
+			Response: entry.Response,
+		}
+	}
+
+	inputBytes, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("marshal input: %w", err)
+	}
+
+	cmd := exec.Command(handlerPath)
+	cmd.Stdin = bytes.NewReader(inputBytes)
+	cmd.Env = append(os.Environ(),
+		"FORT_CAPABILITY="+capName,
+		"FORT_MODE=async",
+		"FORT_TRIGGER=gc",
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return fmt.Errorf("handler exec failed: %w", err)
+	}
+
+	// Parse output (we don't dispatch callbacks during GC, just let handler do cleanup)
+	var handlerOutput AsyncHandlerOutput
+	if err := json.Unmarshal(output, &handlerOutput); err != nil {
+		return fmt.Errorf("handler returned invalid JSON: %w", err)
+	}
+
+	// Update state with any new responses from handler
+	for key, response := range handlerOutput {
+		if entry, ok := state[key]; ok {
+			entry.Response = response
+			entry.UpdatedAt = time.Now().Unix()
+			state[key] = entry
+		}
+	}
+
 	return nil
 }
