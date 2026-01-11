@@ -122,13 +122,18 @@ func NewAgentHandler() (*AgentHandler, error) {
 }
 
 func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Extract capability from path: /agent/<capability>
+	// Extract capability from path: /fort/<capability> or /agent/<capability> (deprecated)
 	path := r.URL.Path
-	if !strings.HasPrefix(path, "/agent/") {
+	var capability string
+	switch {
+	case strings.HasPrefix(path, "/fort/"):
+		capability = strings.TrimPrefix(path, "/fort/")
+	case strings.HasPrefix(path, "/agent/"):
+		capability = strings.TrimPrefix(path, "/agent/")
+	default:
 		h.errorResponse(w, http.StatusNotFound, "invalid path")
 		return
 	}
-	capability := strings.TrimPrefix(path, "/agent/")
 	if capability == "" || strings.Contains(capability, "/") {
 		h.errorResponse(w, http.StatusNotFound, "invalid capability")
 		return
