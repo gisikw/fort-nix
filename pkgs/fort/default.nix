@@ -44,7 +44,7 @@ let
 
     # Build request components
     METHOD="POST"
-    REQ_PATH="/agent/$CAPABILITY"
+    REQ_PATH="/fort/$CAPABILITY"
     TIMESTAMP="$(${pkgs.coreutils}/bin/date +%s)"
     BODY_HASH="$(echo -n "$BODY" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)"
 

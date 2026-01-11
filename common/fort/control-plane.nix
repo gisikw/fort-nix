@@ -51,7 +51,7 @@ let
 
   hostsJson = builtins.listToAttrs (hostEntries ++ principalEntries);
 
-  fcgiSocket = "/run/fort-agent/fcgi.sock";
+  fcgiSocket = "/run/fort/fcgi.sock";
 
   # Mandatory capability handlers (always present on all hosts)
   mandatoryHandlers = {
@@ -74,7 +74,7 @@ let
     manifest = pkgs.writeShellScript "handler-manifest" ''
       ${pkgs.jq}/bin/jq -s '.[0] + {capabilities: .[1]}' \
         /var/lib/fort/host-manifest.json \
-        /etc/fort-agent/capabilities.json
+        /etc/fort/capabilities.json
     '';
 
     # Return holdings (handles this host is actively using)
@@ -115,7 +115,7 @@ let
     '';
 
     # Restart a systemd unit (debug capability)
-    # Optional delay parameter schedules restart in the future (useful for restarting nginx/fort-agent)
+    # Optional delay parameter schedules restart in the future (useful for restarting nginx/fort-provider)
     restart = pkgs.writeShellScript "handler-restart" ''
       set -euo pipefail
 
@@ -353,10 +353,10 @@ let
   capabilitiesJson = builtins.toJSON allCapabilities;
 
   # Import the provider (FastCGI handler)
-  fortProvider = import ../pkgs/fort-provider { inherit pkgs; };
+  fortProvider = import ../../pkgs/fort-provider { inherit pkgs; };
 
-  # Import fort CLI for fulfill service
-  fortCli = import ../pkgs/fort { inherit pkgs domain; };
+  # Import fort CLI for consumer service
+  fortCli = import ../../pkgs/fort { inherit pkgs domain; };
 
   # Fulfill script - reads needs.json and calls providers
   fortFulfillScript = pkgs.writeShellScript "fort-fulfill" ''
@@ -417,7 +417,7 @@ let
       for provider in $providers; do
         log "[$id] Calling $provider/$capability..."
 
-        # Build environment for fort-agent-call (identity override if specified)
+        # Build environment for fort (identity override if specified)
         call_env=""
         if [ -n "$identity_origin" ] && [ -n "$identity_key" ]; then
           call_env="FORT_ORIGIN=$identity_origin FORT_SSH_KEY=$identity_key"
@@ -587,36 +587,35 @@ in
     # Core agent infrastructure - always present on all hosts
     {
       # Generate hosts.json with peer public keys and install mandatory handlers
-      system.activationScripts.fortAgentHosts = {
+      system.activationScripts.fortProviderConfig = {
         deps = [ ];
         text = ''
-          install -d -m0755 /etc/fort-agent
-          install -d -m0755 /etc/fort-agent/handlers
-          install -Dm0644 ${pkgs.writeText "hosts.json" (builtins.toJSON hostsJson)} /etc/fort-agent/hosts.json
+          install -d -m0755 /etc/fort
+          install -d -m0755 /etc/fort/handlers
+          install -Dm0644 ${pkgs.writeText "hosts.json" (builtins.toJSON hostsJson)} /etc/fort/hosts.json
 
           # Install mandatory handlers
-          install -Dm0755 ${mandatoryHandlers.status} /etc/fort-agent/handlers/status
-          install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort-agent/handlers/manifest
-          install -Dm0755 ${mandatoryHandlers.holdings} /etc/fort-agent/handlers/holdings
-          install -Dm0755 ${mandatoryHandlers.journal} /etc/fort-agent/handlers/journal
-          install -Dm0755 ${mandatoryHandlers.restart} /etc/fort-agent/handlers/restart
+          install -Dm0755 ${mandatoryHandlers.status} /etc/fort/handlers/status
+          install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort/handlers/manifest
+          install -Dm0755 ${mandatoryHandlers.holdings} /etc/fort/handlers/holdings
+          install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
+          install -Dm0755 ${mandatoryHandlers.restart} /etc/fort/handlers/restart
 
           # Install RBAC and capabilities config (includes mandatory endpoints)
-          install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort-agent/rbac.json
-          install -Dm0644 ${pkgs.writeText "capabilities.json" capabilitiesJson} /etc/fort-agent/capabilities.json
+          install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
+          install -Dm0644 ${pkgs.writeText "capabilities.json" capabilitiesJson} /etc/fort/capabilities.json
         '';
       };
 
       # Runtime directory for socket and persistent handles storage
       systemd.tmpfiles.rules = [
-        "d /run/fort-agent 0755 root root -"
-        "d /var/lib/fort-agent 0700 root root -"
-        "d /var/lib/fort-agent/handles 0700 root root -"
+        "d /run/fort 0755 root root -"
+        "d /var/lib/fort/handles 0700 root root -"
       ];
 
-      # Socket activation for the FastCGI wrapper
-      systemd.sockets.fort-agent = {
-        description = "Fort Agent FastCGI Socket";
+      # Socket activation for the FastCGI provider
+      systemd.sockets.fort-provider = {
+        description = "Fort Control Plane Provider Socket";
         wantedBy = [ "sockets.target" ];
         listenStreams = [ fcgiSocket ];
         socketConfig = {
@@ -627,10 +626,10 @@ in
       };
 
       # The actual service (activated by socket)
-      systemd.services.fort-agent = {
-        description = "Fort Agent FastCGI Wrapper";
-        requires = [ "fort-agent.socket" ];
-        after = [ "fort-agent.socket" ];
+      systemd.services.fort-provider = {
+        description = "Fort Control Plane Provider";
+        requires = [ "fort-provider.socket" ];
+        after = [ "fort-provider.socket" ];
 
         serviceConfig = {
           Type = "simple";
@@ -641,35 +640,35 @@ in
         };
       };
 
-      # Watch for config changes and restart fort-agent
+      # Watch for config changes and restart fort-provider
       # capabilities.json is regenerated on every activation and reflects all capability changes
-      systemd.paths.fort-agent-config = {
-        description = "Watch for fort-agent config changes";
+      systemd.paths.fort-provider-config = {
+        description = "Watch for fort-provider config changes";
         wantedBy = [ "multi-user.target" ];
         pathConfig = {
-          PathModified = "/etc/fort-agent/capabilities.json";
+          PathModified = "/etc/fort/capabilities.json";
         };
       };
 
-      systemd.services.fort-agent-config = {
-        description = "Restart fort-agent on config change";
+      systemd.services.fort-provider-config = {
+        description = "Restart fort-provider on config change";
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = "${pkgs.systemd}/bin/systemctl restart fort-agent.service";
+          ExecStart = "${pkgs.systemd}/bin/systemctl restart fort-provider.service";
         };
       };
 
-      # Add /agent/* location to the host's nginx vhost
-      # Extends the existing virtualHost from host-status aspect
+      # Control plane endpoint locations
+      # /fort/ is the primary path; /agent/ kept for transition compatibility (see fort-c8y.22)
       services.nginx.virtualHosts."${hostName}.fort.${domain}" = {
-        locations."/agent/" = {
+        locations."/fort/" = {
           extraConfig = ''
             # VPN-only access (cluster-internal)
             if ($is_vpn = 0) {
               return 444;
             }
 
-            # FastCGI to the agent wrapper
+            # FastCGI to the provider
             fastcgi_pass unix:${fcgiSocket};
             include ${pkgs.nginx}/conf/fastcgi_params;
             fastcgi_param SCRIPT_NAME $uri;
@@ -684,10 +683,28 @@ in
             fastcgi_param HTTP_X_FORT_SIGNATURE $http_x_fort_signature;
           '';
         };
+        # Deprecated: kept for transition (remove via fort-c8y.22)
+        locations."/agent/" = {
+          extraConfig = ''
+            if ($is_vpn = 0) {
+              return 444;
+            }
+            fastcgi_pass unix:${fcgiSocket};
+            include ${pkgs.nginx}/conf/fastcgi_params;
+            fastcgi_param SCRIPT_NAME $uri;
+            fastcgi_param REQUEST_METHOD $request_method;
+            fastcgi_param CONTENT_TYPE $content_type;
+            fastcgi_param CONTENT_LENGTH $content_length;
+            fastcgi_param QUERY_STRING $query_string;
+            fastcgi_param HTTP_X_FORT_ORIGIN $http_x_fort_origin;
+            fastcgi_param HTTP_X_FORT_TIMESTAMP $http_x_fort_timestamp;
+            fastcgi_param HTTP_X_FORT_SIGNATURE $http_x_fort_signature;
+          '';
+        };
       };
     }
 
-    # Generate needs.json and fulfillment services if any needs are declared
+    # Generate needs.json and consumer services if any needs are declared
     (lib.mkIf hasNeeds {
       system.activationScripts.fortNeedsJson = {
         deps = [ "fortHostManifest" ];
@@ -696,10 +713,10 @@ in
         '';
       };
 
-      # Fulfillment service - runs at activation to satisfy needs
-      systemd.services.fort-fulfill = {
-        description = "Fulfill fort agent needs";
-        after = [ "network-online.target" "fort-agent.service" ];
+      # Consumer service - runs at activation to satisfy needs
+      systemd.services.fort-consumer = {
+        description = "Fort control plane consumer";
+        after = [ "network-online.target" "fort-provider.service" ];
         wants = [ "network-online.target" ];
         wantedBy = [ "multi-user.target" ];
 
@@ -713,8 +730,8 @@ in
       };
 
       # Retry timer - periodically re-attempts unfulfilled needs
-      systemd.timers.fort-fulfill-retry = {
-        description = "Retry unfulfilled fort agent needs";
+      systemd.timers.fort-consumer-retry = {
+        description = "Retry unfulfilled fort consumer needs";
         wantedBy = [ "timers.target" ];
         timerConfig = {
           OnBootSec = "5m";
@@ -722,8 +739,8 @@ in
         };
       };
 
-      systemd.services.fort-fulfill-retry = {
-        description = "Retry unfulfilled fort agent needs";
+      systemd.services.fort-consumer-retry = {
+        description = "Retry unfulfilled fort consumer needs";
         serviceConfig = {
           Type = "oneshot";
           ExecStart = fortFulfillScript;
@@ -735,12 +752,12 @@ in
 
     # Install user-defined capability handlers (if any)
     (lib.mkIf hasCapabilities {
-      system.activationScripts.fortAgentUserHandlers = {
-        deps = [ "fortAgentHosts" ];
+      system.activationScripts.fortProviderHandlers = {
+        deps = [ "fortProviderConfig" ];
         text = ''
           # Install user-defined handler scripts
           ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: cfg: ''
-            install -Dm0755 ${cfg.handler} /etc/fort-agent/handlers/${name}
+            install -Dm0755 ${cfg.handler} /etc/fort/handlers/${name}
           '') config.fort.host.capabilities)}
         '';
       };

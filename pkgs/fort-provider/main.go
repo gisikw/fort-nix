@@ -34,14 +34,14 @@ import (
 )
 
 const (
-	configDir          = "/etc/fort-agent"
+	configDir          = "/etc/fort"
 	hostsFile          = configDir + "/hosts.json"
 	rbacFile           = configDir + "/rbac.json"
 	capabilitiesFile   = configDir + "/capabilities.json"
 	handlersDir        = configDir + "/handlers"
-	handlesDir         = "/var/lib/fort-agent/handles"
+	handlesDir         = "/var/lib/fort/handles"
 	maxTimestampDrift  = 5 * time.Minute
-	signatureNamespace = "fort-agent"
+	signatureNamespace = "fort-agent" // Keep for signing compatibility during rollout
 )
 
 // HostInfo contains public key info for a peer host

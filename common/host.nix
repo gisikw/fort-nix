@@ -139,7 +139,7 @@ in
           deviceProfileManifest
           ;
       }))
-      (import ./fort-agent.nix {
+      (import ./fort/control-plane.nix {
         inherit
           rootManifest
           cluster
