@@ -26,9 +26,10 @@ let
       exit 1
     fi
 
-    # RBAC: Only dev-sandbox principal can request rw access
-    if [ "$access" = "rw" ] && [ "$caller" != "dev-sandbox" ]; then
-      echo '{"error": "rw access requires dev-sandbox principal"}'
+    # RBAC: Only hosts with dev-sandbox aspect can request rw access
+    # Currently that's ratched - could be made dynamic via host manifest lookup
+    if [ "$access" = "rw" ] && [ "$caller" != "ratched" ]; then
+      echo '{"error": "rw access requires dev-sandbox host (ratched)"}'
       exit 1
     fi
 

@@ -23,12 +23,11 @@ let
   # Comin binary for CLI commands
   cominBin = config.services.comin.package;
 
-  # Transform script for git-token: extracts token from JSON response
-  gitTokenTransform = pkgs.writeShellScript "git-token-transform" ''
-    store_path="$1"
-    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store_path")"
-    ${pkgs.jq}/bin/jq -r '.token' > "$store_path"
-    ${pkgs.coreutils}/bin/chmod 600 "$store_path"
+  # Handler for git-token: extracts token from JSON response and stores it
+  gitTokenHandler = pkgs.writeShellScript "git-token-handler" ''
+    ${pkgs.coreutils}/bin/mkdir -p "${credDir}"
+    ${pkgs.jq}/bin/jq -r '.token' > "${tokenFile}"
+    ${pkgs.coreutils}/bin/chmod 600 "${tokenFile}"
   '';
 
   # Deploy handler - verifies SHA then confirms deployment
@@ -137,10 +136,9 @@ in
 
   # Request RO git token from forge for comin pulls
   fort.host.needs.git-token.default = {
-    providers = [ "drhorrible" ];
+    from = "drhorrible";
     request = { access = "ro"; };
-    store = tokenFile;
-    transform = gitTokenTransform;
+    handler = gitTokenHandler;
   };
 
   services.comin = {

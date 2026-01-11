@@ -196,12 +196,24 @@ let
         allHosts
     ) capabilities;
 
+  # Parse duration string (e.g., "15m", "1h", "30s") to seconds
+  parseDuration = str:
+    let
+      match = builtins.match "([0-9]+)([smh])" str;
+      value = if match != null then lib.toInt (builtins.elemAt match 0) else 900;
+      unit = if match != null then builtins.elemAt match 1 else "m";
+    in
+      if unit == "s" then value
+      else if unit == "m" then value * 60
+      else if unit == "h" then value * 3600
+      else 900;  # default 15m
+
   # Need option type
   needOptions = {
-    providers = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      description = "Hostnames of capability providers to request from";
-      example = [ "drhorrible" ];
+    from = lib.mkOption {
+      type = lib.types.str;
+      description = "Hostname of the capability provider to request from";
+      example = "drhorrible";
     };
 
     request = lib.mkOption {
@@ -211,61 +223,25 @@ let
       example = { service = "outline"; };
     };
 
-    store = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Path to store the response (null = don't store)";
-      example = "/var/lib/fort/oidc/outline";
-    };
-
-    restart = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [ ];
-      description = "Systemd services to restart after successful fulfillment";
-      example = [ "outline.service" ];
-    };
-
-    reload = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [ ];
-      description = "Systemd services to reload (not restart) after successful fulfillment";
-      example = [ "nginx.service" ];
-    };
-
-    transform = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
+    handler = lib.mkOption {
+      type = lib.types.path;
       description = ''
-        Script to transform the response before storage.
-        Called with: $1 = store path, stdin = response body JSON.
-        If null, raw response body is written to store path.
+        Script invoked when the need is fulfilled.
+        Receives response payload on stdin.
+        Exit 0 if credential was successfully processed.
+        Handler is responsible for storage, transformation, and triggering restarts.
       '';
-      example = "./extract-token.sh";
+      example = "./handle-oidc-token.sh";
     };
 
-    identity = lib.mkOption {
-      type = lib.types.nullOr (lib.types.submodule {
-        options = {
-          origin = lib.mkOption {
-            type = lib.types.str;
-            description = "Origin header value (principal name) to use for authentication";
-          };
-          keyPath = lib.mkOption {
-            type = lib.types.str;
-            description = "Path to SSH key for signing requests";
-          };
-        };
-      });
-      default = null;
+    nag = lib.mkOption {
+      type = lib.types.str;
+      default = "15m";
       description = ''
-        Override identity for this need. If null, uses host identity.
-        Use this when the need requires authentication as a different principal
-        (e.g., dev-sandbox principal for RW git access).
+        Duration after which to re-request if unsatisfied.
+        Format: number + unit (s=seconds, m=minutes, h=hours).
       '';
-      example = {
-        origin = "dev-sandbox";
-        keyPath = "/var/lib/fort/dev-sandbox/agent-key";
-      };
+      example = "1h";
     };
   };
 
@@ -323,7 +299,7 @@ let
 
   # Generate needs.json from all fort.host.needs declarations
   #
-  # Structure: fort.host.needs.<capability>.<name> = { providers, request, store, restart }
+  # Structure: fort.host.needs.<capability>.<name> = { from, request, handler, nag }
   # The first key IS the capability name - no magic transformation.
   # Example: fort.host.needs.ssl-cert.wildcard calls the "ssl-cert" capability
   needsJson = let
@@ -332,13 +308,10 @@ let
         lib.mapAttrsToList (name: cfg: {
           id = "${capability}-${name}";
           inherit capability;
-          inherit (cfg) providers request restart reload;
-          store = cfg.store;
-          transform = if cfg.transform != null then toString cfg.transform else null;
-          identity = if cfg.identity != null then {
-            origin = cfg.identity.origin;
-            keyPath = cfg.identity.keyPath;
-          } else null;
+          from = cfg.from;
+          request = cfg.request;
+          handler = toString cfg.handler;
+          nag_seconds = parseDuration cfg.nag;
         })
       ) needs);
   in builtins.toJSON (flattenNeeds config.fort.host.needs);
@@ -359,6 +332,8 @@ let
   fortCli = import ../../pkgs/fort { inherit pkgs domain; };
 
   # Fulfill script - reads needs.json and calls providers
+  # New schema: each need has { from, request, handler, nag_seconds }
+  # Handler is invoked with response body on stdin
   fortFulfillScript = pkgs.writeShellScript "fort-fulfill" ''
     set -euo pipefail
 
@@ -388,21 +363,11 @@ let
 
       id=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.id')
       capability=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.capability')
-      store=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.store // empty')
+      from=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.from')
       request=$(echo "$need" | ${pkgs.jq}/bin/jq -c '.request // {}')
-      providers=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.providers[]')
-      restart_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.restart // [] | .[]')
-      reload_services=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.reload // [] | .[]')
-      transform=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.transform // empty')
-      identity_origin=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.identity.origin // empty')
-      identity_key=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.identity.keyPath // empty')
+      handler=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.handler')
 
-      # Determine handle path
-      if [ -n "$store" ]; then
-        handle_path="''${store}.handle"
-      else
-        handle_path="$HANDLES_DIR/$id"
-      fi
+      handle_path="$HANDLES_DIR/$id"
 
       # Check if already fulfilled (handle file exists and non-empty)
       if [ -f "$handle_path" ] && [ -s "$handle_path" ]; then
@@ -412,78 +377,35 @@ let
         continue
       fi
 
-      # Try each provider in order
-      fulfilled=false
-      for provider in $providers; do
-        log "[$id] Calling $provider/$capability..."
+      log "[$id] Calling $from/$capability..."
 
-        # Build environment for fort (identity override if specified)
-        call_env=""
-        if [ -n "$identity_origin" ] && [ -n "$identity_key" ]; then
-          call_env="FORT_ORIGIN=$identity_origin FORT_SSH_KEY=$identity_key"
-          log "[$id] Using identity: $identity_origin"
-        fi
+      if result=$(${fortCli}/bin/fort "$from" "$capability" "$request" 2>&1); then
+        status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
+        handle=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.handle // empty')
+        body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')
 
-        if result=$(env $call_env ${fortCli}/bin/fort "$provider" "$capability" "$request" 2>&1); then
-          status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
-          handle=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.handle // empty')
-          body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')
+        if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+          log "[$id] Success from $from (HTTP $status)"
 
-          if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
-            log "[$id] Success from $provider (HTTP $status)"
-
-            # Store response if store path specified
-            if [ -n "$store" ]; then
-              ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store")"
-              if [ -n "$transform" ]; then
-                # Use transform script to process response
-                echo "$body" | "$transform" "$store"
-                log "[$id] Transformed response to $store"
-              else
-                # Store raw response
-                echo "$body" | ${pkgs.jq}/bin/jq '.' > "$store"
-                log "[$id] Stored response at $store"
-              fi
-            fi
+          # Invoke handler with response body on stdin
+          if echo "$body" | "$handler"; then
+            log "[$id] Handler completed successfully"
 
             # Store handle if returned
             if [ -n "$handle" ]; then
-              ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$handle_path")"
+              ${pkgs.coreutils}/bin/mkdir -p "$HANDLES_DIR"
               echo "$handle" > "$handle_path"
               HOLDINGS["$id"]="$handle"
               log "[$id] Stored handle at $handle_path"
             fi
-
-            # Reload services (graceful)
-            for service in $reload_services; do
-              if ${pkgs.systemd}/bin/systemctl reload "$service" 2>&1; then
-                log "[$id] Reloaded $service"
-              else
-                log "[$id] Warning: failed to reload $service"
-              fi
-            done
-
-            # Restart services
-            for service in $restart_services; do
-              if ${pkgs.systemd}/bin/systemctl restart "$service" 2>&1; then
-                log "[$id] Restarted $service"
-              else
-                log "[$id] Warning: failed to restart $service"
-              fi
-            done
-
-            fulfilled=true
-            break
           else
-            log "[$id] Provider $provider returned HTTP $status"
+            log "[$id] Handler failed, will retry later"
           fi
         else
-          log "[$id] Provider $provider failed: $result"
+          log "[$id] Provider $from returned HTTP $status"
         fi
-      done
-
-      if [ "$fulfilled" = false ]; then
-        log "[$id] All providers failed, will retry later"
+      else
+        log "[$id] Provider $from failed: $result"
       fi
     done <<< "$needs"
 
@@ -522,35 +444,38 @@ in
       default = { };
       description = ''
         Declares what this host needs from capability providers.
-        Structure: fort.host.needs.<capability>.<id> = { providers, request, store, restart }
+        Structure: fort.host.needs.<capability>.<id> = { from, request, handler, nag }
 
         The first key is the capability to call. The second key is an arbitrary
         identifier for disambiguation - use "default" for singletons, or a
         descriptive id when you have multiple needs of the same capability.
-        All actual parameters go in the request field.
+
+        The handler script receives the response payload on stdin and is
+        responsible for storage, transformation, and triggering any restarts.
 
         Examples:
-          # Singleton - just use "default"
-          fort.host.needs.ssl-cert.default = {
-            providers = [ "drhorrible" ];
-            store = "/var/lib/fort/ssl";
-            restart = [ "nginx.service" ];
+          # Simple need with inline handler
+          fort.host.needs.git-token.default = {
+            from = "drhorrible";
+            request = { access = "ro"; };
+            handler = pkgs.writeShellScript "git-token-handler" '''
+              ${pkgs.jq}/bin/jq -r '.token' > /var/lib/fort-git/token
+            ''';
           };
 
-          # Multiple of same capability - use descriptive ids
-          fort.host.needs.oidc-register.outline = {
-            providers = [ "drhorrible" ];
-            request = { service = "outline"; };
-            store = "/var/lib/fort/oidc/outline";
-            restart = [ "outline.service" ];
+          # OIDC registration with handler
+          fort.host.needs.oidc.outline = {
+            from = "drhorrible";
+            request = { client_name = "outline"; };
+            nag = "1h";
+            handler = ./handlers/oidc-callback.sh;
           };
       '';
       example = {
-        ssl-cert.default = {
-          providers = [ "drhorrible" ];
-          request = { };
-          store = "/var/lib/fort/ssl";
-          restart = [ "nginx.service" ];
+        git-token.default = {
+          from = "drhorrible";
+          request = { access = "ro"; };
+          handler = ./handle-git-token.sh;
         };
       };
     };

@@ -16,13 +16,13 @@ let
   beads = import ../../pkgs/beads { inherit pkgs; };
   fort = import ../../pkgs/fort { inherit pkgs domain; };
 
-  # Transform script for git-token: extracts token from JSON response
-  gitTokenTransform = pkgs.writeShellScript "git-token-transform" ''
-    # $1 = store path, stdin = {"token": "...", "username": "..."}
-    store_path="$1"
-    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$store_path")"
-    ${pkgs.jq}/bin/jq -r '.token' > "$store_path"
-    ${pkgs.coreutils}/bin/chmod 644 "$store_path"
+  # Handler for git-token: extracts token from JSON response and stores it
+  # Note: chmod 644 so dev user can read it for git credential helper
+  devTokenPath = "/var/lib/fort-git/dev-token";
+  gitTokenHandler = pkgs.writeShellScript "git-token-handler" ''
+    ${pkgs.coreutils}/bin/mkdir -p /var/lib/fort-git
+    ${pkgs.jq}/bin/jq -r '.token' > ${devTokenPath}
+    ${pkgs.coreutils}/bin/chmod 644 ${devTokenPath}
   '';
 
   # Derive SSH keys for dev-sandbox access from principals
@@ -171,17 +171,12 @@ in
   ];
 
   # Request RW git token from forge via control plane
-  # Uses dev-sandbox principal identity for RW access
+  # Host identity (ratched) is allowed RW access by the git-token capability
   # Stored separately from gitops RO token (dev-token vs deploy-token)
   fort.host.needs.git-token.dev = {
-    providers = [ "drhorrible" ];
+    from = "drhorrible";
     request = { access = "rw"; };
-    store = "/var/lib/fort-git/dev-token";
-    transform = gitTokenTransform;
-    identity = {
-      origin = "dev-sandbox";
-      keyPath = agentKeyPath;
-    };
+    handler = gitTokenHandler;
   };
 
   # Agent key for fort signing (readable by dev user)
