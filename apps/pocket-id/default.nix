@@ -173,17 +173,16 @@ let
     done
 
     # GC: Delete clients that are no longer needed
-    # TODO(fort-c8y.19): Re-enable after all hosts have migrated to control plane
-    # for client_json in $(echo "$existing_clients" | ${pkgs.jq}/bin/jq -c '.[]'); do
-    #   client_name=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.name')
-    #   client_id=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.id')
-    #
-    #   is_needed=$(echo "$needed_names" | ${pkgs.jq}/bin/jq -r --arg n "$client_name" 'any(. == $n)')
-    #   if [ "$is_needed" = "false" ]; then
-    #     echo "GC: Deleting orphaned client: $client_name" >&2
-    #     api_call DELETE "/api/oidc/clients/$client_id" || true
-    #   fi
-    # done
+    for client_json in $(echo "$existing_clients" | ${pkgs.jq}/bin/jq -c '.[]'); do
+      client_name=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.name')
+      client_id=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.id')
+
+      is_needed=$(echo "$needed_names" | ${pkgs.jq}/bin/jq -r --arg n "$client_name" 'any(. == $n)')
+      if [ "$is_needed" = "false" ]; then
+        echo "GC: Deleting orphaned client: $client_name" >&2
+        api_call DELETE "/api/oidc/clients/$client_id" || true
+      fi
+    done
 
     echo "$output"
   '';
