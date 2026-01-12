@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? null, rootManifest, ... }:
 { ... }:
 let
   fort = rootManifest.fortConfig;
@@ -6,14 +6,15 @@ in
 {
   virtualisation.oci-containers = {
     containers.super-productivity = {
-      image = "containers.${fort.settings.domain}/johannesjo/super-productivity:latest";
+      image = "containers.${fort.settings.domain}/johannesjo/super-productivity:v16.8.1";
       ports = [ "4578:80" ];
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "super";
+      subdomain = subdomain;
       port = 4578;
     }
   ];

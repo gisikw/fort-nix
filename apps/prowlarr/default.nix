@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.prowlarr.enable = true;
@@ -10,9 +10,10 @@
   systemd.services.flaresolverr.serviceConfig.NetworkNamespacePath = "/run/netns/egress-vpn";
   systemd.services.flaresolverr.wants = [ "egress-vpn-namespace.service" ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "prowlarr";
+      subdomain = subdomain;
       port = 9696;
       inEgressNamespace = true;
     }

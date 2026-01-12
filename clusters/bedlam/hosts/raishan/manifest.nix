@@ -4,9 +4,20 @@ rec {
 
   roles = [ "beacon" ];
 
-  apps = [ ];
+  apps = [
+    {
+      name = "hugo-blog";
+      domain = "catdevurandom.com";
+      contentDir = ./catdevurandom.com;
+      title = "$ cat /dev/urandom";
+      description = "Random thoughts from a random cat";
+    }
+  ];
 
-  aspects = [ "observable" ];
+  aspects = [
+    "observable"
+    { name = "gitops"; manualDeploy = true; }
+  ];
 
   module =
     { config, pkgs, ... }:

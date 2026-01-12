@@ -137,7 +137,7 @@ in
     config.age.secrets.zwave-iot-manifest.file
   ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "zwave";
       port = 8091;

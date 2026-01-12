@@ -55,7 +55,7 @@
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "zigbee";
       port = 8080;

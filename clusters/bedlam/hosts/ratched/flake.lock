@@ -3,8 +3,8 @@
     "agenix": {
       "inputs": {
         "darwin": "darwin",
-        "home-manager": "home-manager",
-        "nixpkgs": "nixpkgs",
+        "home-manager": "home-manager_2",
+        "nixpkgs": "nixpkgs_2",
         "systems": "systems"
       },
       "locked": {
@@ -21,10 +21,56 @@
         "type": "github"
       }
     },
+    "cluster": {
+      "inputs": {
+        "agenix": [
+          "cluster",
+          "root",
+          "agenix"
+        ],
+        "comin": [
+          "cluster",
+          "root",
+          "comin"
+        ],
+        "deploy-rs": [
+          "cluster",
+          "root",
+          "deploy-rs"
+        ],
+        "disko": [
+          "cluster",
+          "root",
+          "disko"
+        ],
+        "home-config": "home-config",
+        "impermanence": [
+          "cluster",
+          "root",
+          "impermanence"
+        ],
+        "nixpkgs": [
+          "cluster",
+          "root",
+          "nixpkgs"
+        ],
+        "root": "root_2"
+      },
+      "locked": {
+        "path": "../..",
+        "type": "path"
+      },
+      "original": {
+        "path": "../..",
+        "type": "path"
+      },
+      "parent": []
+    },
     "comin": {
       "inputs": {
         "flake-compat": "flake-compat",
         "nixpkgs": [
+          "cluster",
           "root",
           "nixpkgs"
         ]
@@ -46,6 +92,7 @@
     "darwin": {
       "inputs": {
         "nixpkgs": [
+          "cluster",
           "root",
           "agenix",
           "nixpkgs"
@@ -69,7 +116,7 @@
     "deploy-rs": {
       "inputs": {
         "flake-compat": "flake-compat_2",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs_3",
         "utils": "utils"
       },
       "locked": {
@@ -88,7 +135,7 @@
     },
     "disko": {
       "inputs": {
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_4"
       },
       "locked": {
         "lastModified": 1764627417,
@@ -107,6 +154,7 @@
     "disko_2": {
       "inputs": {
         "nixpkgs": [
+          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -162,6 +210,7 @@
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
+          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -181,9 +230,52 @@
         "type": "github"
       }
     },
+    "home-config": {
+      "inputs": {
+        "home-manager": "home-manager",
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1767768521,
+        "narHash": "sha256-Q/vyI7y03TWqpIv/G3QgrVJ0QWPxr+9tNUnska0t0pc=",
+        "owner": "gisikw",
+        "repo": "config",
+        "rev": "32cf02c2ca46c54c7a6302b36ebf9e3980ca8cab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gisikw",
+        "repo": "config",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
+          "cluster",
+          "home-config",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1767024057,
+        "narHash": "sha256-B1aycRjMRvb6QOGbnqDhiDzZwMebj5jxZ5qyJzaKvpI=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "34578a2fdfce4257ce5f5baf6e7efbd4e4e252b1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "ref": "release-25.11",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "cluster",
           "root",
           "agenix",
           "nixpkgs"
@@ -221,6 +313,7 @@
     "nix-vm-test": {
       "inputs": {
         "nixpkgs": [
+          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -247,7 +340,7 @@
         "nix-vm-test": "nix-vm-test",
         "nixos-images": "nixos-images",
         "nixos-stable": "nixos-stable",
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
@@ -267,11 +360,13 @@
     "nixos-images": {
       "inputs": {
         "nixos-stable": [
+          "cluster",
           "root",
           "nixos-anywhere",
           "nixos-stable"
         ],
         "nixos-unstable": [
+          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"
@@ -309,6 +404,22 @@
     },
     "nixpkgs": {
       "locked": {
+        "lastModified": 1767047869,
+        "narHash": "sha256-tzYsEzXEVa7op1LTnrLSiPGrcCY6948iD0EcNLWcmzo=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "89dbf01df72eb5ebe3b24a86334b12c27d68016a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-25.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
         "lastModified": 1754028485,
         "narHash": "sha256-IiiXB3BDTi6UqzAZcf2S797hWEPCRZOwyNThJIYhUfk=",
         "owner": "NixOS",
@@ -323,7 +434,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_2": {
+    "nixpkgs_3": {
       "locked": {
         "lastModified": 1743014863,
         "narHash": "sha256-jAIUqsiN2r3hCuHji80U7NNEafpIMBXiwKlSrjWMlpg=",
@@ -339,7 +450,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_4": {
       "locked": {
         "lastModified": 1752596105,
         "narHash": "sha256-lFNVsu/mHLq3q11MuGkMhUUoSXEdQjCHvpReaGP1S2k=",
@@ -355,7 +466,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1749201760,
         "narHash": "sha256-LEZbj+VD/AR/dWL5ns1gMwzMvp4mLlv4WalxmZTKy5Y=",
@@ -371,7 +482,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_6": {
       "locked": {
         "lastModified": 1764983851,
         "narHash": "sha256-y7RPKl/jJ/KAP/VKLMghMgXTlvNIJMHKskl8/Uuar7o=",
@@ -390,30 +501,34 @@
     "root": {
       "inputs": {
         "agenix": [
-          "root",
+          "cluster",
           "agenix"
         ],
+        "cluster": "cluster",
         "comin": [
-          "root",
+          "cluster",
           "comin"
         ],
         "deploy-rs": [
-          "root",
+          "cluster",
           "deploy-rs"
         ],
         "disko": [
-          "root",
+          "cluster",
           "disko"
         ],
+        "home-config": [
+          "cluster",
+          "home-config"
+        ],
         "impermanence": [
-          "root",
+          "cluster",
           "impermanence"
         ],
         "nixpkgs": [
-          "root",
+          "cluster",
           "nixpkgs"
-        ],
-        "root": "root_2"
+        ]
       }
     },
     "root_2": {
@@ -424,17 +539,19 @@
         "disko": "disko",
         "impermanence": "impermanence",
         "nixos-anywhere": "nixos-anywhere",
-        "nixpkgs": "nixpkgs_5"
+        "nixpkgs": "nixpkgs_6"
       },
       "locked": {
-        "path": "../../../..",
+        "path": "./../..",
         "type": "path"
       },
       "original": {
-        "path": "../../../..",
+        "path": "./../..",
         "type": "path"
       },
-      "parent": []
+      "parent": [
+        "cluster"
+      ]
     },
     "systems": {
       "locked": {
@@ -469,6 +586,7 @@
     "treefmt-nix": {
       "inputs": {
         "nixpkgs": [
+          "cluster",
           "root",
           "nixos-anywhere",
           "nixpkgs"

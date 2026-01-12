@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? "tasks", rootManifest, ... }:
 { lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -11,10 +11,10 @@ in
     port = 3456;
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "vikunja";
-      subdomain = "tasks";
+      subdomain = subdomain;
       port = 3456;
     }
   ];

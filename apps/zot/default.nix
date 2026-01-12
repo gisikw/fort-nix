@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { pkgs, lib, ... }:
 let
   zot = import ../../pkgs/zot { inherit pkgs; };
@@ -48,9 +48,10 @@ in
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "containers";
+      subdomain = subdomain;
       port = 5000;
     }
   ];

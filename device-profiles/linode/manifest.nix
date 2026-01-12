@@ -29,7 +29,7 @@
 
       users.mutableUsers = false;
       users.users.root.initialPassword = "hunter2";
-      users.users.root.openssh.authorizedKeys.keys = [ config.fort.settings.sshKey.publicKey ];
+      users.users.root.openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
 
       # Linode requires per-interface DHCP due to global DHCP being disabled.
       networking.interfaces.eth0.useDHCP = true;

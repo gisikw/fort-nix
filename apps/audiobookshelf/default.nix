@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { config, ... }:
 {
   services.audiobookshelf = {
@@ -10,9 +10,10 @@
   users.groups.media = { };
   users.users.audiobookshelf.extraGroups = [ "media" ];
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "audiobookshelf";
+      subdomain = subdomain;
       port = 13378;
     }
   ];

@@ -7,20 +7,38 @@ args@{
   hostDir,
   agenix,
   comin,
+  # Cluster-specific inputs (optional)
+  home-config ? null,
   ...
 }:
 let
   cluster = import ../common/cluster-context.nix { };
   rootManifest = cluster.manifest;
+  settings = rootManifest.fortConfig.settings;
 
   hostManifest = import (hostDir + "/manifest.nix");
   deviceManifest = import (cluster.devicesDir + "/${hostManifest.device}/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
 
   flatMap = f: xs: builtins.concatLists (map f xs);
+
+  # Derive SSH keys for root access from principals with "root" role
+  # Only SSH keys work for authorized_keys (filter out age keys)
+  isSSHKey = k: builtins.substring 0 4 k == "ssh-";
+  principalsWithRoot = builtins.filter
+    (p: builtins.elem "root" (p.roles or [ ]))
+    (builtins.attrValues settings.principals);
+  rootAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithRoot);
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
-  allAspects = hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
+  # Default aspects that every host gets
+  defaultAspects = [ "host-status" ];
+  allAspects = defaultAspects ++ hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
   allApps = hostManifest.apps ++ flatMap (r: r.apps or [ ]) roles;
+
+  # Extra inputs to pass through to apps/aspects
+  extraInputs = {
+    inherit home-config;
+  };
 
   mkModule =
     type: mod:
@@ -32,6 +50,7 @@ let
           deviceManifest
           deviceProfileManifest
           cluster
+          extraInputs
           ;
       }
 
@@ -43,6 +62,7 @@ let
           deviceManifest
           deviceProfileManifest
           cluster
+          extraInputs
           ;
       }
 
@@ -55,6 +75,7 @@ let
             deviceManifest
             deviceProfileManifest
             cluster
+            extraInputs
             ;
         }
         // (builtins.removeAttrs mod [ "name" ])
@@ -70,9 +91,10 @@ in
       {
         nix.settings.experimental-features = [ "nix-command" "flakes" ];
         # Include attic cache config if it exists (delivered by attic-key-sync)
-        nix.extraOptions = ''
-          !include /var/lib/fort/nix/attic-cache.conf
-        '';
+        # TODO: Re-enable once attic is resilient to network loss
+        # nix.extraOptions = ''
+        #   !include /var/lib/fort/nix/attic-cache.conf
+        # '';
         nixpkgs.config.allowUnfree = true;
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
@@ -91,7 +113,7 @@ in
         };
         age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
-        users.users.root.openssh.authorizedKeys.keys = rootManifest.fortConfig.settings.authorizedDeployKeys;
+        users.users.root.openssh.authorizedKeys.keys = rootAuthorizedKeys;
       }
       impermanence.nixosModules.impermanence
       rootManifest.module
@@ -107,7 +129,6 @@ in
           clusterDir = cluster.clusterDir;
           clusterHostsDir = cluster.hostsDir;
           clusterDevicesDir = cluster.devicesDir;
-          clusterSettings = cluster.manifest.fortConfig.settings;
         };
       }
       (import ./fort.nix ({
@@ -116,8 +137,15 @@ in
           hostManifest
           deviceManifest
           deviceProfileManifest
+          cluster
           ;
       }))
+      (import ./fort/control-plane.nix {
+        inherit
+          rootManifest
+          cluster
+          ;
+      })
     ]
     ++ map (mkModule "app") allApps
     ++ map (mkModule "aspect") allAspects;
@@ -129,7 +157,7 @@ in
       sshUser = "root";
       sshOpts = [
         "-i"
-        rootManifest.fortConfig.settings.sshKey.privateKeyPath
+        settings.principals.admin.privateKeyPath
       ];
       path =
         deploy-rs.lib.${deviceProfileManifest.system}.activate.nixos

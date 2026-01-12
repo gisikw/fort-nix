@@ -13,6 +13,7 @@ rec {
     "mesh"
     "observable"
     "ldap"
+    { name = "gitops"; manualDeploy = true; }
   ];
 
   module =

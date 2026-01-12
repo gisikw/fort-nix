@@ -1,4 +1,4 @@
-deploy_key := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.sshKey.privateKeyPath'`
+deploy_key := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.principals.admin.privateKeyPath'`
 domain := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.domain'`
 cluster := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).clusterName'`
 
@@ -56,21 +56,21 @@ _scaffold-device-flake profile uuid keydir:
   cat > "${devices_root}/{{uuid}}/flake.nix" <<-'EOF'
   {
     inputs = {
-      root.url = "path:../../";
-      nixpkgs.follows = "root/nixpkgs";
-      disko.follows = "root/disko";
-      impermanence.follows = "root/impermanence";
+      cluster.url = "path:../..";
+      nixpkgs.follows = "cluster/nixpkgs";
+      disko.follows = "cluster/disko";
+      impermanence.follows = "cluster/impermanence";
     };
-  
+
     outputs =
       {
-        self, 
-        nixpkgs, 
-        disko, 
+        self,
+        nixpkgs,
+        disko,
         impermanence,
         ...
       }:
-      import ../../common/device.nix {
+      import ../../../../common/device.nix {
         inherit self nixpkgs disko impermanence;
         deviceDir = ./.;
       };
@@ -112,13 +112,13 @@ assign device host:
   cat > "${hosts_root}/{{host}}/flake.nix" <<-EOF
   {
     inputs = {
-      root.url = "path:../..";
-      nixpkgs.follows = "root/nixpkgs";
-      disko.follows = "root/disko";
-      impermanence.follows = "root/impermanence";
-      deploy-rs.follows = "root/deploy-rs";
-      agenix.follows = "root/agenix";
-      attic.follows = "root/attic";
+      cluster.url = "path:../..";
+      nixpkgs.follows = "cluster/nixpkgs";
+      disko.follows = "cluster/disko";
+      impermanence.follows = "cluster/impermanence";
+      deploy-rs.follows = "cluster/deploy-rs";
+      agenix.follows = "cluster/agenix";
+      comin.follows = "cluster/comin";
     };
 
     outputs =
@@ -129,10 +129,10 @@ assign device host:
         impermanence,
         deploy-rs,
         agenix,
-        attic,
+        comin,
         ...
       }:
-      import ../../common/host.nix {
+      import ../../../../common/host.nix {
         inherit
           self
           nixpkgs
@@ -140,7 +140,7 @@ assign device host:
           impermanence
           deploy-rs
           agenix
-          attic
+          comin
           ;
         hostDir = ./.;
       };
@@ -172,6 +172,27 @@ assign device host:
 
 deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
+  set -euo pipefail
+
+  # Expand ~ in deploy key path
+  deploy_key_expanded="{{deploy_key}}"
+  deploy_key_expanded="${deploy_key_expanded/#\~/$HOME}"
+
+  # Check if master key exists - determines deploy mode
+  if [[ -f "$deploy_key_expanded" ]]; then
+    just _deploy-direct {{host}} {{addr}}
+  else
+    just _deploy-gitops {{host}} {{addr}}
+  fi
+
+# Direct deploy via deploy-rs (requires master key)
+_deploy-direct host addr:
+  #!/usr/bin/env bash
+  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
+    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
+    exit 1
+  fi
+
   hosts_root="./hosts"
   devices_root="./devices"
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; devices_root="./clusters/{{cluster}}/devices"; fi
@@ -203,7 +224,118 @@ deploy host addr=(host + ".fort." + domain):
 
   trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
   KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
+
+  # Write deploy info for non-gitops hosts (status endpoint uses this as fallback)
+  deploy_commit=$(git rev-parse --short HEAD)
+  deploy_timestamp=$(date -Iseconds)
+  deploy_branch=$(git rev-parse --abbrev-ref HEAD)
+  deploy_info="{\"commit\":\"${deploy_commit}\",\"timestamp\":\"${deploy_timestamp}\",\"branch\":\"${deploy_branch}\"}"
+
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build "${host_dir}#{{host}}"
+
+  # Write deploy info to target host after successful deploy
+  echo "[Fort] Writing deploy info to {{addr}}"
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
+    "mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json"
+
+# GitOps deploy via fort CLI (no master key needed)
+_deploy-gitops host addr:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  target_sha=$(git rev-parse --short HEAD)
+  echo "[Fort] GitOps deploy {{host}} -> ${target_sha}"
+
+  max_attempts=90  # 7.5 minutes at 5s intervals
+  attempt=0
+  last_state=""
+
+  # For manual-confirm hosts, keep calling deploy until target SHA is active
+  # For auto-deploy hosts (no deploy capability), just poll status
+  has_deploy_capability=true
+
+  while true; do
+    ((attempt++)) || true
+    if [[ $attempt -gt $max_attempts ]]; then
+      echo "[Fort] ERROR: Timed out waiting for {{host}} to deploy ${target_sha}" >&2
+      exit 1
+    fi
+
+    # Check current status first
+    if status_json=$(fort {{host}} status 2>/dev/null | jq -r '.body'); then
+      current=$(echo "$status_json" | jq -r '.deploy.commit // empty')
+
+      # Already deployed?
+      if [[ "$current" == "$target_sha"* ]] || [[ "$target_sha" == "$current"* ]]; then
+        echo "[Fort] {{host}} deployed ${target_sha} successfully"
+        exit 0
+      fi
+    else
+      if [[ "$last_state" != "unreachable" ]]; then
+        echo "[Fort] Waiting for {{host}} to become reachable..."
+        last_state="unreachable"
+      fi
+      sleep 5
+      continue
+    fi
+
+    # Keep trying deploy capability until we reach target SHA
+    # (Even after "deployed" response, the wrong generation might have been confirmed)
+    if [[ "$has_deploy_capability" == "true" ]]; then
+      if deploy_response=$(fort {{host}} deploy "{\"sha\": \"${target_sha}\"}" 2>&1); then
+        deploy_body=$(echo "$deploy_response" | jq -r '.body')
+        deploy_status=$(echo "$deploy_body" | jq -r '.status // .error // empty')
+
+        case "$deploy_status" in
+          deployed|confirmed)
+            if [[ "$last_state" != "switching" ]]; then
+              echo "[Fort] Waiting for switch..."
+              last_state="switching"
+            fi
+            ;;
+          sha_mismatch)
+            if [[ "$last_state" != "fetching" ]]; then
+              pending=$(echo "$deploy_body" | jq -r '.pending // empty')
+              echo "[Fort] Waiting for comin to fetch... (comin has ${pending:-unknown})"
+              last_state="fetching"
+            fi
+            ;;
+          building)
+            if [[ "$last_state" != "building" ]]; then
+              echo "[Fort] Waiting for build..."
+              last_state="building"
+            fi
+            ;;
+          *)
+            if [[ "$last_state" != "$deploy_status" ]]; then
+              echo "[Fort] Deploy status: ${deploy_status}"
+              last_state="$deploy_status"
+            fi
+            ;;
+        esac
+        sleep 5
+      else
+        # Check if it's a 404 (no deploy capability) vs other error
+        if echo "$deploy_response" | grep -q "404\|not found\|unknown capability"; then
+          echo "[Fort] No deploy capability, polling status..."
+          has_deploy_capability=false
+        else
+          if [[ "$last_state" != "retrying" ]]; then
+            echo "[Fort] Deploy call failed, retrying..."
+            last_state="retrying"
+          fi
+          sleep 5
+        fi
+      fi
+    else
+      # No deploy capability - just poll status
+      if [[ "$last_state" != "polling" ]]; then
+        echo "[Fort] Waiting for activation... (current: ${current:-unknown})"
+        last_state="polling"
+      fi
+      sleep 5
+    fi
+  done
 
 fmt:
   nix run .#nixfmt -- .

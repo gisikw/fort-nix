@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { config, pkgs, lib, ... }:
 let
   rubyEnv = pkgs.bundlerEnv {
@@ -48,9 +48,10 @@ in
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "mcp";
+      subdomain = subdomain;
       port = 9292;
       visibility = "public";
     }

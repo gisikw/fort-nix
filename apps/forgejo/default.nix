@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ subdomain ? null, rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -7,19 +7,108 @@ let
   oidcPath = "/user/oauth2/Pocket%20ID";
   bootstrapDir = "/var/lib/forgejo/bootstrap";
   runnerDir = "/var/lib/forgejo-runner";
-  mirrorNames = builtins.attrNames forgeConfig.mirrors;
+  tokenDir = "/var/lib/forgejo/tokens";
+  repoNames = builtins.attrNames forgeConfig.repos;
+
+  # Collect all mirrors across all repos as flat list: [{repo, mirror, tokenFile}, ...]
+  allMirrors = lib.flatten (map (repoName:
+    let repo = forgeConfig.repos.${repoName};
+    in map (mirrorName: {
+      repo = repoName;
+      mirror = mirrorName;
+      tokenFile = repo.mirrors.${mirrorName}.tokenFile;
+      remote = repo.mirrors.${mirrorName}.remote;
+    }) (builtins.attrNames (repo.mirrors or {}))
+  ) repoNames);
+
+  # Handler for git-token capability (async aggregate mode)
+  # Input: {key -> {request: {access, _fort_need_id?}, response?}}
+  #   key format: "origin:needID" or just "origin" for legacy requests
+  # Output: {key -> {token, username}}
+  # Creates Forgejo deploy tokens on-demand with appropriate access levels
+  gitTokenHandler = pkgs.writeShellScript "handler-git-token" ''
+    set -euo pipefail
+
+    # Read aggregate input
+    input=$(${pkgs.coreutils}/bin/cat)
+    ${pkgs.coreutils}/bin/mkdir -p "${tokenDir}"
+
+    # Process each key and build aggregate output
+    output='{}'
+
+    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
+      # Extract origin from key (format: "origin:needID" or just "origin")
+      origin=$(echo "$key" | ${pkgs.coreutils}/bin/cut -d: -f1)
+
+      # Extract request for this key
+      access=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg k "$key" '.[$k].request.access // "ro"')
+
+      # Validate access level
+      if [ "$access" != "ro" ] && [ "$access" != "rw" ]; then
+        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+          '.[$k] = {"error": "access must be ro or rw"}')
+        continue
+      fi
+
+      # RBAC: Only hosts with dev-sandbox aspect can request rw access
+      if [ "$access" = "rw" ] && [ "$origin" != "ratched" ]; then
+        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+          '.[$k] = {"error": "rw access requires dev-sandbox host (ratched)"}')
+        continue
+      fi
+
+      # Token storage (idempotent - reuse existing token per origin+access)
+      token_file="${tokenDir}/$origin-$access"
+
+      # Generate token if not exists
+      if [ ! -s "$token_file" ]; then
+        scopes="read:repository"
+        [ "$access" = "rw" ] && scopes="read:repository,write:repository"
+
+        # Generate token via forgejo CLI (must run as forgejo user, not root)
+        if ! token=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "
+          GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom \
+          ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token \
+            --username forge-admin \
+            --token-name $origin-$access \
+            --scopes $scopes \
+            --raw
+        " 2>/dev/null); then
+          # If generation failed but file exists (race condition), use it
+          if [ -s "$token_file" ]; then
+            token=$(${pkgs.coreutils}/bin/cat "$token_file")
+          else
+            output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+              '.[$k] = {"error": "failed to generate token"}')
+            continue
+          fi
+        fi
+
+        echo "$token" > "$token_file"
+        ${pkgs.coreutils}/bin/chmod 600 "$token_file"
+      fi
+
+      # Add token to output (keyed by original key, not origin)
+      token=$(${pkgs.coreutils}/bin/cat "$token_file")
+      output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --arg t "$token" \
+        '.[$k] = {"token": $t, "username": "forge-admin"}')
+    done
+
+    # Return aggregate output
+    echo "$output"
+  '';
 in
 {
-  # Age secrets for mirror tokens and runner
-  age.secrets = builtins.listToAttrs (map (name: {
-    name = "forge-mirror-${name}";
+  # Age secrets for mirror tokens (per repo-mirror pair) and runner
+  age.secrets = builtins.listToAttrs (map (m: {
+    name = "forge-mirror-${m.repo}-${m.mirror}";
     value = {
-      file = forgeConfig.mirrors.${name}.tokenFile;
+      file = m.tokenFile;
       owner = "forgejo";
       group = "forgejo";
       mode = "0400";
     };
-  }) mirrorNames) // {
+  }) allMirrors) // {
     forgejo-runner-secret = {
       file = ./runner-secret.age;
       owner = "forgejo";
@@ -71,7 +160,7 @@ in
   systemd.services.forgejo-oidc-setup = {
     description = "Configure Forgejo OIDC authentication source";
     after = [ "forgejo.service" ];
-    path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils ];
+    path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils pkgs.sudo ];
 
     environment = {
       GITEA_WORK_DIR = "/var/lib/forgejo";
@@ -80,13 +169,11 @@ in
 
     serviceConfig = {
       Type = "oneshot";
-      User = "forgejo";
-      Group = "forgejo";
+      # Run as root to read credentials, forgejo commands run via sudo -u forgejo
       WorkingDirectory = "/var/lib/forgejo";
       # Restart forgejo after updating auth source
       # --no-block: queue restart without waiting (avoids dependency cycle with requires)
-      # + prefix: run as root
-      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart --no-block forgejo.service";
+      ExecStartPost = "${pkgs.systemd}/bin/systemctl restart --no-block forgejo.service";
     };
 
     script = ''
@@ -102,8 +189,13 @@ in
       CLIENT_SECRET=$(cat ${authDir}/client-secret)
       DISCOVER_URL="https://id.${domain}/.well-known/openid-configuration"
 
+      # Run forgejo commands as forgejo user, preserving environment
+      run_forgejo() {
+        sudo -u forgejo -E HOME=/var/lib/forgejo forgejo "$@"
+      }
+
       # Check if auth source already exists
-      EXISTING_ID=$(forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
+      EXISTING_ID=$(run_forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
 
       COMMON_OPTS="--name 'Pocket ID' \
         --provider openidConnect \
@@ -117,10 +209,10 @@ in
 
       if [ -n "$EXISTING_ID" ]; then
         echo "Updating existing OIDC auth source (ID: $EXISTING_ID)"
-        eval "forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
+        eval "run_forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
       else
         echo "Creating new OIDC auth source"
-        eval "forgejo admin auth add-oauth $COMMON_OPTS"
+        eval "run_forgejo admin auth add-oauth $COMMON_OPTS"
       fi
     '';
   };
@@ -136,7 +228,6 @@ in
       GITEA_WORK_DIR = "/var/lib/forgejo";
       GITEA_CUSTOM = "/var/lib/forgejo/custom";
       FORGEJO_ORG = forgeConfig.org;
-      FORGEJO_REPO = forgeConfig.repo;
     };
 
     serviceConfig = {
@@ -148,14 +239,13 @@ in
     };
 
     script = let
-      mirrorSecretPaths = builtins.listToAttrs (map (name: {
-        name = name;
-        value = config.age.secrets."forge-mirror-${name}".path;
-      }) mirrorNames);
-      mirrorsJson = builtins.toJSON (lib.mapAttrs (name: cfg: {
-        remote = cfg.remote;
-        tokenPath = mirrorSecretPaths.${name};
-      }) forgeConfig.mirrors);
+      # Build JSON structure: { repoName: { mirrors: { mirrorName: {remote, tokenPath} } } }
+      reposJson = builtins.toJSON (lib.mapAttrs (repoName: repoCfg: {
+        mirrors = lib.mapAttrs (mirrorName: mirrorCfg: {
+          remote = mirrorCfg.remote;
+          tokenPath = config.age.secrets."forge-mirror-${repoName}-${mirrorName}".path;
+        }) (repoCfg.mirrors or {});
+      }) forgeConfig.repos);
     in ''
       set -euo pipefail
 
@@ -208,33 +298,36 @@ in
         api -X POST "$API_URL/orgs" -d "{\"username\": \"$FORGEJO_ORG\"}"
       fi
 
-      # Create repo if not exists
-      if ! api "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO" > /dev/null 2>&1; then
-        echo "Creating repo: $FORGEJO_ORG/$FORGEJO_REPO"
-        api -X POST "$API_URL/orgs/$FORGEJO_ORG/repos" \
-          -d "{\"name\": \"$FORGEJO_REPO\", \"private\": true}"
-      fi
-
-      # Configure push mirrors
-      MIRRORS='${mirrorsJson}'
-      for mirror_name in $(echo "$MIRRORS" | jq -r 'keys[]'); do
-        remote=$(echo "$MIRRORS" | jq -r --arg n "$mirror_name" '.[$n].remote')
-        token_path=$(echo "$MIRRORS" | jq -r --arg n "$mirror_name" '.[$n].tokenPath')
-        token=$(cat "$token_path")
-
-        # Build mirror URL (credentials passed separately)
-        mirror_url="https://$remote.git"
-
-        # Check if mirror already exists
-        existing=$(api "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO/push_mirrors" | jq -r --arg r "$remote" '.[] | select(.remote_address | contains($r)) | .id' || true)
-
-        if [ -z "$existing" ]; then
-          echo "Adding push mirror: $mirror_name ($remote)"
-          api -X POST "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO/push_mirrors" \
-            -d "{\"remote_address\": \"$mirror_url\", \"remote_username\": \"x-access-token\", \"remote_password\": \"$token\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
-        else
-          echo "Push mirror already configured: $mirror_name"
+      # Process each repo
+      REPOS='${reposJson}'
+      for repo_name in $(echo "$REPOS" | jq -r 'keys[]'); do
+        # Create repo if not exists
+        if ! api "$API_URL/repos/$FORGEJO_ORG/$repo_name" > /dev/null 2>&1; then
+          echo "Creating repo: $FORGEJO_ORG/$repo_name"
+          api -X POST "$API_URL/orgs/$FORGEJO_ORG/repos" \
+            -d "{\"name\": \"$repo_name\", \"private\": true}"
         fi
+
+        # Configure push mirrors for this repo
+        for mirror_name in $(echo "$REPOS" | jq -r --arg r "$repo_name" '.[$r].mirrors | keys[]'); do
+          remote=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].remote')
+          token_path=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].tokenPath')
+          token=$(cat "$token_path")
+
+          # Build mirror URL (credentials passed separately)
+          mirror_url="https://$remote.git"
+
+          # Check if mirror already exists
+          existing=$(api "$API_URL/repos/$FORGEJO_ORG/$repo_name/push_mirrors" | jq -r --arg r "$remote" '.[] | select(.remote_address | contains($r)) | .id' || true)
+
+          if [ -z "$existing" ]; then
+            echo "Adding push mirror to $repo_name: $mirror_name ($remote)"
+            api -X POST "$API_URL/repos/$FORGEJO_ORG/$repo_name/push_mirrors" \
+              -d "{\"remote_address\": \"$mirror_url\", \"remote_username\": \"x-access-token\", \"remote_password\": \"$token\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
+          else
+            echo "Push mirror already configured for $repo_name: $mirror_name"
+          fi
+        done
       done
 
       # Register runner with Forgejo using shared secret
@@ -357,91 +450,10 @@ EOF
     };
   };
 
-  # Sync deploy token to all hosts in the mesh for GitOps (comin)
-  systemd.timers."forgejo-deploy-token-sync" = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "5m";
-      OnUnitActiveSec = "10m";
-    };
-  };
-
-  systemd.services."forgejo-deploy-token-sync" = {
-    after = [ "forgejo-bootstrap.service" ];
-    path = with pkgs; [
-      tailscale
-      jq
-      openssh
-      coreutils
-    ];
-    # Best-effort sync - wrap entire script so failures exit 0
-    script = ''
-      sync_tokens() {
-        SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
-
-        DEPLOY_TOKEN_FILE="${bootstrapDir}/deploy-token"
-        DEV_TOKEN_FILE="${bootstrapDir}/dev-token"
-
-        if [ ! -s "$DEPLOY_TOKEN_FILE" ]; then
-          echo "Deploy token not yet created, skipping sync"
-          return 0
-        fi
-
-        DEPLOY_TOKEN=$(cat "$DEPLOY_TOKEN_FILE")
-        DEV_TOKEN=$(cat "$DEV_TOKEN_FILE" 2>/dev/null || echo "")
-
-        # Enumerate all hosts in the mesh
-        mesh=$(tailscale status --json)
-        user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
-        peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
-
-        for peer in localhost $peers; do
-          echo "Checking $peer..."
-
-          # Read host manifest to check for dev-sandbox aspect
-          manifest=$(ssh $SSH_OPTS "$peer" "cat /var/lib/fort/host-manifest.json 2>/dev/null" || echo '{}')
-          has_dev_sandbox=$(echo "$manifest" | jq -r '.aspects // [] | any(. == "dev-sandbox")')
-
-          if [ "$has_dev_sandbox" = "true" ] && [ -n "$DEV_TOKEN" ]; then
-            echo "Syncing dev (RW) token to $peer (has dev-sandbox aspect)..."
-            TOKEN_TO_SYNC="$DEV_TOKEN"
-          else
-            echo "Syncing deploy (RO) token to $peer..."
-            TOKEN_TO_SYNC="$DEPLOY_TOKEN"
-          fi
-
-          if ssh $SSH_OPTS "$peer" "
-            mkdir -p /var/lib/fort-git
-            chmod 755 /var/lib/fort-git
-            cat > /var/lib/fort-git/forge-token << 'TOKEN'
-$TOKEN_TO_SYNC
-TOKEN
-            chmod 644 /var/lib/fort-git/forge-token
-          "; then
-            echo "Token synced to $peer"
-          else
-            echo "Failed to sync to $peer, continuing..."
-          fi
-        done
-
-        echo "Token sync complete"
-      }
-
-      # Run sync, but always exit 0 (best-effort, will retry on next timer)
-      if ! sync_tokens; then
-        echo "Token sync failed, will retry on next timer run"
-      fi
-      exit 0
-    '';
-    serviceConfig = {
-      Type = "oneshot";
-      User = "root";
-    };
-  };
-
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "git";
+      subdomain = subdomain;
       port = 3001;
       visibility = "vpn";
       sso = {
@@ -450,4 +462,11 @@ TOKEN
       };
     }
   ];
+
+  # Expose git-token capability for on-demand token generation
+  fort.host.capabilities.git-token = {
+    handler = gitTokenHandler;
+    mode = "async";  # Returns handles, needs GC
+    description = "Generate Forgejo deploy tokens on-demand";
+  };
 }

@@ -1,10 +1,79 @@
-{ rootManifest, ... }:
+{ subdomain ? "cache", rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
   bootstrapDir = "/var/lib/atticd/bootstrap";
   cacheUrl = "https://cache.${domain}";
   cacheName = "fort";
+
+  # Handler for attic-token capability (async aggregate mode)
+  # Input: {key -> {request: {}, response?}}
+  # Output: {key -> {cacheUrl, cacheName, publicKey, pushToken}}
+  # Returns cache configuration and push token for binary cache access
+  atticTokenHandler = pkgs.writeShellScript "handler-attic-token" ''
+    set -euo pipefail
+
+    # Read aggregate input
+    input=$(${pkgs.coreutils}/bin/cat)
+
+    CI_TOKEN_FILE="${bootstrapDir}/ci-token"
+    PUBLIC_KEY_FILE="${bootstrapDir}/public-key"
+
+    # Ensure we have the CI token
+    if [ ! -s "$CI_TOKEN_FILE" ]; then
+      # Return error for all keys
+      echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "CI token not yet created"}}) | from_entries'
+      exit 0
+    fi
+
+    # Cache the public key if not already cached
+    if [ ! -s "$PUBLIC_KEY_FILE" ]; then
+      # Configure attic client to get cache info
+      export HOME=$(${pkgs.coreutils}/bin/mktemp -d)
+      trap '${pkgs.coreutils}/bin/rm -rf "$HOME"' EXIT
+      ${pkgs.coreutils}/bin/mkdir -p "$HOME/.config/attic"
+
+      ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
+      if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
+        echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "Admin token not yet created"}}) | from_entries'
+        exit 0
+      fi
+
+      ${pkgs.coreutils}/bin/cat > "$HOME/.config/attic/config.toml" <<EOF
+default-server = "local"
+
+[servers.local]
+endpoint = "${cacheUrl}"
+token = "$(${pkgs.coreutils}/bin/cat $ADMIN_TOKEN_FILE)"
+EOF
+
+      # Get the cache public key
+      PUBLIC_KEY=$(${pkgs.attic-client}/bin/attic cache info ${cacheName} 2>&1 | ${pkgs.gawk}/bin/awk '/Public Key:/ {print $NF}')
+      if [ -z "$PUBLIC_KEY" ]; then
+        echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "Could not get cache public key"}}) | from_entries'
+        exit 0
+      fi
+
+      echo "$PUBLIC_KEY" > "$PUBLIC_KEY_FILE"
+    fi
+
+    CI_TOKEN=$(${pkgs.coreutils}/bin/cat "$CI_TOKEN_FILE")
+    PUBLIC_KEY=$(${pkgs.coreutils}/bin/cat "$PUBLIC_KEY_FILE")
+
+    # Build response for all requesters (same config for everyone)
+    output='{}'
+    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
+      output=$(echo "$output" | ${pkgs.jq}/bin/jq \
+        --arg k "$key" \
+        --arg url "${cacheUrl}" \
+        --arg name "${cacheName}" \
+        --arg pk "$PUBLIC_KEY" \
+        --arg token "$CI_TOKEN" \
+        '.[$k] = {cacheUrl: $url, cacheName: $name, publicKey: $pk, pushToken: $token}')
+    done
+
+    echo "$output"
+  '';
 in
 {
   services.atticd = {
@@ -176,119 +245,22 @@ EOF
     '';
   in "${uploadScript}";
 
-  # Sync cache public key to all hosts in the mesh
-  # This allows hosts to trust and pull from the cache
-  systemd.timers."attic-key-sync" = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "5m";       # First run 5min after boot (after bootstrap completes)
-      OnUnitActiveSec = "10m";
-    };
-  };
-
-  systemd.services."attic-key-sync" = {
-    after = [ "atticd.service" ];
-    path = with pkgs; [
-      attic-client
-      tailscale
-      jq
-      openssh
-      coreutils
-      gnugrep
-      gawk
-    ];
-    # Best-effort sync - failures shouldn't block deploys
-    # Wrap entire script so any failure exits 0 (will retry on next timer)
-    script = ''
-      sync_keys() {
-        SSH_OPTS="-i /root/.ssh/deployer_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=10"
-
-        # Configure attic client to talk to local server
-        export HOME=$(mktemp -d)
-        trap 'rm -rf "$HOME"' EXIT
-        mkdir -p "$HOME/.config/attic"
-
-        ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
-        if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
-          echo "Admin token not yet created, skipping key sync"
-          return 0
-        fi
-
-        cat > "$HOME/.config/attic/config.toml" <<EOF
-default-server = "local"
-
-[servers.local]
-endpoint = "${cacheUrl}"
-token = "$(cat $ADMIN_TOKEN_FILE)"
-EOF
-
-        # Get the cache public key (attic outputs to stderr with leading spaces)
-        PUBLIC_KEY=$(attic cache info ${cacheName} 2>&1 | awk '/Public Key:/ {print $NF}')
-        if [ -z "$PUBLIC_KEY" ]; then
-          echo "Could not get public key for cache ${cacheName}"
-          return 1
-        fi
-        echo "Cache public key: $PUBLIC_KEY"
-
-        # Build the nix config snippet (URL must include cache name)
-        NIX_CONF="extra-substituters = ${cacheUrl}/${cacheName}
-extra-trusted-public-keys = $PUBLIC_KEY"
-
-        # Enumerate all hosts in the mesh
-        mesh=$(tailscale status --json)
-        user=$(echo $mesh | jq -r '.User | to_entries[] | select(.value.LoginName == "fort") | .key')
-        peers=$(echo $mesh | jq -r --arg user "$user" '.Peer | to_entries[] | select(.value.UserID == ($user | tonumber)) | .value.DNSName')
-
-        # Get the CI token for push access
-        CI_TOKEN_FILE="${bootstrapDir}/ci-token"
-        if [ ! -s "$CI_TOKEN_FILE" ]; then
-          echo "CI token not yet created, skipping sync"
-          return 0
-        fi
-        CI_TOKEN=$(cat "$CI_TOKEN_FILE")
-
-        for peer in localhost $peers; do
-          echo "Syncing cache config to $peer..."
-          if ssh $SSH_OPTS "$peer" "
-            mkdir -p /var/lib/fort/nix
-            cat > /var/lib/fort/nix/attic-cache.conf << 'NIXCONF'
-$NIX_CONF
-NIXCONF
-            chmod 644 /var/lib/fort/nix/attic-cache.conf
-            cat > /var/lib/fort/nix/attic-push-token << 'TOKEN'
-$CI_TOKEN
-TOKEN
-            chmod 600 /var/lib/fort/nix/attic-push-token
-          "; then
-            echo "Cache config synced to $peer"
-          else
-            echo "Failed to sync to $peer, continuing..."
-          fi
-        done
-
-        echo "Cache config sync complete"
-      }
-
-      # Run sync, but always exit 0 (best-effort, will retry on next timer)
-      if ! sync_keys; then
-        echo "Key sync failed, will retry on next timer run"
-      fi
-      exit 0
-    '';
-    serviceConfig = {
-      Type = "oneshot";
-      User = "root";
-    };
-  };
-
   # Expose via reverse proxy
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "attic";
-      subdomain = "cache";
+      subdomain = subdomain;
       port = 8080;
       visibility = "vpn"; # Cache access is token-based, VPN-only for now
       maxBodySize = "2G"; # Large uploads for binary cache (kernel, initrd, etc.)
     }
   ];
+
+  # Expose attic-token capability for cache config distribution
+  fort.host.capabilities.attic-token = {
+    handler = atticTokenHandler;
+    mode = "async";  # Returns handles, needs GC
+    cacheResponse = true;  # Reuse same token for all consumers
+    description = "Distribute binary cache config and push token";
+  };
 }

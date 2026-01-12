@@ -1,4 +1,4 @@
-{ ... }:
+{ subdomain ? null, ... }:
 { ... }:
 {
   services.open-webui = {
@@ -13,9 +13,10 @@
     };
   };
 
-  fortCluster.exposedServices = [
+  fort.cluster.services = [
     {
       name = "ai";
+      subdomain = subdomain;
       port = 8080;
     }
   ];
