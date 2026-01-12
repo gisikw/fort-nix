@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ rootManifest, cluster, ... }:
 {
   config,
   lib,
@@ -64,6 +64,19 @@ let
 
   # Check if this host is the certificate provider (has ACME certs configured)
   isCertProvider = config.security.acme.certs ? ${domain};
+
+  # Discover beacon host for proxy needs
+  beaconHost = let
+    hostFiles = builtins.readDir cluster.hostsDir;
+    hosts = builtins.mapAttrs (name: _: import (cluster.hostsDir + "/" + name + "/manifest.nix")) hostFiles;
+    beacons = builtins.filter (h: builtins.elem "beacon" h.roles) (builtins.attrValues hosts);
+  in if beacons != [] then (builtins.head beacons).hostName else null;
+
+  # Check if this host is the proxy provider (beacon)
+  isProxyProvider = beaconHost == config.networking.hostName;
+
+  # Get services that need public proxy configuration
+  publicServices = builtins.filter (svc: svc.visibility == "public") config.fort.cluster.services;
 in
 {
   options.fort.cluster = lib.mkOption {
@@ -361,6 +374,27 @@ in
           };
         }
       ) ssoServices);
+    })
+
+    # Proxy needs - auto-generated for public services
+    # Each public service gets a proxy need to configure beacon's nginx
+    (lib.mkIf (publicServices != [] && !isProxyProvider && beaconHost != null) {
+      fort.host.needs.proxy = lib.listToAttrs (map (svc:
+        let
+          subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+          fqdn = "${subdomain}.${domain}";
+        in {
+          name = svc.name;
+          value = {
+            from = beaconHost;
+            request = {
+              inherit fqdn;
+            };
+            nag = "1h";
+            # No handler - side-effect-only need
+          };
+        }
+      ) publicServices);
     })
   ];
 }

@@ -273,11 +273,17 @@ let
 
     handler = lib.mkOption {
       type = lib.types.path;
+      default = pkgs.writeShellScript "noop-handler" ''
+        # Side-effect-only need - no handler action needed
+        # Response payload is discarded, success is recorded
+        ${pkgs.coreutils}/bin/cat > /dev/null
+      '';
       description = ''
         Script invoked when the need is fulfilled.
         Receives response payload on stdin.
         Exit 0 if credential was successfully processed.
         Handler is responsible for storage, transformation, and triggering restarts.
+        Defaults to a no-op handler for side-effect-only needs.
       '';
       example = "./handle-oidc-token.sh";
     };

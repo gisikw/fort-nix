@@ -70,50 +70,9 @@ ssh FORGE_HOST,
     .map { |s| "#{s["lan_ip"]} #{s["fqdn"]}" }
     .join("\n")
 
-public_vhosts = <<-EOF
-# Managed by fort-service-registry
-
-map $http_upgrade $connection_upgrade {
- default upgrade;
- "" close;
-}
-EOF
-services
-  .select { |s| s["visibility"] == "public" }
-  .each do |service|
-    # Always proxy to host nginx (port 443) for consistent SSL/auth handling
-    public_vhosts << <<-EOF
-    server {
-      listen 80;
-      listen 443 ssl http2;
-      server_name #{service["fqdn"]};
-
-      ssl_certificate     /var/lib/fort/ssl/#{DOMAIN}/fullchain.pem;
-      ssl_certificate_key /var/lib/fort/ssl/#{DOMAIN}/key.pem;
-
-      location / {
-        proxy_pass https://#{service["vpn_ip"]}:443;
-        proxy_set_header Host               $host;
-        proxy_set_header Cookie             $http_cookie;
-        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto  $scheme;
-        proxy_set_header X-Real-IP          $remote_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade    $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-
-        # Validate upstream cert - reject bad traffic at ingress
-        proxy_ssl_verify on;
-        proxy_ssl_server_name on;
-        proxy_ssl_name $host;
-        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-      }
-    }
-    EOF
-  end
-ssh BEACON_HOST,
-  "tee /var/lib/fort/nginx/public-services.conf >/dev/null; systemctl reload nginx",
-  public_vhosts
+# Proxy management has been migrated to the control plane
+# See: fort.host.capabilities.proxy-configure (public-ingress)
+#      fort.host.needs.proxy.* (consumers)
 
 # OIDC client management has been migrated to the control plane
 # See: fort.host.capabilities.oidc-register (pocket-id)

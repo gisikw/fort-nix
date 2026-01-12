@@ -137,6 +137,7 @@ in
           hostManifest
           deviceManifest
           deviceProfileManifest
+          cluster
           ;
       }))
       (import ./fort/control-plane.nix {
