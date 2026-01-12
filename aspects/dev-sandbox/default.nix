@@ -13,6 +13,7 @@ let
 
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
+  opencode = import ../../pkgs/opencode { inherit pkgs; };
   beads = import ../../pkgs/beads { inherit pkgs; };
   fort = import ../../pkgs/fort { inherit pkgs domain; };
 
@@ -72,6 +73,7 @@ let
 
     # Claude/AI tools
     claude-code
+    opencode
     beads
 
     # Fort control plane
