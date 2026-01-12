@@ -160,7 +160,7 @@ in
   systemd.services.forgejo-oidc-setup = {
     description = "Configure Forgejo OIDC authentication source";
     after = [ "forgejo.service" ];
-    path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils ];
+    path = [ config.services.forgejo.package pkgs.gawk pkgs.gnugrep pkgs.coreutils pkgs.sudo ];
 
     environment = {
       GITEA_WORK_DIR = "/var/lib/forgejo";
@@ -169,13 +169,11 @@ in
 
     serviceConfig = {
       Type = "oneshot";
-      User = "forgejo";
-      Group = "forgejo";
+      # Run as root to read credentials, forgejo commands run via sudo -u forgejo
       WorkingDirectory = "/var/lib/forgejo";
       # Restart forgejo after updating auth source
       # --no-block: queue restart without waiting (avoids dependency cycle with requires)
-      # + prefix: run as root
-      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart --no-block forgejo.service";
+      ExecStartPost = "${pkgs.systemd}/bin/systemctl restart --no-block forgejo.service";
     };
 
     script = ''
@@ -191,8 +189,8 @@ in
       CLIENT_SECRET=$(cat ${authDir}/client-secret)
       DISCOVER_URL="https://id.${domain}/.well-known/openid-configuration"
 
-      # Check if auth source already exists
-      EXISTING_ID=$(forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
+      # Check if auth source already exists (run as forgejo user to access database)
+      EXISTING_ID=$(sudo -u forgejo forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
 
       COMMON_OPTS="--name 'Pocket ID' \
         --provider openidConnect \
@@ -206,10 +204,10 @@ in
 
       if [ -n "$EXISTING_ID" ]; then
         echo "Updating existing OIDC auth source (ID: $EXISTING_ID)"
-        eval "forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
+        eval "sudo -u forgejo forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
       else
         echo "Creating new OIDC auth source"
-        eval "forgejo admin auth add-oauth $COMMON_OPTS"
+        eval "sudo -u forgejo forgejo admin auth add-oauth $COMMON_OPTS"
       fi
     '';
   };
