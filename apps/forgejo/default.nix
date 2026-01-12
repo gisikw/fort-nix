@@ -189,8 +189,13 @@ in
       CLIENT_SECRET=$(cat ${authDir}/client-secret)
       DISCOVER_URL="https://id.${domain}/.well-known/openid-configuration"
 
-      # Check if auth source already exists (run as forgejo user to access database)
-      EXISTING_ID=$(sudo -u forgejo forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
+      # Run forgejo commands as forgejo user, preserving environment
+      run_forgejo() {
+        sudo -u forgejo -E HOME=/var/lib/forgejo forgejo "$@"
+      }
+
+      # Check if auth source already exists
+      EXISTING_ID=$(run_forgejo admin auth list 2>/dev/null | grep -E "^\s*[0-9]+.*Pocket ID" | awk '{print $1}' || true)
 
       COMMON_OPTS="--name 'Pocket ID' \
         --provider openidConnect \
@@ -204,10 +209,10 @@ in
 
       if [ -n "$EXISTING_ID" ]; then
         echo "Updating existing OIDC auth source (ID: $EXISTING_ID)"
-        eval "sudo -u forgejo forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
+        eval "run_forgejo admin auth update-oauth --id $EXISTING_ID $COMMON_OPTS"
       else
         echo "Creating new OIDC auth source"
-        eval "sudo -u forgejo forgejo admin auth add-oauth $COMMON_OPTS"
+        eval "run_forgejo admin auth add-oauth $COMMON_OPTS"
       fi
     '';
   };
