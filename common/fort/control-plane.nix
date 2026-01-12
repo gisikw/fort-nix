@@ -192,6 +192,52 @@ let
         fi
       fi
     '';
+
+    # Force immediate retry of needs by resetting fulfillment state
+    # Optional pattern parameter filters which needs to reset (substring match)
+    # If pattern is empty/missing, resets ALL needs
+    force-nag = pkgs.writeShellScript "handler-force-nag" ''
+      set -euo pipefail
+
+      STATE_FILE="/var/lib/fort/fulfillment-state.json"
+      input=$(${pkgs.coreutils}/bin/cat)
+      pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.pattern // empty')
+
+      if [ ! -f "$STATE_FILE" ]; then
+        ${pkgs.jq}/bin/jq -n '{"status": "no_state", "message": "No fulfillment state exists"}'
+        exit 0
+      fi
+
+      # Count current entries
+      before_count=$(${pkgs.jq}/bin/jq 'length' "$STATE_FILE")
+
+      if [ -z "$pattern" ]; then
+        # Reset everything - truncate to empty object
+        echo '{}' > "$STATE_FILE"
+        reset_count=$before_count
+        reset_keys="all"
+      else
+        # Reset only matching keys (by substring match on key name)
+        reset_keys=$(${pkgs.jq}/bin/jq -r --arg p "$pattern" \
+          'keys[] | select(contains($p))' "$STATE_FILE" | tr '\n' ',' | sed 's/,$//')
+
+        ${pkgs.jq}/bin/jq --arg p "$pattern" \
+          'with_entries(select(.key | contains($p) | not))' \
+          "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+
+        after_count=$(${pkgs.jq}/bin/jq 'length' "$STATE_FILE")
+        reset_count=$((before_count - after_count))
+      fi
+
+      # Restart fort-consumer to trigger immediate retry
+      ${pkgs.systemd}/bin/systemctl restart fort-consumer 2>/dev/null || true
+
+      ${pkgs.jq}/bin/jq -n \
+        --arg pattern "$pattern" \
+        --argjson reset_count "$reset_count" \
+        --arg reset_keys "$reset_keys" \
+        '{status: "reset", pattern: (if $pattern == "" then "all" else $pattern end), reset_count: $reset_count, reset_keys: $reset_keys, consumer_restarted: true}'
+    '';
   };
 
   # Mandatory capabilities config (all RPC - synchronous request-response)
@@ -203,6 +249,7 @@ let
     # Debug capabilities - restricted to dev-sandbox principal
     journal = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     restart = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
+    force-nag = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
   };
 
   # Helper to derive needsGC and ttl from mode
@@ -665,6 +712,7 @@ in
           install -Dm0755 ${mandatoryHandlers.needs} /etc/fort/handlers/needs
           install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
           install -Dm0755 ${mandatoryHandlers.restart} /etc/fort/handlers/restart
+          install -Dm0755 ${mandatoryHandlers.force-nag} /etc/fort/handlers/force-nag
 
           # Install RBAC and capabilities config (includes mandatory endpoints)
           install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
