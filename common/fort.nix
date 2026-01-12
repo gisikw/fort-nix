@@ -7,6 +7,32 @@
 }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+
+  # SSL cert consumer handler - decodes base64 certs and stores them
+  sslCertConsumerHandler = pkgs.writeShellScript "ssl-cert-handler" ''
+    set -euo pipefail
+
+    # Read payload once
+    payload=$(${pkgs.coreutils}/bin/cat)
+
+    # Create target directory
+    mkdir -p /var/lib/fort/ssl/${domain}
+
+    # Decode and store certs from JSON payload
+    echo "$payload" | ${pkgs.jq}/bin/jq -r '.cert' | ${pkgs.coreutils}/bin/base64 -d > /var/lib/fort/ssl/${domain}/fullchain.pem
+    echo "$payload" | ${pkgs.jq}/bin/jq -r '.key' | ${pkgs.coreutils}/bin/base64 -d > /var/lib/fort/ssl/${domain}/key.pem
+    echo "$payload" | ${pkgs.jq}/bin/jq -r '.chain' | ${pkgs.coreutils}/bin/base64 -d > /var/lib/fort/ssl/${domain}/chain.pem
+
+    # Set permissions
+    chown -R root:root /var/lib/fort/ssl
+    chmod -R u=rwX,go=rX /var/lib/fort/ssl
+
+    # Reload nginx if running
+    ${pkgs.systemd}/bin/systemctl reload nginx 2>/dev/null || true
+  '';
+
+  # Check if this host is the certificate provider (has ACME certs configured)
+  isCertProvider = config.security.acme.certs ? ${domain};
 in
 {
   options.fort.cluster = lib.mkOption {
@@ -270,5 +296,15 @@ in
         install -Dm0644 ${hostManifestJson} /var/lib/fort/host-manifest.json
       '';
     }
+
+    # SSL certificate need - all hosts with nginx that aren't the cert provider
+    (lib.mkIf (config.services.nginx.enable && !isCertProvider) {
+      fort.host.needs.ssl-cert.default = {
+        from = "drhorrible";  # certificate-broker host
+        request = {};
+        handler = sslCertConsumerHandler;
+        nag = "1h";  # Re-request if certs not received within 1h
+      };
+    })
   ];
 }

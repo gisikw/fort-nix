@@ -6,34 +6,35 @@
 let
   domain = rootManifest.fortConfig.settings.domain;
 
-  # Handler for ssl-cert capability
-  # Reads ACME-managed certs and returns them as base64-encoded JSON
-  # Request JSON comes via stdin, not $1
+  # Async handler for ssl-cert capability
+  # Receives aggregate requests, returns same certs for all consumers (wildcard)
+  # Input: {"origin:ssl-cert-default": {"request": {...}}, ...}
+  # Output: {"origin:ssl-cert-default": {cert, key, chain, domain}, ...}
   sslCertHandler = pkgs.writeShellScript "handler-ssl-cert" ''
     set -euo pipefail
 
-    # Parse optional domain from request (stdin), default to cluster domain
-    request_domain=$(${pkgs.jq}/bin/jq -r '.domain // empty')
-    cert_domain="''${request_domain:-${domain}}"
-
-    cert_dir="/var/lib/acme/$cert_domain"
+    cert_dir="/var/lib/acme/${domain}"
 
     if [ ! -d "$cert_dir" ]; then
       echo '{"error": "certificate not found for domain"}' >&2
       exit 1
     fi
 
-    # Read and base64-encode the cert files
+    # Read and base64-encode the cert files (same for all consumers - wildcard)
     cert=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/fullchain.pem")
     key=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/key.pem")
     chain=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/chain.pem")
 
-    ${pkgs.jq}/bin/jq -n \
+    # Build response template
+    response=$(${pkgs.jq}/bin/jq -n \
       --arg cert "$cert" \
       --arg key "$key" \
       --arg chain "$chain" \
-      --arg domain "$cert_domain" \
-      '{domain: $domain, cert: $cert, key: $key, chain: $chain}'
+      --arg domain "${domain}" \
+      '{domain: $domain, cert: $cert, key: $key, chain: $chain}')
+
+    # Read aggregate input and return same response for all keys
+    ${pkgs.jq}/bin/jq --argjson resp "$response" 'to_entries | map({key: .key, value: $resp}) | from_entries'
   '';
 in
 {
@@ -63,9 +64,24 @@ in
   # Expose ssl-cert capability via agent API
   fort.host.capabilities.ssl-cert = {
     handler = sslCertHandler;
-    mode = "rpc";  # Synchronous, certs are idempotent
+    mode = "async";  # Aggregate handler, returns same certs to all consumers
+    triggers = {
+      initialize = true;  # Push certs on boot
+      systemd = [ "acme-${domain}.service" ];  # Push on renewal
+    };
     description = "Return cluster SSL certificates (ACME-managed)";
   };
+
+  # Copy ACME certs to standard location for local nginx
+  # Other hosts get this via control plane callback
+  systemd.services."acme-${domain}".postStart = ''
+    mkdir -p /var/lib/fort/ssl/${domain}
+    cp -L /var/lib/acme/${domain}/fullchain.pem /var/lib/fort/ssl/${domain}/
+    cp -L /var/lib/acme/${domain}/key.pem /var/lib/fort/ssl/${domain}/
+    cp -L /var/lib/acme/${domain}/chain.pem /var/lib/fort/ssl/${domain}/
+    chown -R root:root /var/lib/fort/ssl
+    chmod -R u=rwX,go=rX /var/lib/fort/ssl
+  '';
 
   systemd.timers."acme-sync" = {
     wantedBy = [ "timers.target" ];
