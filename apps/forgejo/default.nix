@@ -8,7 +8,18 @@ let
   bootstrapDir = "/var/lib/forgejo/bootstrap";
   runnerDir = "/var/lib/forgejo-runner";
   tokenDir = "/var/lib/forgejo/tokens";
-  mirrorNames = builtins.attrNames forgeConfig.mirrors;
+  repoNames = builtins.attrNames forgeConfig.repos;
+
+  # Collect all mirrors across all repos as flat list: [{repo, mirror, tokenFile}, ...]
+  allMirrors = lib.flatten (map (repoName:
+    let repo = forgeConfig.repos.${repoName};
+    in map (mirrorName: {
+      repo = repoName;
+      mirror = mirrorName;
+      tokenFile = repo.mirrors.${mirrorName}.tokenFile;
+      remote = repo.mirrors.${mirrorName}.remote;
+    }) (builtins.attrNames (repo.mirrors or {}))
+  ) repoNames);
 
   # Handler for git-token capability (async aggregate mode)
   # Input: {key -> {request: {access, _fort_need_id?}, response?}}
@@ -88,16 +99,16 @@ let
   '';
 in
 {
-  # Age secrets for mirror tokens and runner
-  age.secrets = builtins.listToAttrs (map (name: {
-    name = "forge-mirror-${name}";
+  # Age secrets for mirror tokens (per repo-mirror pair) and runner
+  age.secrets = builtins.listToAttrs (map (m: {
+    name = "forge-mirror-${m.repo}-${m.mirror}";
     value = {
-      file = forgeConfig.mirrors.${name}.tokenFile;
+      file = m.tokenFile;
       owner = "forgejo";
       group = "forgejo";
       mode = "0400";
     };
-  }) mirrorNames) // {
+  }) allMirrors) // {
     forgejo-runner-secret = {
       file = ./runner-secret.age;
       owner = "forgejo";
@@ -214,7 +225,6 @@ in
       GITEA_WORK_DIR = "/var/lib/forgejo";
       GITEA_CUSTOM = "/var/lib/forgejo/custom";
       FORGEJO_ORG = forgeConfig.org;
-      FORGEJO_REPO = forgeConfig.repo;
     };
 
     serviceConfig = {
@@ -226,14 +236,13 @@ in
     };
 
     script = let
-      mirrorSecretPaths = builtins.listToAttrs (map (name: {
-        name = name;
-        value = config.age.secrets."forge-mirror-${name}".path;
-      }) mirrorNames);
-      mirrorsJson = builtins.toJSON (lib.mapAttrs (name: cfg: {
-        remote = cfg.remote;
-        tokenPath = mirrorSecretPaths.${name};
-      }) forgeConfig.mirrors);
+      # Build JSON structure: { repoName: { mirrors: { mirrorName: {remote, tokenPath} } } }
+      reposJson = builtins.toJSON (lib.mapAttrs (repoName: repoCfg: {
+        mirrors = lib.mapAttrs (mirrorName: mirrorCfg: {
+          remote = mirrorCfg.remote;
+          tokenPath = config.age.secrets."forge-mirror-${repoName}-${mirrorName}".path;
+        }) (repoCfg.mirrors or {});
+      }) forgeConfig.repos);
     in ''
       set -euo pipefail
 
@@ -286,33 +295,36 @@ in
         api -X POST "$API_URL/orgs" -d "{\"username\": \"$FORGEJO_ORG\"}"
       fi
 
-      # Create repo if not exists
-      if ! api "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO" > /dev/null 2>&1; then
-        echo "Creating repo: $FORGEJO_ORG/$FORGEJO_REPO"
-        api -X POST "$API_URL/orgs/$FORGEJO_ORG/repos" \
-          -d "{\"name\": \"$FORGEJO_REPO\", \"private\": true}"
-      fi
-
-      # Configure push mirrors
-      MIRRORS='${mirrorsJson}'
-      for mirror_name in $(echo "$MIRRORS" | jq -r 'keys[]'); do
-        remote=$(echo "$MIRRORS" | jq -r --arg n "$mirror_name" '.[$n].remote')
-        token_path=$(echo "$MIRRORS" | jq -r --arg n "$mirror_name" '.[$n].tokenPath')
-        token=$(cat "$token_path")
-
-        # Build mirror URL (credentials passed separately)
-        mirror_url="https://$remote.git"
-
-        # Check if mirror already exists
-        existing=$(api "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO/push_mirrors" | jq -r --arg r "$remote" '.[] | select(.remote_address | contains($r)) | .id' || true)
-
-        if [ -z "$existing" ]; then
-          echo "Adding push mirror: $mirror_name ($remote)"
-          api -X POST "$API_URL/repos/$FORGEJO_ORG/$FORGEJO_REPO/push_mirrors" \
-            -d "{\"remote_address\": \"$mirror_url\", \"remote_username\": \"x-access-token\", \"remote_password\": \"$token\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
-        else
-          echo "Push mirror already configured: $mirror_name"
+      # Process each repo
+      REPOS='${reposJson}'
+      for repo_name in $(echo "$REPOS" | jq -r 'keys[]'); do
+        # Create repo if not exists
+        if ! api "$API_URL/repos/$FORGEJO_ORG/$repo_name" > /dev/null 2>&1; then
+          echo "Creating repo: $FORGEJO_ORG/$repo_name"
+          api -X POST "$API_URL/orgs/$FORGEJO_ORG/repos" \
+            -d "{\"name\": \"$repo_name\", \"private\": true}"
         fi
+
+        # Configure push mirrors for this repo
+        for mirror_name in $(echo "$REPOS" | jq -r --arg r "$repo_name" '.[$r].mirrors | keys[]'); do
+          remote=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].remote')
+          token_path=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].tokenPath')
+          token=$(cat "$token_path")
+
+          # Build mirror URL (credentials passed separately)
+          mirror_url="https://$remote.git"
+
+          # Check if mirror already exists
+          existing=$(api "$API_URL/repos/$FORGEJO_ORG/$repo_name/push_mirrors" | jq -r --arg r "$remote" '.[] | select(.remote_address | contains($r)) | .id' || true)
+
+          if [ -z "$existing" ]; then
+            echo "Adding push mirror to $repo_name: $mirror_name ($remote)"
+            api -X POST "$API_URL/repos/$FORGEJO_ORG/$repo_name/push_mirrors" \
+              -d "{\"remote_address\": \"$mirror_url\", \"remote_username\": \"x-access-token\", \"remote_password\": \"$token\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
+          else
+            echo "Push mirror already configured for $repo_name: $mirror_name"
+          fi
+        done
       done
 
       # Register runner with Forgejo using shared secret

@@ -41,11 +41,15 @@ rec {
 
     forge = {
       org = "infra";
-      repo = "fort-nix";
-      mirrors = {
-        github = {
-          remote = "github.com/gisikw/fort-nix";
-          tokenFile = ./github-mirror-token.age;
+      repo = "fort-nix";  # Primary repo (used by gitops)
+      repos = {
+        "fort-nix" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/fort-nix";
+              tokenFile = ./github-mirror-token.age;
+            };
+          };
         };
       };
     };
