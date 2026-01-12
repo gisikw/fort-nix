@@ -51,6 +51,14 @@ rec {
             };
           };
         };
+        "wicket" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/wicket";
+              tokenFile = ./github-mirror-token.age;
+            };
+          };
+        };
       };
     };
   };
