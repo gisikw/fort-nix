@@ -1,4 +1,4 @@
-{ rootManifest, ... }:
+{ rootManifest, hostManifest, ... }:
 { pkgs, ... }:
 let
   corednsConfigFile = "/etc/coredns/Corefile";
@@ -9,6 +9,7 @@ let
     sha256 = "sha256-dmqKd8m1JFzTDXjeZUYnbvZNX/xqMiXYFRJFveq7Nlc=";
   };
   domain = rootManifest.fortConfig.settings.domain;
+  localHostname = hostManifest.hostName;
 
   # Import fort CLI for querying lan-ip capability
   fortCli = import ../../pkgs/fort { inherit pkgs domain; };
@@ -22,6 +23,7 @@ let
 
     input=$(${pkgs.coreutils}/bin/cat)
     HOSTS_FILE="${fortHostsPath}"
+    LOCAL_HOSTNAME="${localHostname}"
 
     # Build response object and hosts content
     response="{}"
@@ -37,8 +39,16 @@ let
 
       # Check cache first
       if [ -z "''${lan_ip_cache[$origin]:-}" ]; then
-        # Query origin's lan-ip capability
-        if result=$(${fortCli}/bin/fort "$origin" lan-ip '{}' 2>/dev/null); then
+        if [ "$origin" = "$LOCAL_HOSTNAME" ]; then
+          # Self-lookup: get our own LAN IP directly
+          lan_ip=$(${pkgs.iproute2}/bin/ip -4 route get 1.1.1.1 2>/dev/null | ${pkgs.gnugrep}/bin/grep -oP 'src \K\S+' || echo "")
+          if [ -n "$lan_ip" ]; then
+            lan_ip_cache[$origin]="$lan_ip"
+          else
+            lan_ip_cache[$origin]="NOROUTE"
+          fi
+        elif result=$(${fortCli}/bin/fort "$origin" lan-ip '{}' 2>/dev/null); then
+          # Remote lookup: query origin's lan-ip capability
           lan_ip=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.body.lan_ip // empty')
           if [ -n "$lan_ip" ]; then
             lan_ip_cache[$origin]="$lan_ip"
