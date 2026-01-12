@@ -73,15 +73,27 @@ in
   };
 
   # Copy ACME certs to standard location for local nginx
-  # Other hosts get this via control plane callback
-  systemd.services."acme-${domain}".postStart = ''
-    mkdir -p /var/lib/fort/ssl/${domain}
-    cp -L /var/lib/acme/${domain}/fullchain.pem /var/lib/fort/ssl/${domain}/
-    cp -L /var/lib/acme/${domain}/key.pem /var/lib/fort/ssl/${domain}/
-    cp -L /var/lib/acme/${domain}/chain.pem /var/lib/fort/ssl/${domain}/
-    chown -R root:root /var/lib/fort/ssl
-    chmod -R u=rwX,go=rX /var/lib/fort/ssl
-  '';
+  # Triggered on ACME success (can't use postStart due to ACME sandbox)
+  systemd.services.fort-ssl-local-copy = {
+    description = "Copy ACME certs to fort/ssl for local nginx";
+    after = [ "acme-${domain}.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "copy-local-certs" ''
+        set -euo pipefail
+        mkdir -p /var/lib/fort/ssl/${domain}
+        cp -L /var/lib/acme/${domain}/fullchain.pem /var/lib/fort/ssl/${domain}/
+        cp -L /var/lib/acme/${domain}/key.pem /var/lib/fort/ssl/${domain}/
+        cp -L /var/lib/acme/${domain}/chain.pem /var/lib/fort/ssl/${domain}/
+        chown -R root:root /var/lib/fort/ssl
+        chmod -R u=rwX,go=rX /var/lib/fort/ssl
+        systemctl reload nginx 2>/dev/null || true
+      '';
+    };
+  };
+
+  # Trigger local copy when ACME succeeds
+  systemd.services."acme-${domain}".unitConfig.OnSuccess = [ "fort-ssl-local-copy.service" ];
 
   systemd.timers."acme-sync" = {
     wantedBy = [ "timers.target" ];
