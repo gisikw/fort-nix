@@ -353,7 +353,7 @@ in
 
     # OIDC needs - auto-generated for services with SSO enabled
     # Each service with sso.mode != "none" gets an oidc need
-    (lib.mkIf (ssoServices != [] && !isOidcProvider) {
+    (lib.mkIf (ssoServices != []) {
       fort.host.needs.oidc-register = lib.listToAttrs (map (svc:
         let
           subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
