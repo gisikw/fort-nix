@@ -86,8 +86,8 @@ in
     "f /var/lib/fort/nginx/public-services.conf 0640 root nginx -"
   ];
 
-  # Expose proxy-configure capability for nginx vhost management
-  fort.host.capabilities.proxy-configure = {
+  # Expose proxy capability for nginx vhost management
+  fort.host.capabilities.proxy = {
     handler = proxyConfigureHandler;
     mode = "async";  # Aggregate handler for all proxy requests
     triggers.initialize = true;  # Rebuild config on boot
