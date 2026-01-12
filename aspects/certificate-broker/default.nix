@@ -72,10 +72,14 @@ in
     description = "Return cluster SSL certificates (ACME-managed)";
   };
 
+  # Ensure SSL directory exists (needed for impermanence hosts)
+  systemd.tmpfiles.rules = [
+    "d /var/lib/fort/ssl/${domain} 0755 root root -"
+  ];
+
   # Copy ACME certs to standard location for local nginx
   # Other hosts get this via control plane callback
   systemd.services."acme-${domain}".postStart = ''
-    mkdir -p /var/lib/fort/ssl/${domain}
     cp -L /var/lib/acme/${domain}/fullchain.pem /var/lib/fort/ssl/${domain}/
     cp -L /var/lib/acme/${domain}/key.pem /var/lib/fort/ssl/${domain}/
     cp -L /var/lib/acme/${domain}/chain.pem /var/lib/fort/ssl/${domain}/
