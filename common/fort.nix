@@ -44,9 +44,9 @@ let
     # Create target directory
     ${pkgs.coreutils}/bin/mkdir -p "$AUTH_DIR"
 
-    # Extract and store credentials
-    echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_id' > "$AUTH_DIR/client-id"
-    echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_secret' > "$AUTH_DIR/client-secret"
+    # Extract and store credentials (no trailing newline - oauth2-proxy is sensitive to this)
+    ${pkgs.coreutils}/bin/printf '%s' "$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_id')" > "$AUTH_DIR/client-id"
+    ${pkgs.coreutils}/bin/printf '%s' "$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_secret')" > "$AUTH_DIR/client-secret"
 
     # Set permissions (readable by service)
     ${pkgs.coreutils}/bin/chmod 644 "$AUTH_DIR/client-id"
