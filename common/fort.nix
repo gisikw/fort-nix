@@ -396,5 +396,26 @@ in
         }
       ) publicServices);
     })
+
+    # DNS (Headscale) needs - auto-generated for all services
+    # Each service gets a dns-headscale need so it can be resolved over the VPN mesh
+    (lib.mkIf (config.fort.cluster.services != [] && beaconHost != null) {
+      fort.host.needs.dns-headscale = lib.listToAttrs (map (svc:
+        let
+          subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+          fqdn = "${subdomain}.${domain}";
+        in {
+          name = svc.name;
+          value = {
+            from = beaconHost;
+            request = {
+              inherit fqdn;
+            };
+            nag = "1h";
+            # No handler - side-effect-only need (provider writes extra-records.json)
+          };
+        }
+      ) config.fort.cluster.services);
+    })
   ];
 }
