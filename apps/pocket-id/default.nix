@@ -10,6 +10,184 @@ let
   user = "pocket-id";
   group = "pocket-id";
 
+  # Handler for oidc-register capability (async aggregate mode)
+  # Input: {key -> {request: {client_name}, response?: {client_id, client_secret}}}
+  # Output: {key -> {client_id, client_secret}}
+  # Creates/manages pocket-id OIDC clients for SSO services
+  oidcRegisterHandler = pkgs.writeShellScript "handler-oidc-register" ''
+    set -euo pipefail
+
+    SERVICE_KEY_FILE="${dataDir}/service-key"
+    POCKETID_URL="https://id.${domain}"
+
+    # Read aggregate input
+    input=$(${pkgs.coreutils}/bin/cat)
+
+    # Ensure we have the service key
+    if [ ! -s "$SERVICE_KEY_FILE" ]; then
+      echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "Service key not yet created"}}) | from_entries'
+      exit 0
+    fi
+    SERVICE_KEY=$(${pkgs.coreutils}/bin/cat "$SERVICE_KEY_FILE")
+
+    # Helper function to make authenticated API calls
+    api_call() {
+      local method="$1"
+      local endpoint="$2"
+      local data="''${3:-}"
+
+      if [ -n "$data" ]; then
+        ${pkgs.curl}/bin/curl -s -X "$method" \
+          "$POCKETID_URL$endpoint" \
+          -H "X-API-KEY: $SERVICE_KEY" \
+          -H "Content-Type: application/json" \
+          -d "$data"
+      else
+        ${pkgs.curl}/bin/curl -s -X "$method" \
+          "$POCKETID_URL$endpoint" \
+          -H "X-API-KEY: $SERVICE_KEY"
+      fi
+    }
+
+    # Get all existing OIDC clients
+    get_all_clients() {
+      local page=1
+      local all_clients="[]"
+      while true; do
+        local response=$(api_call GET "/api/oidc/clients?pagination%5Bpage%5D=$page")
+        local data=$(echo "$response" | ${pkgs.jq}/bin/jq -c '.data // []')
+        local total_pages=$(echo "$response" | ${pkgs.jq}/bin/jq -r '.pagination.totalPages // 1')
+        local current_page=$(echo "$response" | ${pkgs.jq}/bin/jq -r '.pagination.currentPage // 1')
+
+        all_clients=$(echo "$all_clients" "$data" | ${pkgs.jq}/bin/jq -s 'add')
+
+        if [ "$current_page" -ge "$total_pages" ]; then
+          break
+        fi
+        page=$((page + 1))
+      done
+      echo "$all_clients"
+    }
+
+    # Create a new OIDC client and return its secret
+    create_client() {
+      local client_name="$1"
+
+      # Create the client
+      local create_response=$(api_call POST "/api/oidc/clients" "{
+        \"name\": \"$client_name\",
+        \"callbackURLs\": [],
+        \"logoutCallbackURLs\": [],
+        \"isPublic\": false,
+        \"pkceEnabled\": false,
+        \"requiresReauthentication\": false
+      }")
+
+      local client_id=$(echo "$create_response" | ${pkgs.jq}/bin/jq -r '.id // empty')
+      if [ -z "$client_id" ]; then
+        echo "ERROR: Failed to create client $client_name" >&2
+        return 1
+      fi
+
+      # Generate client secret
+      local secret_response=$(api_call POST "/api/oidc/clients/$client_id/secret" "{}")
+      local client_secret=$(echo "$secret_response" | ${pkgs.jq}/bin/jq -r '.secret // empty')
+
+      if [ -z "$client_secret" ]; then
+        echo "ERROR: Failed to generate secret for client $client_name" >&2
+        return 1
+      fi
+
+      ${pkgs.jq}/bin/jq -n --arg id "$client_id" --arg secret "$client_secret" \
+        '{client_id: $id, client_secret: $secret}'
+    }
+
+    # Get existing clients for lookup
+    existing_clients=$(get_all_clients)
+
+    # Track which client names are needed (for GC)
+    needed_names="[]"
+
+    # Build output for all requesters
+    output='{}'
+    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
+      request=$(echo "$input" | ${pkgs.jq}/bin/jq -c --arg k "$key" '.[$k].request // {}')
+      cached_response=$(echo "$input" | ${pkgs.jq}/bin/jq -c --arg k "$key" '.[$k].response // null')
+
+      # Client name is the FQDN (e.g., "outline.gisi.network")
+      client_name=$(echo "$request" | ${pkgs.jq}/bin/jq -r '.client_name // empty')
+
+      if [ -z "$client_name" ]; then
+        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+          '.[$k] = {error: "client_name required in request"}')
+        continue
+      fi
+
+      # Track this name as needed
+      needed_names=$(echo "$needed_names" | ${pkgs.jq}/bin/jq --arg n "$client_name" '. + [$n]')
+
+      # Check if we have a cached response with valid credentials
+      if [ "$cached_response" != "null" ]; then
+        cached_id=$(echo "$cached_response" | ${pkgs.jq}/bin/jq -r '.client_id // empty')
+        cached_secret=$(echo "$cached_response" | ${pkgs.jq}/bin/jq -r '.client_secret // empty')
+
+        # Verify client still exists
+        client_exists=$(echo "$existing_clients" | ${pkgs.jq}/bin/jq -r --arg id "$cached_id" \
+          'any(.[]; .id == $id)')
+
+        if [ "$client_exists" = "true" ] && [ -n "$cached_secret" ]; then
+          # Reuse cached credentials
+          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson resp "$cached_response" \
+            '.[$k] = $resp')
+          continue
+        fi
+      fi
+
+      # Check if client already exists by name
+      existing_client=$(echo "$existing_clients" | ${pkgs.jq}/bin/jq -c --arg name "$client_name" \
+        '.[] | select(.name == $name) // null')
+
+      if [ "$existing_client" != "null" ] && [ -n "$existing_client" ]; then
+        # Client exists but we don't have the secret cached - regenerate it
+        existing_id=$(echo "$existing_client" | ${pkgs.jq}/bin/jq -r '.id')
+        secret_response=$(api_call POST "/api/oidc/clients/$existing_id/secret" "{}")
+        client_secret=$(echo "$secret_response" | ${pkgs.jq}/bin/jq -r '.secret // empty')
+
+        if [ -n "$client_secret" ]; then
+          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --arg id "$existing_id" --arg secret "$client_secret" \
+            '.[$k] = {client_id: $id, client_secret: $secret}')
+        else
+          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+            '.[$k] = {error: "Failed to regenerate secret for existing client"}')
+        fi
+      else
+        # Create new client
+        if new_creds=$(create_client "$client_name"); then
+          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson creds "$new_creds" \
+            '.[$k] = $creds')
+        else
+          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+            '.[$k] = {error: "Failed to create client"}')
+        fi
+      fi
+    done
+
+    # GC: Delete clients that are no longer needed
+    # TODO(fort-c8y.19): Re-enable after all hosts have migrated to control plane
+    # for client_json in $(echo "$existing_clients" | ${pkgs.jq}/bin/jq -c '.[]'); do
+    #   client_name=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.name')
+    #   client_id=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.id')
+    #
+    #   is_needed=$(echo "$needed_names" | ${pkgs.jq}/bin/jq -r --arg n "$client_name" 'any(. == $n)')
+    #   if [ "$is_needed" = "false" ]; then
+    #     echo "GC: Deleting orphaned client: $client_name" >&2
+    #     api_call DELETE "/api/oidc/clients/$client_id" || true
+    #   fi
+    # done
+
+    echo "$output"
+  '';
+
   # Environment settings for pocket-id
   settings = {
     TRUST_PROXY = "true";
@@ -163,4 +341,12 @@ in
       visibility = "public";
     }
   ];
+
+  # Expose oidc-register capability for OIDC client management
+  fort.host.capabilities.oidc-register = {
+    handler = oidcRegisterHandler;
+    mode = "async";  # Returns handles, needs GC
+    cacheResponse = true;  # Preserve client secrets across restarts
+    description = "Register and manage OIDC clients for SSO services";
+  };
 }

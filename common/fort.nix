@@ -31,6 +31,37 @@ let
     ${pkgs.systemd}/bin/systemctl reload nginx 2>/dev/null || true
   '';
 
+  # OIDC credential consumer handler generator - stores client_id and client_secret
+  # Takes service name and restart target as parameters
+  mkOidcHandler = serviceName: restartTarget: pkgs.writeShellScript "oidc-handler-${serviceName}" ''
+    set -euo pipefail
+
+    AUTH_DIR="/var/lib/fort-auth/${serviceName}"
+
+    # Read payload once
+    payload=$(${pkgs.coreutils}/bin/cat)
+
+    # Create target directory
+    ${pkgs.coreutils}/bin/mkdir -p "$AUTH_DIR"
+
+    # Extract and store credentials
+    echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_id' > "$AUTH_DIR/client-id"
+    echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_secret' > "$AUTH_DIR/client-secret"
+
+    # Set permissions (readable by service)
+    ${pkgs.coreutils}/bin/chmod 644 "$AUTH_DIR/client-id"
+    ${pkgs.coreutils}/bin/chmod 600 "$AUTH_DIR/client-secret"
+
+    # Restart the appropriate service
+    ${pkgs.systemd}/bin/systemctl restart "${restartTarget}" 2>/dev/null || true
+  '';
+
+  # Get services that need OIDC registration (sso.mode != "none")
+  ssoServices = builtins.filter (svc: svc.sso.mode != "none") config.fort.cluster.services;
+
+  # Check if this host is the OIDC provider (has pocket-id)
+  isOidcProvider = builtins.any (svc: svc.name == "pocket-id") config.fort.cluster.services;
+
   # Check if this host is the certificate provider (has ACME certs configured)
   isCertProvider = config.security.acme.certs ? ${domain};
 in
@@ -305,6 +336,31 @@ in
         handler = sslCertConsumerHandler;
         nag = "1h";  # Re-request if certs not received within 1h
       };
+    })
+
+    # OIDC needs - auto-generated for services with SSO enabled
+    # Each service with sso.mode != "none" gets an oidc need
+    (lib.mkIf (ssoServices != [] && !isOidcProvider) {
+      fort.host.needs.oidc-register = lib.listToAttrs (map (svc:
+        let
+          subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+          fqdn = "${subdomain}.${domain}";
+          # Default restart target is oauth2-proxy, unless service specifies custom restart
+          restartTarget = if svc.sso.restart != null
+            then svc.sso.restart
+            else "oauth2-proxy-${svc.name}.service";
+        in {
+          name = svc.name;
+          value = {
+            from = "drhorrible";  # pocket-id host
+            request = {
+              client_name = fqdn;
+            };
+            handler = mkOidcHandler svc.name restartTarget;
+            nag = "15m";
+          };
+        }
+      ) ssoServices);
     })
   ];
 }
