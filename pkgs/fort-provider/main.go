@@ -1138,7 +1138,7 @@ func runGC() error {
 			}
 
 			// Convert need_id "<capability>-<name>" to path "<capability>/<name>"
-			needPath := needIDToPath(needID)
+			needPath := needIDToPath(capName, needID)
 
 			// Check if need is still declared
 			if needs, ok := originNeeds[origin]; ok {
@@ -1231,11 +1231,19 @@ func queryOriginNeeds(origin string) (map[string]bool, error) {
 	return needsSet, nil
 }
 
-// needIDToPath converts a need ID (e.g., "oidc-outline") to path format (e.g., "oidc/outline")
-func needIDToPath(needID string) string {
+// needIDToPath converts a need ID (e.g., "oidc-register-outline") to path format (e.g., "oidc-register/outline")
+// capName is the capability name, used to correctly split IDs where the capability contains hyphens
+func needIDToPath(capName, needID string) string {
 	// Need ID format: "<capability>-<name>"
 	// Path format: "<capability>/<name>"
-	idx := strings.Index(needID, "-")
+	// We use capName to find the correct split point since capabilities can contain hyphens
+	prefix := capName + "-"
+	if strings.HasPrefix(needID, prefix) {
+		name := strings.TrimPrefix(needID, prefix)
+		return capName + "/" + name
+	}
+	// Fallback for unexpected format: use last hyphen
+	idx := strings.LastIndex(needID, "-")
 	if idx == -1 {
 		return needID // No hyphen, return as-is
 	}
