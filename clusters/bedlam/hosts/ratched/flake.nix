@@ -1,13 +1,12 @@
 {
   inputs = {
-    cluster.url = "path:../..";
-    nixpkgs.follows = "cluster/nixpkgs";
-    disko.follows = "cluster/disko";
-    impermanence.follows = "cluster/impermanence";
-    deploy-rs.follows = "cluster/deploy-rs";
-    agenix.follows = "cluster/agenix";
-    comin.follows = "cluster/comin";
-    home-config.follows = "cluster/home-config";
+    root.url = "path:../../../..";
+    nixpkgs.follows = "root/nixpkgs";
+    disko.follows = "root/disko";
+    impermanence.follows = "root/impermanence";
+    deploy-rs.follows = "root/deploy-rs";
+    agenix.follows = "root/agenix";
+    comin.follows = "root/comin";
   };
 
   outputs =
@@ -19,7 +18,6 @@
       deploy-rs,
       agenix,
       comin,
-      home-config,
       ...
     }:
     import ../../../../common/host.nix {
@@ -31,7 +29,6 @@
         deploy-rs
         agenix
         comin
-        home-config
         ;
       hostDir = ./.;
     };

@@ -1,4 +1,4 @@
-{ subdomain ? null, ... }:
+{ ... }:
 { ... }:
 {
   services.radarr.enable = true;
@@ -6,10 +6,9 @@
   systemd.services.radarr.wants = [ "egress-vpn-namespace.service" ];
   systemd.services.radarr.after = [ "egress-vpn-namespace.service" ];
 
-  fort.cluster.services = [
+  fortCluster.exposedServices = [
     {
       name = "radarr";
-      subdomain = subdomain;
       port = 7878;
       inEgressNamespace = true;
     }

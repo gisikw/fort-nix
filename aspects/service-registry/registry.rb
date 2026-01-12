@@ -31,15 +31,13 @@ services = hosts.reduce([]) do |services, host|
   lines = ssh host, "
     (ip -4 -o addr show fortmesh0 2>/dev/null || echo 'NOFORT') | head -n1
     (ip -4 route get #{host_lan_ip} 2>/dev/null || echo 'NOROUTE') | head -n1
-    cat /var/lib/fort/host-manifest.json 2>/dev/null || echo '{}'
+    cat /var/lib/fort/services.json 2>/dev/null || echo '[]'
   "
 
   vpn_ip = lines[0].split(/\s+/)[3].split("/")[0] rescue 'NOFORT'
   lan_ip = lines[1].match(/src\s+(\S+)/)[1] rescue 'NOROUTE'
 
-  manifest = JSON.parse(lines[2])
-  exposed_services = manifest["services"] || []
-  services | exposed_services.each do |service|
+  services | JSON.parse(lines[2]).each do |service|
     service["hostname"] = "#{host}.fort.#{DOMAIN}"
     service["host"] = host
     service["vpn_ip"] = vpn_ip
@@ -70,10 +68,123 @@ ssh FORGE_HOST,
     .map { |s| "#{s["lan_ip"]} #{s["fqdn"]}" }
     .join("\n")
 
-# Proxy management has been migrated to the control plane
-# See: fort.host.capabilities.proxy-configure (public-ingress)
-#      fort.host.needs.proxy.* (consumers)
+public_vhosts = <<-EOF
+# Managed by fort-service-registry
 
-# OIDC client management has been migrated to the control plane
-# See: fort.host.capabilities.oidc-register (pocket-id)
-#      fort.host.needs.oidc-register.* (consumers)
+map $http_upgrade $connection_upgrade {
+ default upgrade;
+ "" close;
+}
+EOF
+services
+  .select { |s| s["visibility"] == "public" }
+  .each do |service|
+    public_vhosts << <<-EOF
+    server {
+      listen 80;
+      listen 443 ssl http2;
+      server_name #{service["fqdn"]};
+
+      ssl_certificate     /var/lib/fort/ssl/#{DOMAIN}/fullchain.pem;
+      ssl_certificate_key /var/lib/fort/ssl/#{DOMAIN}/key.pem;
+
+      location / {
+        proxy_pass http://#{service["vpn_ip"]}:#{service["port"]};
+        proxy_set_header Host               $host;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+      }
+    }
+    EOF
+  end
+ssh BEACON_HOST,
+  "tee /var/lib/fort/nginx/public-services.conf >/dev/null; systemctl reload nginx",
+  public_vhosts
+
+def pocket_service_key
+  @pocket_service_key ||= File.read("/var/lib/pocket-id/service-key").chomp
+end
+
+def get_pocketid_clients
+  results = []
+  while true do
+    uri = URI("https://id.#{DOMAIN}/api/oidc/clients")
+    uri.query = URI.encode_www_form({ "pagination[page]" => 2 })
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    request = Net::HTTP::Get.new(uri.request_uri)
+    request['X-API-KEY'] = pocket_service_key
+    response = JSON.parse(http.request(request).body)
+    results |= response["data"]
+    break if response["pagination"]["totalPages"] == response["pagination"]["currentPage"]
+  end
+  results
+end
+
+def create_pocketid_client(service)
+  uri = URI("https://id.#{DOMAIN}/api/oidc/clients")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  request = Net::HTTP::Post.new(uri.request_uri)
+
+  request.body = {
+    callbackURLs: [],
+    credentials: {
+      federatedIdentities: []
+    },
+    isPublic: false,
+    logoutCallbackURLs: [],
+    name: service["fqdn"],
+    pkceEnabled: false,
+    requiresReauthentication: false
+  }.to_json
+
+  request['X-API-KEY'] = pocket_service_key
+  response = JSON.parse(http.request(request).body)
+
+  client_id = response["id"]
+
+  uri = URI("https://id.#{DOMAIN}/api/oidc/clients/#{client_id}/secret")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  request = Net::HTTP::Post.new(uri.request_uri)
+  request['X-API-KEY'] = pocket_service_key
+  client_secret = JSON.parse(http.request(request).body)["secret"]
+
+  dir = "/var/lib/fort-auth/#{service["name"]}/"
+  ssh service["host"], "cat > #{dir}/client-id && chmod 644 #{dir}/client-id", client_id
+  ssh service["host"], "cat > #{dir}/client-secret && chmod 644 #{dir}/client-secret", client_secret
+
+  restart_target = (service["sso"]&.[]("restart") || "oauth2-proxy-#{service["name"]}")
+  ssh service["host"], "systemctl restart #{restart_target}"
+end
+
+def delete_pocketid_client(client)
+  uri = URI("https://id.#{DOMAIN}/api/oidc/clients/#{client["id"]}")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  request = Net::HTTP::Delete.new(uri.request_uri)
+  request['X-API-KEY'] = pocket_service_key
+  http.request(request)
+end
+
+target_clients = services.reject { |s| s["sso"]["mode"] == "none" rescue true }
+current_clients = get_pocketid_clients
+
+clients_to_create =
+  target_clients.reject { |c| current_clients.any? { |cc| cc["name"] == c["fqdn"] } }
+puts "Creating #{clients_to_create.size} new clients..."
+clients_to_create.each { |c| create_pocketid_client(c) }
+
+clients_to_delete =
+  current_clients.reject { |cc| target_clients.any? { |c| cc["name"] == c["fqdn"] } }
+puts "Deleting #{clients_to_delete.size} orphaned clients..."
+clients_to_delete.each { |c| delete_pocketid_client(c) }

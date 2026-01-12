@@ -38,19 +38,12 @@ in
       disko.nixosModules.disko
       (deviceDir + "/hardware-configuration.nix")
       {
-        # Define fort.cluster for device builds (minimal, just accepts freeform config)
-        options.fort.cluster = nixpkgs.lib.mkOption {
-          type = nixpkgs.lib.types.submodule {
-            freeformType = nixpkgs.lib.types.attrsOf nixpkgs.lib.types.anything;
-          };
-          default = { };
-          description = "Cluster-level config (settings, forge)";
-        };
         config.fort = {
           clusterName = cluster.clusterName;
           clusterDir = cluster.clusterDir;
           clusterHostsDir = cluster.hostsDir;
           clusterDevicesDir = cluster.devicesDir;
+          clusterSettings = cluster.manifest.fortConfig.settings;
         };
       }
     ];

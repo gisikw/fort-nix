@@ -2,57 +2,6 @@
 { config, pkgs, lib, ... }:
 let
   fort = rootManifest.fortConfig;
-  domain = fort.settings.domain;
-
-  # Async handler for DNS record configuration
-  # Receives aggregate requests, generates extra-records.json for headscale
-  # Input: {"origin:dns-headscale/servicename": {"request": {"fqdn": "..."}}, ...}
-  # Output: {"origin:dns-headscale/servicename": "OK", ...}
-  dnsHeadscaleHandler = pkgs.writeShellScript "handler-dns-headscale" ''
-    set -euo pipefail
-
-    input=$(${pkgs.coreutils}/bin/cat)
-    RECORDS_FILE="/var/lib/headscale/extra-records.json"
-
-    # Get tailscale status once for IP lookups
-    ts_status=$(${pkgs.tailscale}/bin/tailscale status --json)
-
-    # Build response object and records array
-    response="{}"
-    records="[]"
-
-    # Process each request
-    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
-      origin=$(echo "$key" | ${pkgs.coreutils}/bin/cut -d: -f1)
-      fqdn=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg k "$key" '.[$k].request.fqdn')
-
-      # Look up origin's IPv4 from tailscale status
-      # Check both .Peer (other nodes) and .Self (if origin is this host)
-      ipv4=$(echo "$ts_status" | ${pkgs.jq}/bin/jq -r --arg h "$origin" '
-        (.Peer | to_entries[] | select(.value.HostName == $h) | .value.TailscaleIPs[0])
-        // (if .Self.HostName == $h then .Self.TailscaleIPs[0] else null end)
-        // null
-      ')
-
-      if [ "$ipv4" = "null" ] || [ -z "$ipv4" ]; then
-        echo "Warning: Could not find IP for origin $origin" >&2
-        response=$(echo "$response" | ${pkgs.jq}/bin/jq --arg k "$key" '. + {($k): "ERROR: host not found in mesh"}')
-        continue
-      fi
-
-      # Add A record
-      records=$(echo "$records" | ${pkgs.jq}/bin/jq --arg name "$fqdn" --arg ip "$ipv4" \
-        '. + [{name: $name, type: "A", value: $ip}]')
-
-      response=$(echo "$response" | ${pkgs.jq}/bin/jq --arg k "$key" '. + {($k): "OK"}')
-    done
-
-    # Write records file
-    echo "$records" > "$RECORDS_FILE"
-    ${pkgs.coreutils}/bin/chown headscale:headscale "$RECORDS_FILE"
-
-    echo "$response"
-  '';
 in
 {
   config = lib.mkMerge [
@@ -62,10 +11,6 @@ in
         requires = [ "headscale.service" ];
       };
     })
-    {
-      # Ensure nginx waits for headscale at boot to avoid 502s
-      systemd.services.nginx.after = [ "headscale.service" ];
-    }
     {
       systemd.tmpfiles.rules = [
         "f /var/lib/headscale/extra-records.json 0640 headscale headscale -"
@@ -131,7 +76,11 @@ in
         locations."/" = {
           proxyPass = "http://127.0.0.1:9080";
           proxyWebsockets = true;
-          # NixOS nginx includes recommended proxy headers by default
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+          '';
         };
         locations."/headscale.v1.HeadscaleService/" = {
           extraConfig = ''
@@ -145,14 +94,6 @@ in
       security.acme = {
         acceptTerms = true;
         defaults.email = "admin@${fort.settings.domain}";
-      };
-
-      # Expose dns-headscale capability for VPN DNS record management
-      fort.host.capabilities.dns-headscale = {
-        handler = dnsHeadscaleHandler;
-        mode = "async";
-        triggers.initialize = true;  # Rebuild records on boot
-        description = "Configure headscale extra DNS records for service FQDNs";
       };
     }
   ];

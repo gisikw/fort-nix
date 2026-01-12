@@ -1,37 +1,13 @@
-{ rootManifest, extraInputs ? {}, accessKeys ? [], ... }:
+{ rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
-  settings = rootManifest.fortConfig.settings;
   user = "dev";
-
-  # Cluster-specific inputs (available when passed from host flake)
-  home-config = extraInputs.home-config or null;
-  hasHomeConfig = home-config != null;
   homeDir = "/home/${user}";
-  agentKeyPath = "/var/lib/fort/dev-sandbox/agent-key";
 
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
-  opencode = import ../../pkgs/opencode { inherit pkgs; };
   beads = import ../../pkgs/beads { inherit pkgs; };
-  fort = import ../../pkgs/fort { inherit pkgs domain; };
-
-  # Handler for git-token: extracts token from JSON response and stores it
-  # Note: chmod 644 so dev user can read it for git credential helper
-  devTokenPath = "/var/lib/fort-git/dev-token";
-  gitTokenHandler = pkgs.writeShellScript "git-token-handler" ''
-    ${pkgs.coreutils}/bin/mkdir -p /var/lib/fort-git
-    ${pkgs.jq}/bin/jq -r '.token' > ${devTokenPath}
-    ${pkgs.coreutils}/bin/chmod 644 ${devTokenPath}
-  '';
-
-  # Derive SSH keys for dev-sandbox access from principals
-  isSSHKey = k: builtins.substring 0 4 k == "ssh-";
-  principalsWithDevSandbox = builtins.filter
-    (p: builtins.elem "dev-sandbox" (p.roles or [ ]))
-    (builtins.attrValues settings.principals);
-  devAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithDevSandbox);
 
   # Core development tools
   devTools = with pkgs; [
@@ -73,45 +49,30 @@ let
 
     # Claude/AI tools
     claude-code
-    opencode
     beads
-
-    # Fort control plane
-    fort
-
-    # Calendar
-    vdirsyncer
-    khal
   ];
+
+  # Public key for SSH access
+  devPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILjnWniCp8wmg2JzxbWDv5MLEZtdMJqqszZ0F3slNoAF dev@ratched.fort";
 in
 {
-  # Import home-manager NixOS module when home-config is available
-  imports = lib.optionals hasHomeConfig [
-    home-config.inputs.home-manager.nixosModules.home-manager
-  ];
-
-  # Home-manager configuration for the dev user
-  home-manager = lib.mkIf hasHomeConfig {
-    useGlobalPkgs = true;
-    useUserPackages = true;
-    backupFileExtension = "bak";
-    extraSpecialArgs = {
-      isDarwin = false;
-      isLinux = true;
-    };
-    users.${user} = {
-      imports = [ home-config.homeManagerModules.default ];
-      home.stateVersion = "25.11";
-    };
-  };
-
   # Create the dev user
   users.users.${user} = {
     isNormalUser = true;
     home = homeDir;
     shell = pkgs.zsh;
     extraGroups = [ "wheel" ];
-    openssh.authorizedKeys.keys = devAuthorizedKeys ++ accessKeys;
+    openssh.authorizedKeys.keys = [
+      devPubKey
+    ] ++ rootManifest.fortConfig.settings.authorizedDeployKeys;
+  };
+
+  # SSH private key for the dev user (for git operations, etc.)
+  age.secrets.dev-ssh-key = {
+    file = ./dev-ssh-key.age;
+    owner = user;
+    mode = "0400";
+    path = "${homeDir}/.ssh/id_ed25519";
   };
 
   # Install dev tools system-wide
@@ -124,25 +85,9 @@ in
       # Auto-attach to tmux on SSH connection
       # Skip if: already in tmux, not interactive, not SSH session
       if [[ -z "$TMUX" && -n "$SSH_CONNECTION" && $- == *i* ]]; then
-        # Inject Monokai Pro Spectrum colors via OSC escape sequences
-        # Must happen BEFORE tmux attaches, so xterm.js receives them directly
-        # OSC 10=fg, 11=bg, 12=cursor, 4;n=ANSI color n
-        printf '\e]10;#f7f1ff\a\e]11;#222222\a\e]12;#bab6c0\a'
-        printf '\e]4;0;#222222\a\e]4;1;#fc618d\a\e]4;2;#7bd88f\a\e]4;3;#fce566\a'
-        printf '\e]4;4;#fd9353\a\e]4;5;#948ae3\a\e]4;6;#5ad4e6\a\e]4;7;#f7f1ff\a'
-        printf '\e]4;8;#69676c\a\e]4;9;#fc618d\a\e]4;10;#7bd88f\a\e]4;11;#fce566\a'
-        printf '\e]4;12;#fd9353\a\e]4;13;#948ae3\a\e]4;14;#5ad4e6\a\e]4;15;#f7f1ff\a'
-
-        # Attach to the most recently used session (by last_attached timestamp)
-        LAST_SESSION=$(tmux list-sessions -F '#{session_last_attached} #{session_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
-        if [[ -n "$LAST_SESSION" ]]; then
-          exec tmux attach-session -t "$LAST_SESSION"
-        fi
+        # Attach to any existing session if one exists
+        tmux attach-session 2>/dev/null || true
       fi
-
-      # Fort agent configuration for dev-sandbox identity
-      export FORT_SSH_KEY="${agentKeyPath}"
-      export FORT_ORIGIN="dev-sandbox"
     '';
   };
 
@@ -153,205 +98,50 @@ in
   };
 
   # Persist the home directory across reboots (for impermanent systems)
-  # Mode 0710 ensures ACL mask includes execute bit (needed for silverbullet traversal)
   environment.persistence."/persist/system".directories = [
-    { directory = homeDir; user = user; group = "users"; mode = "0710"; }
+    { directory = homeDir; user = user; group = "users"; mode = "0700"; }
   ];
 
   # Create Projects directory structure
-  # Mode 0710 on homeDir ensures ACL mask includes execute bit
   systemd.tmpfiles.rules = [
-    "d ${homeDir} 0710 ${user} users -"
+    "d ${homeDir} 0700 ${user} users -"
     "d ${homeDir}/.ssh 0700 ${user} users -"
     "d ${homeDir}/Projects 0755 ${user} users -"
-    "d /var/lib/fort/dev-sandbox 0755 ${user} users -"
-    "d /var/lib/fort-git 0755 root root -"
-    # vdirsyncer/khal directories
-    "d ${homeDir}/.config/vdirsyncer 0700 ${user} users -"
-    "d ${homeDir}/.config/khal 0700 ${user} users -"
-    "d ${homeDir}/.local/share/vdirsyncer 0700 ${user} users -"
   ];
 
-  # Request RW git token from forge via control plane
-  # Host identity (ratched) is allowed RW access by the git-token capability
-  # Stored separately from gitops RO token (dev-token vs deploy-token)
-  fort.host.needs.git-token.dev = {
-    from = "drhorrible";
-    request = { access = "rw"; };
-    handler = gitTokenHandler;
-  };
+  # Basic shell configuration for dev user
+  system.activationScripts.devUserConfig = ''
+    # Create .ssh/config if it doesn't exist
+    if [ ! -f ${homeDir}/.ssh/config ]; then
+      cat > ${homeDir}/.ssh/config << 'EOF'
+Host github.com
+  IdentityFile ~/.ssh/id_ed25519
+  User git
 
-  # Agent key for fort signing (readable by dev user)
-  age.secrets.dev-sandbox-agent-key = {
-    file = ./agent-key.age;
-    path = agentKeyPath;
-    owner = user;
-    group = "users";
-    mode = "0600";
-  };
+Host *.fort.${domain}
+  IdentityFile ~/.ssh/id_ed25519
+EOF
+      chown ${user}:users ${homeDir}/.ssh/config
+      chmod 600 ${homeDir}/.ssh/config
+    fi
 
-  # Generate vdirsyncer config with secrets at boot
-  # Runs as root to read secrets, then chowns to dev
-  systemd.services.vdirsyncer-config = {
-    description = "Generate vdirsyncer config";
-    wantedBy = [ "multi-user.target" ];
-    after = [ "agenix.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
-    path = with pkgs; [ coreutils ];
-    script = ''
-      # Ensure token file is group-readable (dev user is in vdirsyncer group)
-      if [ -f /var/lib/vdirsyncer/token ]; then
-        chmod 640 /var/lib/vdirsyncer/token
-      fi
-
-      # Read secrets (only root can read these)
-      CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
-      CLIENT_SECRET=$(cat ${config.age.secrets.oauth-client-secret.path} | tr -d '\n')
-
-      # Ensure directories exist
-      mkdir -p ${homeDir}/.config/vdirsyncer
-      mkdir -p ${homeDir}/.config/khal
-      mkdir -p ${homeDir}/.local/share/vdirsyncer/status
-
-      cat > ${homeDir}/.config/vdirsyncer/config << EOF
-      [general]
-      status_path = "${homeDir}/.local/share/vdirsyncer/status/"
-
-      [pair google_calendar]
-      a = "google_calendar_remote"
-      b = "google_calendar_local"
-      collections = ["from a", "from b"]
-      metadata = ["color"]
-
-      [storage google_calendar_remote]
-      type = "google_calendar"
-      token_file = "/var/lib/vdirsyncer/token"
-      client_id = "$CLIENT_ID"
-      client_secret = "$CLIENT_SECRET"
-
-      [storage google_calendar_local]
-      type = "filesystem"
-      path = "${homeDir}/.local/share/vdirsyncer/calendars/"
-      fileext = ".ics"
-      EOF
-
-      chown ${user}:users ${homeDir}/.config/vdirsyncer/config
-      chmod 600 ${homeDir}/.config/vdirsyncer/config
-
-      # Generate khal config
-      cat > ${homeDir}/.config/khal/config << EOF
-      [calendars]
-
-      [[google]]
-      path = ${homeDir}/.local/share/vdirsyncer/calendars/*
-      type = discover
-
-      [locale]
-      local_timezone = America/Chicago
-      default_timezone = America/Chicago
-      timeformat = %H:%M
-      dateformat = %Y-%m-%d
-      longdateformat = %Y-%m-%d
-      datetimeformat = %Y-%m-%d %H:%M
-      longdatetimeformat = %Y-%m-%d %H:%M
-
-      [default]
-      highlight_event_days = True
-      EOF
-
-      chown ${user}:users ${homeDir}/.config/khal/config
-      chmod 600 ${homeDir}/.config/khal/config
-
-      # Fix ownership of directories
-      chown -R ${user}:users ${homeDir}/.config/vdirsyncer
-      chown -R ${user}:users ${homeDir}/.config/khal
-      chown -R ${user}:users ${homeDir}/.local/share/vdirsyncer
-    '';
-  };
-
-  # Bootstrap: run vdirsyncer discover if calendars not yet set up
-  systemd.services.vdirsyncer-bootstrap = {
-    description = "Initial vdirsyncer calendar discovery";
-    after = [ "vdirsyncer-config.service" "network-online.target" ];
-    requires = [ "vdirsyncer-config.service" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = user;
-      Group = "vdirsyncer";  # Need vdirsyncer group to read token
-    };
-    path = with pkgs; [ vdirsyncer ];
-    script = ''
-      # Skip if already discovered (status dir has content)
-      if [ -d "${homeDir}/.local/share/vdirsyncer/status" ] && [ "$(ls -A ${homeDir}/.local/share/vdirsyncer/status 2>/dev/null)" ]; then
-        echo "Calendars already discovered, skipping"
-        exit 0
-      fi
-
-      # Skip if no token yet
-      if [ ! -f /var/lib/vdirsyncer/token ]; then
-        echo "No OAuth token yet, skipping discovery"
-        exit 0
-      fi
-
-      echo "Running initial calendar discovery..."
-      vdirsyncer discover
-      echo "Discovery complete"
-    '';
-  };
-
-  # Periodic calendar sync (every 15 minutes)
-  systemd.timers.vdirsyncer-sync = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "2m";
-      OnUnitActiveSec = "15m";
-    };
-  };
-
-  systemd.services.vdirsyncer-sync = {
-    description = "Sync calendars with Google";
-    serviceConfig = {
-      Type = "oneshot";
-      User = user;
-      Group = "vdirsyncer";
-    };
-    path = with pkgs; [ vdirsyncer coreutils ];
-    script = ''
-      # Skip if no token yet
-      if [ ! -f /var/lib/vdirsyncer/token ]; then
-        echo "No OAuth token, skipping sync"
-        exit 0
-      fi
-
-      vdirsyncer sync
-
-      # Touch marker file for freshness tracking
-      touch ${homeDir}/.local/share/vdirsyncer/.last_sync
-    '';
-  };
+    # Create public key file
+    echo "${devPubKey}" > ${homeDir}/.ssh/id_ed25519.pub
+    chown ${user}:users ${homeDir}/.ssh/id_ed25519.pub
+    chmod 644 ${homeDir}/.ssh/id_ed25519.pub
+  '';
 
   # Git credential helper for Forgejo access
-  # Prefers RW dev-token, falls back to RO deploy-token
+  # Reads the token distributed by forgejo-deploy-token-sync
   environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
     # Git credential helper - only respond to "get" action
     case "$1" in
       get)
-        # Prefer RW token (dev-sandbox), fallback to RO token (gitops)
-        if [ -s "/var/lib/fort-git/dev-token" ]; then
-          TOKEN=$(cat "/var/lib/fort-git/dev-token")
-        elif [ -s "/var/lib/fort-git/deploy-token" ]; then
-          TOKEN=$(cat "/var/lib/fort-git/deploy-token")
-        else
-          exit 0
+        TOKEN_FILE="/var/lib/fort-git/forge-token"
+        if [ -s "$TOKEN_FILE" ]; then
+          echo "username=forge-admin"
+          echo "password=$(cat "$TOKEN_FILE")"
         fi
-        echo "username=forge-admin"
-        echo "password=$TOKEN"
         ;;
     esac
   '';

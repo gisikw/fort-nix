@@ -11,7 +11,7 @@ This is a NixOS homelab infrastructure. Read `README.md` for architecture overvi
 This project uses **bd** (beads) for issue tracking. Prefer bd over TodoWrite - use TodoWrite only for complex single-session work where micro-step tracking adds clarity.
 
 ```bash
-bd ready -n 100                       # Find available work (default shows 10)
+bd ready                              # Find available work
 bd show <id>                          # View issue details
 bd update <id> --status in_progress   # Claim work
 bd close <id>                         # Complete work
@@ -27,7 +27,7 @@ common/
   fort.nix                   # Service exposure, nginx, oauth2-proxy (~240 lines, important)
   cluster-context.nix        # Entry point for locating manifests
 clusters/<cluster>/
-  manifest.nix               # Cluster settings (domain, principals)
+  manifest.nix               # Cluster settings (domain, SSH keys)
   hosts/<name>/manifest.nix  # Host config: roles, apps, aspects
   devices/<uuid>/            # Auto-generated device bindings
 pkgs/<name>/default.nix      # Custom derivations for external projects
@@ -44,10 +44,10 @@ device-profiles/<type>/      # Hardware base images (beelink, linode, etc.)
 Apps live in `apps/<name>/default.nix`. Every app should:
 
 1. Define its systemd service(s)
-2. Declare exposure via `fort.cluster.services`:
+2. Declare exposure via `fortCluster.exposedServices`:
 
 ```nix
-fort.cluster.services = [{
+fortCluster.exposedServices = [{
   name = "myapp";
   port = 8080;
   visibility = "local";      # vpn | local | public
@@ -63,28 +63,51 @@ Then add it to a host's `manifest.nix`:
 { apps = [ "myapp" ]; ... }
 ```
 
-After deploying a new app with a subdomain, refresh the service registry so DNS picks it up immediately:
-
-```bash
-just deploy <host>                                           # Wait for host deploy
-fort drhorrible restart '{"unit": "fort-service-registry"}'  # Refresh DNS
-```
-
-Use restart **without** delay unless the service would kill the response (nginx, fort-agent, tailscale).
-
 ### SSO Modes
-
-Services can use SSO via `fort.cluster.services`:
 
 | Mode | Use When |
 |------|----------|
 | `none` | Service handles its own auth, or no auth needed |
-| `oidc` | Service supports OIDC natively |
-| `headers` | Service can consume `X-Auth-*` headers |
-| `basicauth` | Service only supports HTTP Basic Auth |
+| `oidc` | Service supports OIDC natively (credentials delivered to `/var/lib/fort-auth/<svc>/`) |
+| `headers` | Service can consume `X-Auth-*` headers from oauth2-proxy |
+| `basicauth` | Service only supports HTTP Basic Auth (proxy translates) |
 | `gatekeeper` | Login required but no identity passed to backend |
 
-For detailed implementation guidance, mode-specific patterns, and troubleshooting, see the `sso-guide` skill (`.claude/skills/sso-guide/`). Working examples: `apps/outline/` (oidc), `apps/fort-observability/` (headers).
+#### OIDC Credential Delivery
+
+When using `sso.mode = "oidc"`, the `service-registry` aspect (running on the forge host) automatically:
+
+1. Registers an OIDC client in pocket-id using the service's FQDN as the client name
+2. SSHs credentials to the target host at `/var/lib/fort-auth/<service-name>/`:
+   - `client-id` - the OIDC client ID
+   - `client-secret` - the OIDC client secret
+3. Restarts the service specified in `sso.restart` (defaults to `oauth2-proxy-<name>`)
+
+**App responsibilities** when using `oidc` mode:
+
+```nix
+# 1. Declare the exposure with restart target
+fortCluster.exposedServices = [{
+  name = "myapp";
+  port = 8080;
+  sso = {
+    mode = "oidc";
+    restart = "myapp.service";  # Service to restart after creds delivered
+  };
+}];
+
+# 2. Create tmpfiles for credential directory
+systemd.tmpfiles.rules = [
+  "d /var/lib/fort-auth/myapp 0700 myapp myapp -"
+];
+
+# 3. Configure the app to read credentials and use pocket-id endpoints:
+#    - Issuer/Auth URL: https://id.${domain}/authorize
+#    - Token URL: https://id.${domain}/api/oidc/token
+#    - Userinfo URL: https://id.${domain}/api/oidc/userinfo
+```
+
+See `apps/outline/default.nix` for a complete example using `wrapProgram` to inject credentials at runtime.
 
 ### Custom Derivations
 
@@ -195,7 +218,7 @@ aspects = [
 Services that should route through the external VPN (e.g., torrent clients):
 
 ```nix
-fort.cluster.services = [{
+fortCluster.exposedServices = [{
   name = "qbittorrent";
   port = 8080;
   inEgressNamespace = true;  # Routes through WireGuard namespace
@@ -257,49 +280,6 @@ git push  # Credential helper reads token automatically
 
 If rebuilding the dev-sandbox environment, wait for the next token sync (~10 min) or manually trigger it on the forge host: `systemctl start forgejo-deploy-token-sync`
 
-## Access Control (Principals)
-
-Access is managed through **principals** defined in `clusters/<cluster>/manifest.nix`. Each principal has a public key and roles determining what they can access:
-
-```nix
-principals = {
-  admin = {
-    description = "Admin user - full access";
-    publicKey = "ssh-ed25519 AAAA... fort";
-    privateKeyPath = "~/.ssh/fort";  # Only for principals that run deploy-rs
-    roles = [ "root" "dev-sandbox" "secrets" ];
-  };
-  forge = {
-    description = "Forge host (drhorrible) - credential distribution";
-    publicKey = "ssh-ed25519 AAAA... fort-deployer";
-    roles = [ "root" ];
-  };
-  ratched = {
-    description = "Dev sandbox / LLM agents";
-    publicKey = "age1...";  # age keys work for secrets, not SSH
-    roles = [ "secrets" ];
-  };
-  ci = {
-    description = "Forgejo CI";
-    publicKey = "age1...";
-    roles = [ "secrets" ];
-  };
-};
-```
-
-**Roles:**
-| Role | Grants |
-|------|--------|
-| `root` | SSH as root to all hosts (key added to root's authorized_keys) |
-| `dev-sandbox` | SSH as dev user on hosts with dev-sandbox aspect |
-| `secrets` | Can decrypt secrets on main branch (key included in agenix recipients) |
-
-**Key types:**
-- SSH keys (`ssh-ed25519 ...`) work for both SSH access and secret decryption
-- Age keys (`age1...`) work only for secret decryption
-
-The consuming code (`host.nix`, `secrets.nix`, `dev-sandbox`) derives the appropriate key lists from principals based on their roles.
-
 ## Secrets
 
 Uses **agenix**. Secrets are `.age` files decrypted at activation time.
@@ -321,61 +301,30 @@ nix-shell -p age --run "age -d -i ~/.config/age/keys.txt <secret.age>"
 ## Testing & Deployment
 
 ```bash
-# For single-host changes (faster)
-nix flake check ./clusters/bedlam/hosts/<host>
-
-# For multi-host or common/ changes
 just test                    # Flake check on all hosts/devices
 ```
 
 ### GitOps Hosts (Most Hosts)
 
-For hosts with the `gitops` aspect:
+For hosts with the `gitops` aspect, deployment is automatic:
 
 1. Commit and push to `main`
-2. Run `just deploy <host>` to wait for deployment
+2. CI validates and updates `release` branch
+3. Hosts auto-pull and deploy (~5 min total)
 
-The command auto-detects the right method and blocks until the host is running your commit:
-- **With master key**: deploy-rs direct push
-- **Without master key**: Polls GitOps status, triggers deploy if needed, waits for activation
+**Do NOT run `just deploy` for these hosts** - just commit and push.
 
-**Auto-deploy hosts**: joker, lordhenry, minos, q, ratched, ursula
+**GitOps hosts**: joker, lordhenry, minos, q, ratched, ursula
 
-**Manual-confirmation hosts**: drhorrible, raishan (build automatically, but `just deploy` triggers the switch)
+### Non-GitOps Hosts (Forge/Beacon)
 
-### Testing Changes Safely (Test Branches)
+The forge (drhorrible) and beacon (raishan) require manual deployment. After committing and pushing, **ask the user** to deploy:
 
-For risky changes, use test branches to deploy without modifying the bootloader (recoverable via reboot):
-
-```bash
-git checkout -b <hostname>-test
-# make changes
-git push origin <hostname>-test
+```
+User, please deploy drhorrible: `just deploy drhorrible`
 ```
 
-CI will:
-1. Validate only that host's flake
-2. Re-key secrets only for that host
-3. Create `release-<hostname>-test` branch
-
-Comin on the target host picks up the testing branch and deploys with `switch-to-configuration test`. If broken, reboot reverts to the last booted config.
-
-**To finalize**: Merge your changes to `main`. Once the `release` branch updates, comin automatically switches back from the testing branch.
-
-**To abandon**: Delete the `<hostname>-test` branch. Comin will revert to `release` on next poll.
-
-### Manual-Confirmation Hosts (Forge/Beacon)
-
-The forge (drhorrible) and beacon (raishan) use GitOps but with **manual confirmation** - they pull and build automatically, but won't switch until explicitly triggered. This prevents surprise deploys on critical infrastructure.
-
-Use `just deploy <host>` like any other host - it handles the confirmation automatically. If the agent API isn't responding, ask the user to run the command instead.
-
-## Dev Sandbox Constraints
-
-The dev-sandbox environment has limited local privileges:
-- **No sudo access** - use `fort` to restart services or run privileged operations on hosts
-- **No interactive SSH** - construct one-shot commands or use agent calls
-- **Age key for secrets** - can decrypt secrets on `main` branch only
+Agents cannot run `just deploy` directly - it requires SSH access that agents don't have.
 
 ## Debugging Deployment Failures
 
@@ -394,59 +343,6 @@ Common issues:
 - **Port conflict**: Another service on the same port
 - **Missing state directory**: Check `systemd.tmpfiles.rules` or `StateDirectory`
 
-## Inter-Host Agent Calls
-
-Agents in the dev-sandbox can query and control other hosts using `fort`. This enables debugging, deployment, and cluster management without SSH access.
-
-```bash
-# Check a host's status (uptime, failed units, deploy info)
-fort drhorrible status
-
-# Get a host's manifest (apps, aspects, roles, exposed services)
-fort joker manifest
-
-# List GC handles held by a host
-fort ursula holdings
-```
-
-**Output format**: JSON envelope with `body`, `status`, `handle`, `ttl` fields.
-
-**Available on all hosts**: `status`, `manifest`, `holdings`
-
-### Debug Capabilities
-
-These capabilities are restricted to the `dev-sandbox` principal for operational safety:
-
-```bash
-# Trigger deployment on manual-confirmation hosts (forge/beacon)
-fort drhorrible deploy '{"sha": "5563ac2"}'
-
-# Fetch journal logs for a service
-fort joker journal '{"unit": "nginx", "lines": 50}'
-fort joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
-
-# Restart a service (immediate - preferred, fails if restart fails)
-fort joker restart '{"unit": "fort-service-registry"}'
-
-# Restart with delay (only for nginx/fort-agent/tailscale - avoids killing response)
-fort joker restart '{"unit": "nginx", "delay": 2}'
-
-# Force immediate retry of needs (resets fulfillment state)
-fort q force-nag '{}'                      # Reset all needs
-fort q force-nag '{"pattern": "oidc"}'     # Reset only oidc-* needs
-```
-
-| Capability | Request | Notes |
-|------------|---------|-------|
-| `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
-| `journal` | `{unit, lines?, since?}` | Returns journalctl output |
-| `restart` | `{unit, delay?}` | Restarts systemd unit; use delay only for nginx/fort-agent/tailscale |
-| `force-nag` | `{pattern?}` | Resets fulfillment state and restarts consumer; pattern filters by substring |
-
-**Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
-
-For detailed guidance on adding capabilities, writing handlers, and the GC protocol, see the `control-plane-guide` skill.
-
 ## Impermanence
 
 Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Services needing persistent data should use `/var/lib` (which is persisted).
@@ -455,10 +351,8 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 
 - Don't modify `flake.nix` or `common/` without good reason
 - Don't hardcode IPs or hostnames - use `${domain}` from cluster manifest
-- Don't add nginx virtual hosts manually - use `fort.cluster.services`
+- Don't add nginx virtual hosts manually - use `fortCluster.exposedServices`
 - Don't commit unencrypted secrets
-- Don't use `:latest` container tags - pin to explicit versions (e.g., `:1.10.0`) for reproducible deploys
-- Don't use Write tool for large file transformations - prefer `mv` to rename then Edit for in-place changes (more token-efficient and avoids tool call overhead)
 
 ## Working on Tickets
 
@@ -473,11 +367,11 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 
 Before closing a ticket:
 
-1. **Stage and test**: `git add <files>` then `nix flake check ./clusters/bedlam/hosts/<host>` (or `just test` for multi-host changes) - Nix requires files to be staged.
+1. **Stage and test**: `git add <files>` then `just test` - Nix requires files to be staged.
 
 2. **Commit and push**: This triggers GitOps for most hosts.
 
-3. **Wait for deploy**: Run `just deploy <host>` even for auto-deploy hosts. This ensures the deploy completes before closing the ticket.
+3. **Request manual deploy if needed**: If the change affects drhorrible (forge) or raishan (beacon), ask the user to deploy those hosts manually.
 
 4. **Close the ticket**: `bd close <id>`
 
@@ -485,7 +379,6 @@ Before closing a ticket:
    - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
    - **Process friction**: What slowed things down? Missing tools, unclear docs, manual steps that could be automated?
    - **Pattern extraction**: Did the code changes reveal a pattern worth generalizing? A new SSO mode, a reusable derivation structure, a common module shape?
-   - **Skill candidates**: Did you repeatedly reference a specific AGENTS.md section, or wish you had step-by-step guidance for a workflow? Consider whether it should be a skill (loaded on-demand) rather than always-present context.
    - **Discovered work**: Did you uncover related issues while working?
 
    For each item surfaced: **ticket it, document it, address it now, or explicitly discard it**. Don't just note friction and move on - that's venting, not improving. Quick triage with the user ensures nothing gets lost.

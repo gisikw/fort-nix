@@ -4,37 +4,13 @@ rec {
 
   roles = [ ];
 
-  apps = [
-    {
-      name = "flatnotes";
-      subdomain = "exocortex";
-      dataDir = "/home/dev/Projects/exocortex/notes";
-      dataUser = "dev";
-      dataGroup = "users";
-    }
-    "vdirsyncer-auth"
-  ];
+  apps = [ ];
 
-  aspects = [
-    "mesh"
-    "observable"
-    {
-      name = "dev-sandbox";
-      accessKeys = [
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGBsPj4lG8wP2gfgU5akZ05GrMy55syzvI0MEpiNFQ8t dev-sandbox-ssh"
-      ];
-    }
-    "gitops"
-  ];
+  aspects = [ "mesh" "observable" "dev-sandbox" "gitops" ];
 
   module =
-    { config, pkgs, ... }:
+    { config, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
-
-      config.systemd.tmpfiles.rules = [
-        "d /home/dev/Projects/exocortex 0755 dev users -"
-        # notes subdir owned by flatnotes app via dataUser/dataGroup params
-      ];
     };
 }

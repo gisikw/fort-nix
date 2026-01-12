@@ -1,4 +1,4 @@
-{ subdomain ? "budget", ... }:
+{ ... }:
 { ... }:
 {
   services.actual = {
@@ -9,10 +9,10 @@
     };
   };
 
-  fort.cluster.services = [
+  fortCluster.exposedServices = [
     {
       name = "actualbudget";
-      subdomain = subdomain;
+      subdomain = "budget";
       port = 5006;
     }
   ];

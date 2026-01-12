@@ -1,4 +1,4 @@
-{ subdomain ? null, rootManifest, ... }:
+{ rootManifest, ... }:
 { pkgs, ... }:
 let
   fort = rootManifest.fortConfig;
@@ -162,7 +162,7 @@ in
 {
   virtualisation.oci-containers = {
     containers.sillytavern = {
-      image = "containers.${fort.settings.domain}/ghcr.io/sillytavern/sillytavern:1.15.0";
+      image = "containers.${fort.settings.domain}/ghcr.io/sillytavern/sillytavern:latest";
       hostname = "sillytavern.${fort.settings.domain}";
       ports = [ "8000:8000" ];
       environment = {
@@ -189,10 +189,9 @@ in
     "d /var/lib/sillytavern/extensions 0755 root root -"
   ];
 
-  fort.cluster.services = [
+  fortCluster.exposedServices = [
     {
       name = "sillytavern";
-      subdomain = subdomain;
       port = 8000;
     }
   ];

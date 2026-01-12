@@ -31,7 +31,7 @@ The configuration for a host is composed of several layers:
 
 ## Service Exposure
 
-Services are exposed through `fort.cluster.services`, which provides centralized management of TLS, DNS, and nginx routing. Each service declaration supports:
+Services are exposed through `fortCluster.exposedServices`, which provides centralized management of TLS, DNS, and nginx routing. Each service declaration supports:
 
 - **visibility**: `vpn` (mesh-only), `local` (LAN + mesh), or `public` (internet-facing via beacon)
 - **sso**: Optional SSO integration via Pocket ID with modes including `oidc`, `headers`, `basicauth`, and `gatekeeper`

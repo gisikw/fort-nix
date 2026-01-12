@@ -1,4 +1,4 @@
-{ subdomain ? "ebooks", ... }:
+{ ... }:
 { config, lib, pkgs, ... }:
 let
   stateDir = "/var/lib/calibre-web";
@@ -52,10 +52,10 @@ in
     ];
   };
 
-  fort.cluster.services = [
+  fortCluster.exposedServices = [
     {
       name = "calibre-web";
-      subdomain = subdomain;
+      subdomain = "ebooks";
       port = 8083;
     }
   ];

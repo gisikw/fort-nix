@@ -1,13 +1,12 @@
-{ subdomain ? null, ... }:
+{ ... }:
 { ... }:
 {
   services.jellyfin.enable = true;
   users.users.jellyfin.extraGroups = [ "media" ];
 
-  fort.cluster.services = [
+  fortCluster.exposedServices = [
     {
       name = "jellyfin";
-      subdomain = subdomain;
       port = 8096;
       visibility = "local";
     }

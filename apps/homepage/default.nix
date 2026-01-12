@@ -1,4 +1,4 @@
-{ subdomain ? null, rootManifest, ... }:
+{ rootManifest, ... }:
 { pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -13,7 +13,7 @@ in
 
   virtualisation.oci-containers = {
     containers.homepage = {
-      image = "containers.${domain}/ghcr.io/gethomepage/homepage:v1.8.0";
+      image = "containers.${domain}/ghcr.io/gethomepage/homepage:latest";
       ports = [ "8425:3000" ];
       volumes = [ "/var/lib/homepage/config:/app/config" ];
       environment.HOMEPAGE_ALLOWED_HOSTS = "home.${domain}";
@@ -28,10 +28,9 @@ in
     "d /var/lib/homepage/config 0755 root root -"
   ];
 
-  fort.cluster.services = [
+  fortCluster.exposedServices = [
     {
       name = "home";
-      subdomain = subdomain;
       port = 8425;
     }
   ];

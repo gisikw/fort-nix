@@ -1,9 +1,9 @@
 {
   inputs = {
-    cluster.url = "path:../..";
-    nixpkgs.follows = "cluster/nixpkgs";
-    disko.follows = "cluster/disko";
-    impermanence.follows = "cluster/impermanence";
+    root.url = "path:../../../..";
+    nixpkgs.follows = "root/nixpkgs";
+    disko.follows = "root/disko";
+    impermanence.follows = "root/impermanence";
   };
 
   outputs =
