@@ -44,7 +44,8 @@
       "Bash(fort drhorrible journal '{\"\"unit\"\": \"\"fort-provider-gc.service\"\", \"\"lines\"\": 30}')",
       "Bash(fort drhorrible journal:*)",
       "Bash(fort drhorrible status:*)",
-      "Bash(fort joker:*)"
+      "Bash(fort joker:*)",
+      "Bash(fort q journal:*)"
     ],
     "deny": [],
     "ask": []

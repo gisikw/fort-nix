@@ -59,7 +59,7 @@ let
         local total_pages=$(echo "$response" | ${pkgs.jq}/bin/jq -r '.pagination.totalPages // 1')
         local current_page=$(echo "$response" | ${pkgs.jq}/bin/jq -r '.pagination.currentPage // 1')
 
-        all_clients=$(echo "$all_clients" "$data" | ${pkgs.jq}/bin/jq -s 'add')
+        all_clients=$(${pkgs.jq}/bin/jq -n --argjson a "$all_clients" --argjson b "$data" '$a + $b')
 
         if [ "$current_page" -ge "$total_pages" ]; then
           break
@@ -145,7 +145,7 @@ let
 
       # Check if client already exists by name
       existing_client=$(echo "$existing_clients" | ${pkgs.jq}/bin/jq -c --arg name "$client_name" \
-        '.[] | select(.name == $name) // null')
+        '[.[] | select(.name == $name)] | if length > 0 then .[0] else null end')
 
       if [ "$existing_client" != "null" ] && [ -n "$existing_client" ]; then
         # Client exists but we don't have the secret cached - regenerate it
