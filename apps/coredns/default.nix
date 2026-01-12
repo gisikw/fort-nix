@@ -9,6 +9,66 @@ let
     sha256 = "sha256-dmqKd8m1JFzTDXjeZUYnbvZNX/xqMiXYFRJFveq7Nlc=";
   };
   domain = rootManifest.fortConfig.settings.domain;
+
+  # Import fort CLI for querying lan-ip capability
+  fortCli = import ../../pkgs/fort { inherit pkgs domain; };
+
+  # Async handler for LAN DNS record configuration
+  # Receives aggregate requests, generates hosts file for CoreDNS
+  # Input: {"origin:dns-coredns/servicename": {"request": {"fqdn": "..."}}, ...}
+  # Output: {"origin:dns-coredns/servicename": "OK", ...}
+  dnsCorednsHandler = pkgs.writeShellScript "handler-dns-coredns" ''
+    set -euo pipefail
+
+    input=$(${pkgs.coreutils}/bin/cat)
+    HOSTS_FILE="${fortHostsPath}"
+
+    # Build response object and hosts content
+    response="{}"
+    hosts="# Managed by fort dns-coredns capability"
+
+    # Cache LAN IP lookups per origin (avoid repeated calls)
+    declare -A lan_ip_cache
+
+    # Process each request
+    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
+      origin=$(echo "$key" | ${pkgs.coreutils}/bin/cut -d: -f1)
+      fqdn=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg k "$key" '.[$k].request.fqdn')
+
+      # Check cache first
+      if [ -z "''${lan_ip_cache[$origin]:-}" ]; then
+        # Query origin's lan-ip capability
+        if result=$(${fortCli}/bin/fort "$origin" lan-ip '{}' 2>/dev/null); then
+          lan_ip=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.body.lan_ip // empty')
+          if [ -n "$lan_ip" ]; then
+            lan_ip_cache[$origin]="$lan_ip"
+          else
+            lan_ip_cache[$origin]="NOROUTE"
+          fi
+        else
+          lan_ip_cache[$origin]="NOROUTE"
+        fi
+      fi
+
+      lan_ip="''${lan_ip_cache[$origin]}"
+
+      if [ "$lan_ip" = "NOROUTE" ]; then
+        echo "Warning: Could not get LAN IP for origin $origin" >&2
+        response=$(echo "$response" | ${pkgs.jq}/bin/jq --arg k "$key" '. + {($k): "ERROR: no LAN IP"}')
+        continue
+      fi
+
+      # Add hosts entry
+      hosts+=$'\n'"$lan_ip $fqdn"
+
+      response=$(echo "$response" | ${pkgs.jq}/bin/jq --arg k "$key" '. + {($k): "OK"}')
+    done
+
+    # Write hosts file (path watcher will trigger merge and coredns reload)
+    echo "$hosts" > "$HOSTS_FILE"
+
+    echo "$response"
+  '';
 in
 {
   networking.firewall.allowedTCPPorts = [ 53 ];
@@ -72,5 +132,13 @@ in
       PathChanged = [ fortHostsPath ];
       Unit = "merge-coredns-hosts.service";
     };
+  };
+
+  # Expose dns-coredns capability for LAN DNS record management
+  fort.host.capabilities.dns-coredns = {
+    handler = dnsCorednsHandler;
+    mode = "async";
+    triggers.initialize = true;  # Rebuild records on boot
+    description = "Configure CoreDNS hosts file for LAN DNS resolution";
   };
 }

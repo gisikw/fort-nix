@@ -72,11 +72,21 @@ let
     beacons = builtins.filter (h: builtins.elem "beacon" h.roles) (builtins.attrValues hosts);
   in if beacons != [] then (builtins.head beacons).hostName else null;
 
+  # Discover forge host for LAN DNS needs
+  forgeHost = let
+    hostFiles = builtins.readDir cluster.hostsDir;
+    hosts = builtins.mapAttrs (name: _: import (cluster.hostsDir + "/" + name + "/manifest.nix")) hostFiles;
+    forges = builtins.filter (h: builtins.elem "forge" h.roles) (builtins.attrValues hosts);
+  in if forges != [] then (builtins.head forges).hostName else null;
+
   # Check if this host is the proxy provider (beacon)
   isProxyProvider = beaconHost == config.networking.hostName;
 
   # Get services that need public proxy configuration
   publicServices = builtins.filter (svc: svc.visibility == "public") config.fort.cluster.services;
+
+  # Get services that need LAN DNS (non-vpn visibility)
+  lanDnsServices = builtins.filter (svc: svc.visibility != "vpn") config.fort.cluster.services;
 in
 {
   options.fort.cluster = lib.mkOption {
@@ -416,6 +426,27 @@ in
           };
         }
       ) config.fort.cluster.services);
+    })
+
+    # DNS (CoreDNS) needs - auto-generated for non-vpn services
+    # Each non-vpn service gets a dns-coredns need so it can be resolved on the LAN
+    (lib.mkIf (lanDnsServices != [] && forgeHost != null) {
+      fort.host.needs.dns-coredns = lib.listToAttrs (map (svc:
+        let
+          subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+          fqdn = "${subdomain}.${domain}";
+        in {
+          name = svc.name;
+          value = {
+            from = forgeHost;
+            request = {
+              inherit fqdn;
+            };
+            nag = "1h";
+            # No handler - side-effect-only need (provider writes custom.conf)
+          };
+        }
+      ) lanDnsServices);
     })
   ];
 }
