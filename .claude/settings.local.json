@@ -41,7 +41,10 @@
       "Bash(git commit:*)",
       "Bash(git push)",
       "Bash(just deploy:*)",
-      "Bash(fort drhorrible journal '{\"\"unit\"\": \"\"fort-provider-gc.service\"\", \"\"lines\"\": 30}')"
+      "Bash(fort drhorrible journal '{\"\"unit\"\": \"\"fort-provider-gc.service\"\", \"\"lines\"\": 30}')",
+      "Bash(fort drhorrible journal:*)",
+      "Bash(fort drhorrible status:*)",
+      "Bash(fort joker:*)"
     ],
     "deny": [],
     "ask": []
