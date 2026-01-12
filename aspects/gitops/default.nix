@@ -15,10 +15,12 @@ let
 
   repoUrl = "https://git.${domain}/${forgeConfig.org}/${forgeConfig.repo}.git";
 
-  # Cache configuration
+  # Cache configuration (delivered via control plane)
   cacheUrl = "https://cache.${domain}";
   cacheName = "fort";
-  pushTokenFile = "/var/lib/fort/nix/attic-push-token";
+  cacheDir = "/var/lib/fort/nix";
+  cacheConfFile = "${cacheDir}/attic-cache.conf";
+  pushTokenFile = "${cacheDir}/attic-push-token";
 
   # Comin binary for CLI commands
   cominBin = config.services.comin.package;
@@ -28,6 +30,32 @@ let
     ${pkgs.coreutils}/bin/mkdir -p "${credDir}"
     ${pkgs.jq}/bin/jq -r '.token' > "${tokenFile}"
     ${pkgs.coreutils}/bin/chmod 600 "${tokenFile}"
+  '';
+
+  # Handler for attic-token: stores cache config and push token
+  atticTokenHandler = pkgs.writeShellScript "attic-token-handler" ''
+    set -euo pipefail
+    ${pkgs.coreutils}/bin/mkdir -p "${cacheDir}"
+
+    # Read payload from stdin
+    payload=$(${pkgs.coreutils}/bin/cat)
+
+    # Extract fields from response
+    respCacheUrl=$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.cacheUrl')
+    respCacheName=$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.cacheName')
+    publicKey=$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.publicKey')
+    pushToken=$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.pushToken')
+
+    # Write nix substituter config
+    ${pkgs.coreutils}/bin/cat > "${cacheConfFile}" <<EOF
+extra-substituters = $respCacheUrl/$respCacheName
+extra-trusted-public-keys = $publicKey
+EOF
+    ${pkgs.coreutils}/bin/chmod 644 "${cacheConfFile}"
+
+    # Write push token
+    echo "$pushToken" > "${pushTokenFile}"
+    ${pkgs.coreutils}/bin/chmod 600 "${pushTokenFile}"
   '';
 
   # Deploy handler - verifies SHA then confirms deployment
@@ -129,9 +157,10 @@ EOF
   '';
 in
 {
-  # Ensure credential directory exists
+  # Ensure credential directories exist
   systemd.tmpfiles.rules = [
     "d ${credDir} 0700 root root -"
+    "d ${cacheDir} 0755 root root -"
   ];
 
   # Request RO git token from forge for comin pulls
@@ -139,6 +168,13 @@ in
     from = "drhorrible";
     request = { access = "ro"; };
     handler = gitTokenHandler;
+  };
+
+  # Request attic cache config and push token from forge
+  fort.host.needs.attic-token.default = {
+    from = "drhorrible";
+    request = { };  # No parameters needed
+    handler = atticTokenHandler;
   };
 
   services.comin = {
