@@ -39,7 +39,8 @@ let
       config+="
     server {
       listen 80;
-      listen 443 ssl http2;
+      listen 443 ssl;
+      http2 on;
       server_name $fqdn;
 
       ssl_certificate     /var/lib/fort/ssl/${domain}/fullchain.pem;
