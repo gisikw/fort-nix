@@ -21,129 +21,121 @@ The existing Grafana/Prometheus stack on fort-observability is powerful but over
 
 | Requirement | Priority | Notes |
 |-------------|----------|-------|
-| Runtime-driven config | Must | Services announce themselves; beacon discovers what to monitor |
-| No mandatory agents | Must | HTTP/TCP probes primary; agents optional for richer data |
+| Polling-based discovery | Must | Beacon polls hosts; no push infrastructure needed |
+| No mandatory agents | Must | HTTP probes; hosts just serve static JSON |
 | VPN-only access | Phase 1 | Public access with split-gatekeeper auth is future work |
 | Push notifications | Nice | Email, ntfy, Slack, etc. |
 | Lightweight | Must | "What's going on" not "why is it down" |
 
-### Key Insight: Runtime Orchestration
+## Recommendation: Gatus with Polling Discovery
 
-The fort-nix pattern is **runtime orchestration on top of declarative infrastructure**. Hosts don't rebuild beacon when they deploy - they announce needs and beacon fulfills them:
+### Why Polling (Not Push)
 
-```
-Host deploys → announces "monitor me" need → beacon provider fulfills → Gatus config updates
-```
+We considered runtime orchestration (hosts push "monitor me" needs to beacon), but polling is simpler here because:
 
-This matches existing patterns: DNS registration, OIDC client registration, etc. Monitoring is just another need/capability pair.
-
-## Candidates Evaluated
-
-### 1. Gatus (Recommended)
-
-**Repository:** [TwiN/gatus](https://github.com/TwiN/gatus)
-
-A developer-oriented status page with health checks, alerting, and incident management.
-
-![Gatus Dashboard](https://raw.githubusercontent.com/TwiN/gatus/master/.github/assets/dashboard-conditions.jpg)
-
-**Pros:**
-- YAML-based configuration
-- **Auto-reloads config file** (~30s) - perfect for runtime updates
-- No agents required - HTTP/TCP/DNS/ICMP/SSH probes
-- In nixpkgs with NixOS module (`services.gatus`)
-- Lightweight single binary (Go)
-- 40+ alerting integrations (ntfy, email, Slack, Discord, etc.)
-- Rich condition expressions: `[STATUS]`, `[BODY]`, `[RESPONSE_TIME]`
-- SSH endpoints can execute commands on remote hosts
-
-**Cons:**
-- Smaller community than Uptime Kuma (~9.5k stars vs ~81k)
-- No web UI for config changes (feature, not bug, for us)
-
-**Runtime config pattern:**
-```
-Provider aggregates needs → writes /var/lib/gatus/config.yaml → Gatus auto-reloads
-```
-
----
-
-### 2. Uptime Kuma
-
-**Repository:** [louislam/uptime-kuma](https://github.com/louislam/uptime-kuma)
-
-![Uptime Kuma Light Mode](https://uptime.kuma.pet/img/light.jpg)
-
-**Pros:**
-- Beautiful UI, huge community
-- Has [Python API wrapper](https://pypi.org/project/uptime-kuma-api/) for programmatic control
-
-**Cons:**
-- API is Socket.IO based (more complex than file writes)
-- UI-centric design doesn't fit our runtime orchestration model as cleanly
-- No NixOS module
-
-**Verdict:** Viable, but Gatus's file-based config reload is simpler for our pattern.
-
----
-
-### 3. Beszel
-
-**Disqualified:** Requires agents on all monitored hosts.
-
----
-
-### 4. Homepage
-
-**Verdict:** Complementary. Could add a Gatus widget to display status on the dashboard. Not a replacement.
-
----
-
-## Recommendation: Gatus with Runtime Orchestration
+1. **Polling is literally the point** - we're checking if things are up
+2. **Hosts already expose status** - `<host>.fort.<domain>/status.json` exists
+3. **Failure handling is natural** - if a host is unreachable, we keep existing data
+4. **No coordination needed** - new hosts appear on tailnet, beacon discovers them
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Beacon (raishan)                         │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
-│  │ monitoring      │    │ config.yaml     │    │   Gatus     │ │
-│  │ capability      │───▶│ (generated)     │───▶│  (watches)  │ │
-│  │ handler         │    │                 │    │             │ │
-│  └─────────────────┘    └─────────────────┘    └─────────────┘ │
+│                                                                  │
+│  systemd timer (5min)              activation script (deploy)   │
+│       │                                   │                      │
+│       ▼                                   ▼                      │
+│  ┌─────────────────┐              ┌─────────────────┐           │
+│  │ tailscale status│              │ GC: remove hosts│           │
+│  │ → fetch status  │              │ not in Nix list │           │
+│  │ → merge config  │              │                 │           │
+│  └────────┬────────┘              └────────┬────────┘           │
+│           │                                │                     │
+│           ▼                                ▼                     │
+│       ┌─────────────────────────────────────────┐               │
+│       │           config.yaml                    │               │
+│       │  (Gatus auto-reloads ~30s)              │               │
+│       └─────────────────────────────────────────┘               │
+│                          │                                       │
+│                          ▼                                       │
+│                   ┌─────────────┐                               │
+│                   │   Gatus     │                               │
+│                   └─────────────┘                               │
 └─────────────────────────────────────────────────────────────────┘
-           ▲                                            │
-           │ needs                                      │ probes
-           │                                            ▼
-┌──────────┴──────────┐                    ┌───────────────────────┐
-│   Hosts (q, joker,  │                    │  Services             │
-│   drhorrible, etc)  │                    │  - /status endpoints  │
-│                     │                    │  - health checks      │
-│   fort.cluster      │                    │  - port availability  │
-│   .services[].health│                    └───────────────────────┘
-└─────────────────────┘
 ```
 
-### Service Health Declaration
+### Two-Phase Config Management
+
+| Phase | Trigger | Operation | Trust Source |
+|-------|---------|-----------|--------------|
+| **Poll** | 5min timer | Add/update entries | Tailnet peers + status.json |
+| **GC** | Beacon deploy | Remove orphan entries | Nix host list (canonical) |
+
+**Poll phase** (additive):
+- `tailscale status --json` → get peers matching `*.fort.<domain>`
+- For each peer, fetch `status.json`
+- If fetch succeeds, update/add entries
+- If fetch fails, keep existing entries (preserve data during outages)
+- Never removes entries
+
+**GC phase** (subtractive):
+- Runs on beacon deploy (activation script)
+- Nix provides canonical list of hosts at build time
+- Remove any config entries for hosts not in the Nix list
+- This handles host decommissioning
+
+### Extending status.json
+
+Each host already serves `<host>.fort.<domain>/status.json`. Extend it with a `services` key:
+
+```json
+{
+  "hostname": "q",
+  "uptime": 123456,
+  "failed_units": 0,
+  "deploy": {
+    "sha": "abc123",
+    "timestamp": "2026-01-13T10:00:00Z"
+  },
+  "services": [
+    {
+      "name": "outline",
+      "subdomain": "docs",
+      "health": {
+        "endpoint": "/api/health",
+        "interval": "2m",
+        "conditions": ["[STATUS] == 200", "[BODY].status == ok"]
+      }
+    },
+    {
+      "name": "forgejo",
+      "subdomain": "git"
+    }
+  ]
+}
+```
+
+Services without explicit `health` get defaults:
+- `endpoint`: `/`
+- `interval`: `5m`
+- `conditions`: `["[STATUS] == 200", "[RESPONSE_TIME] < 5000"]`
+
+### Service Health Declaration (Nix side)
 
 Extend `fort.cluster.services` with optional health definitions:
 
 ```nix
-# In an app's default.nix
 fort.cluster.services = [{
   name = "outline";
   port = 3000;
   sso.mode = "oidc";
 
-  # NEW: Health check definition (optional)
+  # Optional health check definition
   health = {
-    # Override endpoint (default: "/")
     endpoint = "/api/health";
-
-    # Override interval (default: "5m")
     interval = "2m";
-
-    # Override conditions (default: ["[STATUS] == 200" "[RESPONSE_TIME] < 5000"])
     conditions = [
       "[STATUS] == 200"
       "[RESPONSE_TIME] < 2000"
@@ -153,65 +145,79 @@ fort.cluster.services = [{
 }];
 ```
 
-**Defaults when `health` is omitted:**
-- Endpoint: `https://<subdomain>.<domain>/`
-- Interval: `5m`
-- Conditions: `["[STATUS] == 200" "[RESPONSE_TIME] < 5000"]`
+This gets serialized into `status.json` at build time.
 
-**To disable monitoring for a service:**
+To disable monitoring for a service:
 ```nix
 health.enabled = false;
 ```
-
-### Host-Level Monitoring
-
-Every host with `observable` aspect gets a base health check against `<host>.fort.<domain>/status` (the fort-agent endpoint). This provides:
-- Host reachability
-- Failed systemd units count
-- Deploy status
-
-The monitoring provider on beacon automatically includes these - no per-host configuration needed.
 
 ### Implementation Sketch
 
 ```nix
 # apps/gatus/default.nix
-{ subdomain ? "status", rootManifest, ... }:
+{ subdomain ? "status", rootManifest, cluster, ... }:
 { config, pkgs, lib, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
   dataDir = "/var/lib/gatus";
 
-  # Handler receives aggregated monitoring needs from all hosts
-  monitoringHandler = pkgs.writeShellScript "handler-monitoring" ''
+  # Canonical host list from Nix (for GC)
+  hostDirs = builtins.attrNames (builtins.readDir cluster.hostsDir);
+  canonicalHosts = builtins.toJSON hostDirs;
+
+  # Polling script - runs on timer, additive only
+  pollScript = pkgs.writeShellScript "gatus-poll" ''
     set -euo pipefail
-    input=$(cat)
 
-    # Transform needs into Gatus endpoint config
-    endpoints=$(echo "$input" | ${pkgs.jq}/bin/jq -c '
-      to_entries | map(
-        .value.request as $req |
-        {
-          name: $req.name,
-          url: $req.url,
-          interval: ($req.interval // "5m"),
-          conditions: ($req.conditions // ["[STATUS] == 200"])
-        }
-      )
-    ')
+    DOMAIN="${domain}"
+    CONFIG="${dataDir}/config.yaml"
+    CACHE="${dataDir}/hosts"
 
-    # Write Gatus config
-    ${pkgs.jq}/bin/jq -n \
-      --argjson endpoints "$endpoints" \
-      '{
-        web: { port: 8080 },
-        endpoints: $endpoints
-      }' > ${dataDir}/config.yaml
+    mkdir -p "$CACHE"
 
-    # Gatus auto-reloads within ~30s
+    # Get tailnet peers
+    peers=$(${pkgs.tailscale}/bin/tailscale status --json | \
+      ${pkgs.jq}/bin/jq -r '.Peer[] | select(.DNSName | test("^\\w+\\.fort\\.")) | .DNSName | sub("\\.fort\\..*"; "")')
 
-    # Return success for all requesters
-    echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {registered: true}}) | from_entries'
+    for host in $peers; do
+      url="https://$host.fort.$DOMAIN/status.json"
+      cache_file="$CACHE/$host.json"
+
+      # Fetch status.json, keep existing on failure
+      if ${pkgs.curl}/bin/curl -sf --max-time 10 "$url" -o "$cache_file.new"; then
+        mv "$cache_file.new" "$cache_file"
+      else
+        rm -f "$cache_file.new"
+        # Keep existing cache file if present
+      fi
+    done
+
+    # Regenerate Gatus config from cached data
+    ${pkgs.python3}/bin/python3 ${./generate-config.py} \
+      --cache-dir "$CACHE" \
+      --output "$CONFIG" \
+      --domain "$DOMAIN"
+  '';
+
+  # GC script - runs on deploy, removes orphans
+  gcScript = pkgs.writeShellScript "gatus-gc" ''
+    set -euo pipefail
+
+    CACHE="${dataDir}/hosts"
+    CANONICAL='${canonicalHosts}'
+
+    mkdir -p "$CACHE"
+
+    # Remove cache files for hosts not in canonical list
+    for cache_file in "$CACHE"/*.json; do
+      [ -f "$cache_file" ] || continue
+      host=$(basename "$cache_file" .json)
+      if ! echo "$CANONICAL" | ${pkgs.jq}/bin/jq -e --arg h "$host" 'index($h)' >/dev/null; then
+        echo "GC: removing $host (not in canonical host list)"
+        rm -f "$cache_file"
+      fi
+    done
   '';
 in
 {
@@ -222,46 +228,76 @@ in
 
   systemd.tmpfiles.rules = [
     "d ${dataDir} 0755 root root -"
+    "d ${dataDir}/hosts 0755 root root -"
   ];
 
-  # Bootstrap config so Gatus starts
+  # Bootstrap empty config
   system.activationScripts.gatusBootstrap = ''
     if [ ! -f ${dataDir}/config.yaml ]; then
-      echo '{"web": {"port": 8080}, "endpoints": []}' > ${dataDir}/config.yaml
+      echo 'web: {port: 8080}' > ${dataDir}/config.yaml
+      echo 'endpoints: []' >> ${dataDir}/config.yaml
     fi
   '';
+
+  # GC on deploy
+  system.activationScripts.gatusGC = ''
+    ${gcScript}
+  '';
+
+  # Polling timer
+  systemd.timers.gatus-poll = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "1min";
+      OnUnitActiveSec = "5min";
+    };
+  };
+
+  systemd.services.gatus-poll = {
+    description = "Poll hosts for Gatus monitoring config";
+    after = [ "network-online.target" "tailscaled.service" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pollScript;
+    };
+  };
 
   fort.cluster.services = [{
     name = "status";
     subdomain = subdomain;
     port = 8080;
-    visibility = "vpn";  # VPN-only for now
+    visibility = "vpn";
     sso.mode = "none";
+    health.enabled = false;  # Don't monitor the monitor
   }];
-
-  fort.host.capabilities.monitoring = {
-    handler = monitoringHandler;
-    mode = "async";
-    description = "Register services for uptime monitoring";
-  };
 }
 ```
 
-### What This Monitors (addressing open tickets)
+### What This Monitors
+
+| Source | What Gets Monitored |
+|--------|---------------------|
+| Host status.json | Host reachability, failed units, deploy status |
+| services[].health | Per-service health checks with custom conditions |
+| Defaults | Services without explicit health get basic 200 check |
+
+**Addressing open tickets:**
 
 | Ticket | Solution |
 |--------|----------|
-| fort-1nj (Headscale health) | Automatic - headscale app declares health endpoint |
-| fort-576 (Failed systemd) | Automatic - all observable hosts checked via /status |
-| fort-e2w.8 (Backup alerts) | Backup service exposes health endpoint, declares in fort.cluster.services |
-| fort-w38 (Stale images) | Could expose reconciliation status as health endpoint |
+| fort-1nj (Headscale health) | Headscale app declares health in fort.cluster.services |
+| fort-576 (Failed systemd) | Host status.json includes failed_units count |
+| fort-e2w.8 (Backup alerts) | Backup service exposes status, declares health |
+| fort-w38 (Stale images) | Could add image version info to status.json |
 
 ### Phase 1 Scope
 
 - VPN-only access (`visibility = "vpn"`)
-- Basic HTTP health checks
-- Host /status endpoint monitoring
-- ntfy alerting (if ntfy is deployed)
+- Polling discovery from tailnet peers
+- Per-service health checks from status.json
+- GC on beacon deploy
+- ntfy alerting (if deployed)
 
 ### Future Work
 
@@ -270,11 +306,9 @@ in
 | fort-ok4 | Split-gatekeeper: network-aware auth bypass |
 | fort-r65 | Migrate Gatus to split-gatekeeper (depends on fort-ok4) |
 
-Once split-gatekeeper exists, Gatus can be exposed publicly with OIDC for external access while remaining auth-free on VPN.
-
 ### Alerting Configuration
 
-Gatus supports 40+ alerting providers. Initial setup with ntfy:
+Gatus supports 40+ alerting providers. Example with ntfy:
 
 ```yaml
 alerting:
@@ -287,21 +321,29 @@ alerting:
       success-threshold: 2
 ```
 
-Or email via SMTP, Slack webhooks, Discord, PagerDuty, etc.
+## Why Gatus
+
+| Feature | Gatus | Uptime Kuma |
+|---------|-------|-------------|
+| Config approach | YAML file, auto-reloads | Socket.IO API |
+| NixOS module | Yes | No |
+| Fits polling model | Yes (file-based) | Awkward (API calls) |
+| Community | ~9.5k stars | ~81k stars |
+
+Gatus's file-based config with auto-reload is perfect for the polling + GC model.
 
 ## Next Steps
 
-1. Define `lib.types.health` option schema in common/fort.nix
-2. Create `apps/gatus/default.nix` with monitoring capability
-3. Add to beacon role
-4. Update existing apps to declare health (or rely on defaults)
+1. Add `health` option to `fort.cluster.services` schema in common/fort.nix
+2. Extend status.json generation to include services
+3. Create `apps/gatus/default.nix` with poll + GC scripts
+4. Add to beacon role
 5. Configure ntfy alerting
-6. Optional: Homepage widget for dashboard view
+6. Optional: Homepage Gatus widget
 
 ## References
 
 - [Gatus Documentation](https://gatus.io/docs)
-- [Gatus Conditions](https://gatus.io/docs/conditions)
-- [Gatus Config Reload](https://github.com/TwiN/gatus/issues/1064)
+- [Gatus Conditions](https://gatus.io/docs/conditions) - `[STATUS]`, `[BODY]`, `[RESPONSE_TIME]`
+- [Gatus Config Reload](https://github.com/TwiN/gatus/issues/1064) - auto-reloads ~30s
 - [NixOS Gatus Module](https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/monitoring/gatus.nix)
-- [Uptime Kuma API](https://github.com/lucasheld/uptime-kuma-api)
