@@ -18,14 +18,16 @@ let
 
     mkdir -p "$CACHE"
 
-    # Get tailnet peers that match *.fort.<domain>
+    # Get tailnet peers that match *.fort.<domain> (actual fort hosts)
+    # DNSName format is "hostname.fort.domain.ts.net." with trailing dot
     peers=$(${pkgs.tailscale}/bin/tailscale status --json 2>/dev/null | \
-      ${pkgs.jq}/bin/jq -r '.Peer // {} | to_entries[] | select(.value.DNSName | test("^[a-z0-9-]+\\.fort\\.")) | .value.DNSName | sub("\\.fort\\..*"; "")' || echo "")
+      ${pkgs.jq}/bin/jq -r --arg domain "$DOMAIN" \
+        '.Peer // {} | to_entries[] | .value.DNSName // "" | select(test("^[a-z0-9-]+\\.fort\\." + $domain)) | split(".")[0]' \
+      || echo "")
 
-    if [ -z "$peers" ]; then
-      echo "No tailnet peers found, skipping poll"
-      exit 0
-    fi
+    # Always include self (not in peer list) - use proper DNS name, not localhost
+    LOCAL_HOST=$(hostname)
+    peers="$LOCAL_HOST $peers"
 
     for host in $peers; do
       url="https://$host.fort.$DOMAIN/status.json"
@@ -53,57 +55,37 @@ let
     CONFIG="${dataDir}/config.yaml"
     CACHE="${dataDir}/hosts"
 
-    # Start building endpoints array
-    endpoints="[]"
+    # Process each cached host file and build endpoints using jq
+    # This avoids shell word-splitting issues with complex JSON
+    endpoints=$(
+      for cache_file in "$CACHE"/*.json; do
+        [ -f "$cache_file" ] || continue
+        host=$(basename "$cache_file" .json)
 
-    # Process each cached host
-    for cache_file in "$CACHE"/*.json; do
-      [ -f "$cache_file" ] || continue
-
-      host=$(basename "$cache_file" .json)
-      data=$(cat "$cache_file")
-
-      # Add host-level health check (always)
-      host_endpoint=$(${pkgs.jq}/bin/jq -n \
-        --arg name "$host" \
-        --arg url "https://$host.fort.$DOMAIN/status.json" \
-        '{
-          name: ("host: " + $name),
-          group: "hosts",
-          url: $url,
-          interval: "5m",
-          conditions: ["[STATUS] == 200", "[RESPONSE_TIME] < 5000"]
-        }')
-      endpoints=$(echo "$endpoints" | ${pkgs.jq}/bin/jq --argjson ep "$host_endpoint" '. + [$ep]')
-
-      # Add service-level health checks
-      services=$(echo "$data" | ${pkgs.jq}/bin/jq -c '.services // []')
-      for svc in $(echo "$services" | ${pkgs.jq}/bin/jq -c '.[]'); do
-        enabled=$(echo "$svc" | ${pkgs.jq}/bin/jq -r '.health.enabled // true')
-        [ "$enabled" = "false" ] && continue
-
-        name=$(echo "$svc" | ${pkgs.jq}/bin/jq -r '.name')
-        subdomain=$(echo "$svc" | ${pkgs.jq}/bin/jq -r '.subdomain // .name')
-        endpoint_path=$(echo "$svc" | ${pkgs.jq}/bin/jq -r '.health.endpoint // "/"')
-        interval=$(echo "$svc" | ${pkgs.jq}/bin/jq -r '.health.interval // "5m"')
-        conditions=$(echo "$svc" | ${pkgs.jq}/bin/jq -c '.health.conditions // ["[STATUS] == 200", "[RESPONSE_TIME] < 5000"]')
-
-        svc_endpoint=$(${pkgs.jq}/bin/jq -n \
-          --arg name "$name" \
-          --arg group "$host" \
-          --arg url "https://$subdomain.$DOMAIN$endpoint_path" \
-          --arg interval "$interval" \
-          --argjson conditions "$conditions" \
-          '{
-            name: $name,
-            group: $group,
-            url: $url,
-            interval: $interval,
-            conditions: $conditions
-          }')
-        endpoints=$(echo "$endpoints" | ${pkgs.jq}/bin/jq --argjson ep "$svc_endpoint" '. + [$ep]')
-      done
-    done
+        # Extract host endpoint and service endpoints in one jq call
+        ${pkgs.jq}/bin/jq \
+          --arg host "$host" \
+          --arg domain "$DOMAIN" \
+          '
+          # Host-level endpoint
+          [{
+            name: ("host: " + $host),
+            group: "hosts",
+            url: ("https://" + $host + ".fort." + $domain + "/status.json"),
+            interval: "5m",
+            conditions: ["[STATUS] == 200", "[RESPONSE_TIME] < 5000"]
+          }] +
+          # Service-level endpoints
+          [.services // [] | .[] | select(.health.enabled != false) | {
+            name: .name,
+            group: $host,
+            url: ("https://" + (.subdomain // .name) + "." + $domain + (.health.endpoint // "/")),
+            interval: (.health.interval // "5m"),
+            conditions: (.health.conditions // ["[STATUS] == 200", "[RESPONSE_TIME] < 5000"])
+          }]
+          ' "$cache_file"
+      done | ${pkgs.jq}/bin/jq -s 'add // []'
+    )
 
     # Write final config
     ${pkgs.jq}/bin/jq -n \
