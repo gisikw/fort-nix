@@ -244,7 +244,7 @@ let
 
   # Helper to derive needsGC and ttl from mode
   # RPC mode: synchronous, no GC needed
-  # Async mode: asynchronous with handles, needs GC
+  # Async mode: asynchronous with state, needs GC
   modeToGcConfig = mode: {
     needsGC = mode == "async";
     ttl = if mode == "async" then 86400 else 0;  # 24h default for async
@@ -348,8 +348,8 @@ let
       default = "async";
       description = ''
         Execution mode for this capability:
-        - "rpc": Synchronous request-response. No GC, no handles.
-        - "async": Asynchronous with state. Returns handles, requires GC.
+        - "rpc": Synchronous request-response. No state tracking, no GC.
+        - "async": Tracks state by origin:need_id. Provider can GC when need is removed.
       '';
       example = "rpc";
     };
@@ -611,10 +611,10 @@ in
             description = "Return cluster SSL certificates";
           };
 
-          # Async capability with GC (creates handles, needs garbage collection)
+          # Async capability with state tracking (provider can GC when need removed)
           fort.host.capabilities.oidc-register = {
             handler = ./handlers/oidc-register;
-            mode = "async";  # Default - returns handles, needs GC
+            mode = "async";  # Default - tracks state, supports GC
             description = "Register OIDC client in pocket-id";
           };
 
