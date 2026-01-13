@@ -21,15 +21,25 @@ The existing Grafana/Prometheus stack on fort-observability is powerful but over
 
 | Requirement | Priority | Notes |
 |-------------|----------|-------|
-| No agents on monitored hosts | Must | Probes only (HTTP, TCP, ping, DNS) |
-| Declarative config | Must | YAML or Nix-native, not click-ops |
-| OIDC support OR disable auth | Must | No double-auth with oauth2-proxy |
+| Runtime-driven config | Must | Services announce themselves; beacon discovers what to monitor |
+| No mandatory agents | Must | HTTP/TCP probes primary; agents optional for richer data |
+| VPN-only access | Phase 1 | Public access with split-gatekeeper auth is future work |
 | Push notifications | Nice | Email, ntfy, Slack, etc. |
 | Lightweight | Must | "What's going on" not "why is it down" |
 
+### Key Insight: Runtime Orchestration
+
+The fort-nix pattern is **runtime orchestration on top of declarative infrastructure**. Hosts don't rebuild beacon when they deploy - they announce needs and beacon fulfills them:
+
+```
+Host deploys → announces "monitor me" need → beacon provider fulfills → Gatus config updates
+```
+
+This matches existing patterns: DNS registration, OIDC client registration, etc. Monitoring is just another need/capability pair.
+
 ## Candidates Evaluated
 
-### 1. Gatus
+### 1. Gatus (Recommended)
 
 **Repository:** [TwiN/gatus](https://github.com/TwiN/gatus)
 
@@ -38,40 +48,22 @@ A developer-oriented status page with health checks, alerting, and incident mana
 ![Gatus Dashboard](https://raw.githubusercontent.com/TwiN/gatus/master/.github/assets/dashboard-conditions.jpg)
 
 **Pros:**
-- YAML-based configuration (fully declarative)
-- **Native OIDC support** - can use Pocket ID directly
-- No agents required - HTTP/TCP/DNS/ping probes
+- YAML-based configuration
+- **Auto-reloads config file** (~30s) - perfect for runtime updates
+- No agents required - HTTP/TCP/DNS/ICMP/SSH probes
 - In nixpkgs with NixOS module (`services.gatus`)
-- Lightweight single binary
-- 40+ alerting integrations (ntfy, email, Slack, Discord, PagerDuty, etc.)
-- Status page built-in
-- Supports condition expressions (response time < 500ms, status == 200, etc.)
+- Lightweight single binary (Go)
+- 40+ alerting integrations (ntfy, email, Slack, Discord, etc.)
+- Rich condition expressions: `[STATUS]`, `[BODY]`, `[RESPONSE_TIME]`
+- SSH endpoints can execute commands on remote hosts
 
 **Cons:**
 - Smaller community than Uptime Kuma (~9.5k stars vs ~81k)
-- No web UI for config changes (YAML only)
+- No web UI for config changes (feature, not bug, for us)
 
-**Auth options:**
-```yaml
-security:
-  oidc:
-    issuer-url: "https://id.gisi.network"
-    client-id: "gatus"
-    client-secret: "${OIDC_CLIENT_SECRET}"
-    redirect-url: "https://status.gisi.network/authorization-code/callback"
-    scopes: ["openid", "profile", "email"]
+**Runtime config pattern:**
 ```
-
-**NixOS module:**
-```nix
-services.gatus = {
-  enable = true;
-  settings = {
-    endpoints = [
-      { name = "Headscale"; url = "https://hs.gisi.network/health"; }
-    ];
-  };
-};
+Provider aggregates needs → writes /var/lib/gatus/config.yaml → Gatus auto-reloads
 ```
 
 ---
@@ -80,174 +72,236 @@ services.gatus = {
 
 **Repository:** [louislam/uptime-kuma](https://github.com/louislam/uptime-kuma)
 
-A fancy self-hosted monitoring tool with a beautiful UI.
-
 ![Uptime Kuma Light Mode](https://uptime.kuma.pet/img/light.jpg)
 
-![Uptime Kuma Status Page](https://user-images.githubusercontent.com/1336778/134628766-a3fe0981-0926-4285-ab46-891a21c3e4cb.png)
-
 **Pros:**
-- Beautiful, polished UI
-- Huge community (~81k stars)
-- 90+ notification integrations
-- Status pages with custom CSS
-- WebSocket-based real-time updates
+- Beautiful UI, huge community
+- Has [Python API wrapper](https://pypi.org/project/uptime-kuma-api/) for programmatic control
 
 **Cons:**
-- **No native OIDC** - would need oauth2-proxy (double auth)
-- **UI-only configuration** - not declarative without hacks
-- Requires Node.js runtime
-- No NixOS module (would need to run as container or custom service)
+- API is Socket.IO based (more complex than file writes)
+- UI-centric design doesn't fit our runtime orchestration model as cleanly
+- No NixOS module
 
-**Auth situation:**
-No native SSO. [Open feature request since 2022](https://github.com/louislam/uptime-kuma/issues/553). Would require oauth2-proxy in front, meaning two logins or header-passthrough complexity.
+**Verdict:** Viable, but Gatus's file-based config reload is simpler for our pattern.
 
 ---
 
 ### 3. Beszel
 
-**Repository:** [henrygd/beszel](https://github.com/henrygd/beszel)
-
-A lightweight server monitoring platform with Docker stats.
-
-**Disqualified:** Requires agents on all monitored hosts. Architecture is hub + agent model - the agent runs on each system to report metrics. This doesn't fit our "probes only" requirement.
+**Disqualified:** Requires agents on all monitored hosts.
 
 ---
 
-### 4. Homepage (as monitoring dashboard)
+### 4. Homepage
 
-**Repository:** [gethomepage/homepage](https://github.com/gethomepage/homepage)
-
-Already deployed at home.gisi.network. Has widgets for Uptime Kuma and Gatus.
-
-**Pros:**
-- Already deployed
-- Can display status from other tools via widgets
-- Highly customizable
-
-**Cons:**
-- Not a monitoring tool - just displays data from other sources
-- Would need another tool actually doing the monitoring
-- No alerting capability
-
-**Verdict:** Complementary, not a replacement. Could display Gatus status via widget.
+**Verdict:** Complementary. Could add a Gatus widget to display status on the dashboard. Not a replacement.
 
 ---
 
-### 5. Statping-ng / Kener
+## Recommendation: Gatus with Runtime Orchestration
 
-Briefly evaluated but:
-- **Statping-ng**: Less active development, no clear OIDC story
-- **Kener**: GitHub-based storage model, SvelteKit stack adds complexity
+### Architecture
 
-Neither offered clear advantages over Gatus for our requirements.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Beacon (raishan)                         │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
+│  │ monitoring      │    │ config.yaml     │    │   Gatus     │ │
+│  │ capability      │───▶│ (generated)     │───▶│  (watches)  │ │
+│  │ handler         │    │                 │    │             │ │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+           ▲                                            │
+           │ needs                                      │ probes
+           │                                            ▼
+┌──────────┴──────────┐                    ┌───────────────────────┐
+│   Hosts (q, joker,  │                    │  Services             │
+│   drhorrible, etc)  │                    │  - /status endpoints  │
+│                     │                    │  - health checks      │
+│   fort.cluster      │                    │  - port availability  │
+│   .services[].health│                    └───────────────────────┘
+└─────────────────────┘
+```
 
----
+### Service Health Declaration
 
-## Comparison Matrix
-
-| Feature | Gatus | Uptime Kuma | Beszel | Homepage |
-|---------|-------|-------------|--------|----------|
-| Declarative config | YAML | UI only | N/A | YAML |
-| Native OIDC | Yes | No | Yes | N/A |
-| No agents needed | Yes | Yes | **No** | N/A |
-| In nixpkgs | Yes | No | No | No |
-| NixOS module | Yes | No | No | No |
-| Alerting | 40+ | 90+ | Yes | No |
-| Community size | ~9.5k | ~81k | ~5k | ~23k |
-
-## Recommendation: Gatus
-
-**Gatus is the clear winner** for our requirements:
-
-1. **Declarative by design** - YAML config fits perfectly with NixOS patterns. We can generate the config from Nix and it becomes part of the system definition.
-
-2. **Native OIDC** - Direct integration with Pocket ID. No oauth2-proxy needed, no double authentication, single sign-on just works.
-
-3. **No agents** - Pure probe-based monitoring. HTTP health checks, TCP port checks, DNS resolution, ICMP ping. Perfect for "is it up" from an external vantage point.
-
-4. **NixOS native** - `services.gatus` module exists. Clean integration path.
-
-5. **Right-sized** - It's a status page with alerting, not a metrics platform. Answers "what's going on" without the complexity of Grafana dashboards.
-
-### Proposed Implementation
+Extend `fort.cluster.services` with optional health definitions:
 
 ```nix
-# apps/gatus/default.nix (sketch)
-{ subdomain ? "status", hostManifest, rootManifest, cluster, ... }:
+# In an app's default.nix
+fort.cluster.services = [{
+  name = "outline";
+  port = 3000;
+  sso.mode = "oidc";
+
+  # NEW: Health check definition (optional)
+  health = {
+    # Override endpoint (default: "/")
+    endpoint = "/api/health";
+
+    # Override interval (default: "5m")
+    interval = "2m";
+
+    # Override conditions (default: ["[STATUS] == 200" "[RESPONSE_TIME] < 5000"])
+    conditions = [
+      "[STATUS] == 200"
+      "[RESPONSE_TIME] < 2000"
+      "[BODY].status == ok"
+    ];
+  };
+}];
+```
+
+**Defaults when `health` is omitted:**
+- Endpoint: `https://<subdomain>.<domain>/`
+- Interval: `5m`
+- Conditions: `["[STATUS] == 200" "[RESPONSE_TIME] < 5000"]`
+
+**To disable monitoring for a service:**
+```nix
+health.enabled = false;
+```
+
+### Host-Level Monitoring
+
+Every host with `observable` aspect gets a base health check against `<host>.fort.<domain>/status` (the fort-agent endpoint). This provides:
+- Host reachability
+- Failed systemd units count
+- Deploy status
+
+The monitoring provider on beacon automatically includes these - no per-host configuration needed.
+
+### Implementation Sketch
+
+```nix
+# apps/gatus/default.nix
+{ subdomain ? "status", rootManifest, ... }:
 { config, pkgs, lib, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+  dataDir = "/var/lib/gatus";
 
-  # Derive endpoints from cluster hosts
-  hostDirs = builtins.attrNames (builtins.readDir cluster.hostsDir);
-  # ... generate health check endpoints
+  # Handler receives aggregated monitoring needs from all hosts
+  monitoringHandler = pkgs.writeShellScript "handler-monitoring" ''
+    set -euo pipefail
+    input=$(cat)
+
+    # Transform needs into Gatus endpoint config
+    endpoints=$(echo "$input" | ${pkgs.jq}/bin/jq -c '
+      to_entries | map(
+        .value.request as $req |
+        {
+          name: $req.name,
+          url: $req.url,
+          interval: ($req.interval // "5m"),
+          conditions: ($req.conditions // ["[STATUS] == 200"])
+        }
+      )
+    ')
+
+    # Write Gatus config
+    ${pkgs.jq}/bin/jq -n \
+      --argjson endpoints "$endpoints" \
+      '{
+        web: { port: 8080 },
+        endpoints: $endpoints
+      }' > ${dataDir}/config.yaml
+
+    # Gatus auto-reloads within ~30s
+
+    # Return success for all requesters
+    echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {registered: true}}) | from_entries'
+  '';
 in
 {
   services.gatus = {
     enable = true;
-    environmentFile = config.age.secrets.gatus-oidc.path;
-    settings = {
-      web.port = 8080;
-
-      security.oidc = {
-        issuer-url = "https://id.${domain}";
-        client-id = "gatus";
-        client-secret = "\${OIDC_CLIENT_SECRET}";
-        redirect-url = "https://${subdomain}.${domain}/authorization-code/callback";
-        scopes = [ "openid" "profile" "email" ];
-      };
-
-      endpoints = [
-        {
-          name = "Headscale";
-          url = "https://hs.${domain}/health";
-          interval = "5m";
-          conditions = [ "[STATUS] == 200" ];
-        }
-        # ... more endpoints
-      ];
-
-      alerting = {
-        ntfy = {
-          url = "https://ntfy.${domain}";
-          topic = "alerts";
-        };
-      };
-    };
+    configFile = "${dataDir}/config.yaml";
   };
+
+  systemd.tmpfiles.rules = [
+    "d ${dataDir} 0755 root root -"
+  ];
+
+  # Bootstrap config so Gatus starts
+  system.activationScripts.gatusBootstrap = ''
+    if [ ! -f ${dataDir}/config.yaml ]; then
+      echo '{"web": {"port": 8080}, "endpoints": []}' > ${dataDir}/config.yaml
+    fi
+  '';
 
   fort.cluster.services = [{
     name = "status";
     subdomain = subdomain;
     port = 8080;
-    sso.mode = "none";  # Gatus handles its own OIDC
+    visibility = "vpn";  # VPN-only for now
+    sso.mode = "none";
   }];
+
+  fort.host.capabilities.monitoring = {
+    handler = monitoringHandler;
+    mode = "async";
+    description = "Register services for uptime monitoring";
+  };
 }
 ```
 
-### What This Could Monitor (addressing open tickets)
+### What This Monitors (addressing open tickets)
 
-| Ticket | How Gatus Helps |
-|--------|-----------------|
-| fort-1nj (Headscale health) | HTTP check on /health endpoint, alert on failure |
-| fort-576 (Failed systemd) | HTTP check on fort-agent /status endpoint per host |
-| fort-e2w.8 (Backup alerts) | Could expose backup status via simple HTTP endpoint |
-| fort-w38 (Stale images) | Not directly - but could check a reconciliation endpoint |
+| Ticket | Solution |
+|--------|----------|
+| fort-1nj (Headscale health) | Automatic - headscale app declares health endpoint |
+| fort-576 (Failed systemd) | Automatic - all observable hosts checked via /status |
+| fort-e2w.8 (Backup alerts) | Backup service exposes health endpoint, declares in fort.cluster.services |
+| fort-w38 (Stale images) | Could expose reconciliation status as health endpoint |
 
-### Next Steps
+### Phase 1 Scope
 
-1. Create `apps/gatus/default.nix` with basic config
-2. Register OIDC client with Pocket ID (oidc-register capability)
-3. Add to beacon role or raishan manifest
-4. Configure initial endpoints (headscale, forge, key services)
-5. Set up ntfy or email alerting
-6. Optionally add Homepage widget to display Gatus status
+- VPN-only access (`visibility = "vpn"`)
+- Basic HTTP health checks
+- Host /status endpoint monitoring
+- ntfy alerting (if ntfy is deployed)
+
+### Future Work
+
+| Ticket | Description |
+|--------|-------------|
+| fort-ok4 | Split-gatekeeper: network-aware auth bypass |
+| fort-r65 | Migrate Gatus to split-gatekeeper (depends on fort-ok4) |
+
+Once split-gatekeeper exists, Gatus can be exposed publicly with OIDC for external access while remaining auth-free on VPN.
+
+### Alerting Configuration
+
+Gatus supports 40+ alerting providers. Initial setup with ntfy:
+
+```yaml
+alerting:
+  ntfy:
+    url: "https://ntfy.gisi.network"
+    topic: "monitoring"
+    default-alert:
+      enabled: true
+      failure-threshold: 3
+      success-threshold: 2
+```
+
+Or email via SMTP, Slack webhooks, Discord, PagerDuty, etc.
+
+## Next Steps
+
+1. Define `lib.types.health` option schema in common/fort.nix
+2. Create `apps/gatus/default.nix` with monitoring capability
+3. Add to beacon role
+4. Update existing apps to declare health (or rely on defaults)
+5. Configure ntfy alerting
+6. Optional: Homepage widget for dashboard view
 
 ## References
 
 - [Gatus Documentation](https://gatus.io/docs)
-- [Gatus OIDC Configuration](https://twin.sh/articles/56/securing-gatus-with-oidc-using-auth0)
-- [Authelia Gatus Integration](https://www.authelia.com/integration/openid-connect/clients/gatus/)
+- [Gatus Conditions](https://gatus.io/docs/conditions)
+- [Gatus Config Reload](https://github.com/TwiN/gatus/issues/1064)
 - [NixOS Gatus Module](https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/monitoring/gatus.nix)
-- [Uptime Kuma SSO Discussion](https://github.com/louislam/uptime-kuma/issues/553)
+- [Uptime Kuma API](https://github.com/lucasheld/uptime-kuma-api)
