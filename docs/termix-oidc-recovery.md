@@ -80,17 +80,22 @@ CREATE TABLE users (
 
 ### Credential Rotation Flow
 
+The sync handler caches credentials in `/var/lib/fort-auth/termix/` (same location the control plane writes to). On each invocation:
+
 ```
-1. Control plane delivers new OIDC credentials
-2. Compare new client_id to marker file
-3. If changed:
+1. Control plane delivers OIDC credentials to /var/lib/fort-auth/termix/
+2. Compare client_id + client_secret against cached values in /var/lib/termix/oidc-cache/
+3. If unchanged: exit early (noop - no container cycling)
+4. If changed:
    a. Stop termix container
    b. Decrypt DB
    c. UPDATE oidc_config with new credentials JSON
    d. Re-encrypt DB
    e. Start termix container
-   f. Update marker file
+   f. Update cached values
 ```
+
+This prevents unnecessary container restarts when the control plane re-delivers the same credentials (reconnects, GC cycles, etc.).
 
 ### Database Operations Script
 
@@ -215,12 +220,19 @@ fs.writeFileSync(outPath, Buffer.concat([lenBuffer, metaBuffer, encrypted]));
 ```
 podman-termix.service
     │
-    ├── termix-oidc-provision.service (oneshot, first boot only)
-    │   └── Creates throwaway admin, stops container, patches DB, restarts
+    ├── termix-oidc-provision.service (oneshot, RemainAfterExit=true)
+    │   ├── Gates on marker file: /var/lib/termix/oidc-provisioned
+    │   ├── If marker exists: exit 0 immediately (already provisioned)
+    │   ├── If no marker: create admin, stop container, patch DB, start container
+    │   └── Container restart doesn't re-trigger (marker file + RemainAfterExit)
     │
-    └── [control plane callback]
-        └── termix-oidc-sync (stops container, patches DB, restarts)
+    └── [control plane OIDC callback] → termix-oidc-sync
+        ├── Compares incoming creds against /var/lib/termix/oidc-cache/
+        ├── Noop if unchanged
+        └── Stop/patch/start if changed
 ```
+
+The provisioning service is decoupled from the container lifecycle - it only runs the provision logic once per installation, gated by the marker file. The stop/start it performs doesn't create a circular dependency because `RemainAfterExit=true` keeps systemd happy and the marker prevents re-runs.
 
 ## Migration Path
 
