@@ -1,263 +1,251 @@
-# Termix OIDC Self-Jailing Recovery
+# Termix OIDC Configuration via Direct DB Injection
 
-**Status**: Research / Design
+**Status**: Implementation Plan
 **Ticket**: fort-c8y.34
 **Date**: 2026-01-13
 
 ## Problem Statement
 
-The termix bootstrap disables password login after configuring OIDC. If OIDC credentials get rotated/invalidated (e.g., pocket-id state reset), there's no recovery path:
+The current termix bootstrap uses the API to configure OIDC, then disables password login. If OIDC credentials get rotated/invalidated, there's no recovery path - can't log in to reconfigure. Current fix requires nuking all state.
 
-1. Password login is globally disabled
-2. OIDC validation fails (client_id/secret invalid)
-3. Can't log in to reconfigure OIDC
-4. Current fix: nuke `/var/lib/termix/*` and lose all state
+**Constraints:**
+- Endpoint is public (accessible from outside VPN)
+- Registration must stay open (disabling it breaks OIDC for new users)
+- Password login should stay disabled (cleaner UX - avoids extra click to reach OIDC)
 
-## Technical Context
+## Solution: Direct Database Manipulation
 
-### Termix Auth Model
+Instead of using the termix API, we inject OIDC configuration directly into the SQLite database. This bypasses authentication entirely, making credential rotation seamless.
 
-- **Storage**: Encrypted SQLite database
-- **Password hashing**: bcrypt
-- **First user is admin**: The first `/users/create` call gets `is_admin=true`
-- **Global password toggle**: `PATCH /users/password-login-allowed` affects ALL users
-- **No per-user exceptions**: Can't keep admin password login while disabling others
+### Termix Database Architecture
 
-### Current Bootstrap Flow (apps/termix/default.nix)
+Termix uses an **in-memory SQLite database** with periodic encrypted snapshots:
 
+- On startup: Decrypts `db.sqlite.encrypted` → loads into memory
+- While running: Flushes to encrypted file every **15 seconds**
+- On shutdown: SIGTERM triggers final flush before exit
+
+**Encryption**: AES-256-GCM with key from `DATABASE_KEY` in `/var/lib/termix/.env`
+
+**File format** (single-file v2):
 ```
-1. Create local admin user (fort-admin) with random password
-2. Wait for OIDC credentials from pocket-id
-3. Login with local admin to get JWT
-4. POST OIDC config to termix
-5. Disable password login globally  ← Creates the jail
-6. Mark OIDC as configured
-```
-
-### Failure Scenario
-
-```
-pocket-id state reset (e.g., beads nuke)
-    ↓
-termix client_id/secret now invalid
-    ↓
-OIDC auth fails (can't validate tokens)
-    ↓
-Password login disabled
-    ↓
-No way in → Must destroy state
+[4 bytes: metadata length (big-endian)]
+[N bytes: JSON metadata {iv, tag, version, algorithm}]
+[remaining: encrypted SQLite data]
 ```
 
-## Approaches Analyzed
+**Implication**: Must stop termix before modifying the DB file, otherwise changes get overwritten.
 
-### Approach A: OIDC Admin Account (User's Initial Suggestion)
+### Relevant Schema
 
-**Concept**: Make the admin user an OIDC user, not a local user.
+```sql
+-- Global settings including OIDC config
+CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 
-**Flow**:
-1. Create local admin user (temporary)
-2. Enable OIDC
-3. Log in via OIDC with pocket-id service account → creates OIDC user in termix
-4. Promote OIDC user to admin via local admin session
-5. Disable password login
-6. Future admin access via OIDC
+-- Key rows:
+-- 'oidc_config' → JSON with client_id, client_secret, issuer_url, etc.
+-- 'allow_password_login' → 'true' or 'false'
+-- 'allow_registration' → 'true' or 'false'
 
-**Problem**: This doesn't solve the core issue. When termix's OIDC client credentials become invalid, termix can't validate *any* OIDC tokens, including the admin's. The failure is at the termix↔pocket-id client level, not the user identity level.
+-- Users table (first created user gets is_admin=1)
+CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    ...
+);
+```
 
-**Verdict**: ❌ Does not address the failure mode.
+## Implementation
 
----
+### Initial Provisioning Flow
 
-### Approach B: External OIDC Config Injection
+```
+1. Start termix container (fresh, no encrypted DB exists)
+2. Wait for termix to be healthy
+3. POST /users/create with throwaway credentials
+   └── Burns "first user is admin" - we don't need these creds
+4. Stop termix container (triggers flush to encrypted file)
+5. Wait for OIDC credentials from control plane
+6. Decrypt DB → Patch settings → Re-encrypt DB:
+   - INSERT/UPDATE oidc_config with OIDC credentials JSON
+   - UPDATE allow_password_login = 'false'
+7. Start termix container
+8. Write client_id to marker file for change detection
+```
 
-**Concept**: Bypass termix's API entirely. Inject OIDC config directly into the database or via environment variables on startup.
+### Credential Rotation Flow
 
-**Flow**:
-1. Termix starts with OIDC config from external source (control plane)
-2. When credentials rotate, control plane pushes new config
-3. Termix restart picks up new config
-4. No need to authenticate to reconfigure
+```
+1. Control plane delivers new OIDC credentials
+2. Compare new client_id to marker file
+3. If changed:
+   a. Stop termix container
+   b. Decrypt DB
+   c. UPDATE oidc_config with new credentials JSON
+   d. Re-encrypt DB
+   e. Start termix container
+   f. Update marker file
+```
 
-**Implementation Options**:
+### Database Operations Script
 
-1. **Database injection**: Write directly to termix's SQLite
-   - Risk: Schema changes in upstream could break us
-   - Risk: Database encryption complicates direct writes
-   - Requires reverse-engineering the schema
+```bash
+#!/usr/bin/env bash
+# termix-db-patch.sh - Decrypt, patch OIDC config, re-encrypt
 
-2. **Config file**: If termix supports file-based config
-   - Unknown: Upstream docs don't document this
-   - Would need to test or patch termix
+set -euo pipefail
 
-3. **Environment variables**: Pass OIDC config via env
-   - Unknown: Upstream doesn't document env-based OIDC config
-   - Would need to patch termix
+TERMIX_DATA="/var/lib/termix"
+ENCRYPTED_DB="$TERMIX_DATA/db.sqlite.encrypted"
+TMP_DB="/tmp/termix-patched.sqlite"
+CLIENT_ID="$1"
+CLIENT_SECRET="$2"
+ISSUER_URL="$3"
 
-**Verdict**: ⚠️ Potentially viable but requires upstream investigation or patching. High fragility risk if using undocumented interfaces.
+# Read encryption key
+KEY=$(grep DATABASE_KEY "$TERMIX_DATA/.env" | cut -d'=' -f2)
 
----
+# Decrypt to temp file
+node /path/to/decrypt-termix.mjs "$ENCRYPTED_DB" "$KEY" "$TMP_DB"
 
-### Approach C: Detect-and-Recover Service
+# Build OIDC config JSON
+OIDC_CONFIG=$(jq -n \
+  --arg cid "$CLIENT_ID" \
+  --arg cs "$CLIENT_SECRET" \
+  --arg iss "$ISSUER_URL" \
+  '{
+    client_id: $cid,
+    client_secret: $cs,
+    issuer_url: $iss,
+    authorization_url: ($iss + "/authorize"),
+    token_url: ($iss + "/api/oidc/token"),
+    userinfo_url: ($iss + "/api/oidc/userinfo"),
+    identifier_path: "sub",
+    name_path: "preferred_username",
+    scopes: "openid email profile"
+  }')
 
-**Concept**: A watchdog service that detects OIDC failure and initiates recovery.
+# Patch the database
+sqlite3 "$TMP_DB" <<EOF
+INSERT OR REPLACE INTO settings (key, value) VALUES ('oidc_config', '$OIDC_CONFIG');
+INSERT OR REPLACE INTO settings (key, value) VALUES ('allow_password_login', 'false');
+EOF
 
-**Flow**:
-1. Systemd service periodically tests OIDC health
-2. On failure detection:
-   - Re-enable password login (direct DB write or emergency API)
-   - Login with stored admin credentials
-   - Fetch fresh OIDC credentials from pocket-id
-   - Reconfigure OIDC
-   - Disable password login again
+# Re-encrypt
+node /path/to/encrypt-termix.mjs "$TMP_DB" "$KEY" "$ENCRYPTED_DB"
 
-**Requirements**:
-- Ability to re-enable password login without authentication
-- Either: Direct DB manipulation, or patched emergency endpoint
+# Cleanup
+rm -f "$TMP_DB"
+```
 
-**Complexity**:
-- Health check logic (distinguish transient vs permanent failure)
-- Race conditions during recovery
-- DB manipulation adds fragility
+### Node.js Decrypt/Encrypt Helpers
 
-**Verdict**: ⚠️ Viable but complex. Still requires either DB manipulation or upstream patch.
+**decrypt-termix.mjs:**
+```javascript
+import crypto from 'crypto';
+import fs from 'fs';
 
----
+const [encPath, keyHex, outPath] = process.argv.slice(2);
+const fileBuffer = fs.readFileSync(encPath);
+const metaLen = fileBuffer.readUInt32BE(0);
+const metadata = JSON.parse(fileBuffer.slice(4, 4 + metaLen).toString('utf8'));
+const encData = fileBuffer.slice(4 + metaLen);
 
-### Approach D: Keep Password Login Enabled
+const decipher = crypto.createDecipheriv('aes-256-gcm',
+  Buffer.from(keyHex, 'hex'),
+  Buffer.from(metadata.iv, 'hex'));
+decipher.setAuthTag(Buffer.from(metadata.tag, 'hex'));
+const decrypted = Buffer.concat([decipher.update(encData), decipher.final()]);
 
-**Concept**: Don't disable password login at all.
+fs.writeFileSync(outPath, decrypted);
+```
 
-**Flow**:
-1. Create local admin with strong random password
-2. Configure OIDC as primary login method
-3. Keep password login enabled
-4. Regular users use OIDC; admin password is emergency backdoor
+**encrypt-termix.mjs:**
+```javascript
+import crypto from 'crypto';
+import fs from 'fs';
 
-**Trade-offs**:
-- ✅ Simple, no upstream changes needed
-- ✅ Always recoverable
-- ❌ Password auth remains enabled for all users
-- ❌ Attack surface: password-based attacks on any user
-- ❌ Users might create local accounts instead of using SSO
+const [inPath, keyHex, outPath] = process.argv.slice(2);
+const plaintext = fs.readFileSync(inPath);
+const key = Buffer.from(keyHex, 'hex');
+const iv = crypto.randomBytes(16);
 
-**Mitigation**: Could disable registration while keeping password login enabled. New users must come through OIDC, but existing local admin can still log in.
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+const tag = cipher.getAuthTag();
 
-**Verdict**: ✅ Simplest solution. Acceptable if we disable registration.
+const metadata = JSON.stringify({
+  iv: iv.toString('hex'),
+  tag: tag.toString('hex'),
+  version: 'v2',
+  fingerprint: 'termix-v2-systemcrypto',
+  algorithm: 'aes-256-gcm',
+  keySource: 'SystemCrypto',
+  dataSize: encrypted.length
+});
 
----
+const metaBuffer = Buffer.from(metadata, 'utf8');
+const lenBuffer = Buffer.alloc(4);
+lenBuffer.writeUInt32BE(metaBuffer.length, 0);
 
-### Approach E: Upstream Patch - Per-User Password Exception
+fs.writeFileSync(outPath, Buffer.concat([lenBuffer, metaBuffer, encrypted]));
+```
 
-**Concept**: Patch termix to support per-user password login override.
+## Changes to apps/termix/default.nix
 
-**Implementation**:
-- Add `password_login_override` field to users table
-- Admin user gets `password_login_override = true`
-- Global toggle only affects users without override
+### Remove from bootstrap script:
+- Login with admin credentials
+- POST to `/users/oidc-config`
+- PATCH to `/users/password-login-allowed`
+- Storage of admin credentials (no longer needed)
 
-**Trade-offs**:
-- ✅ Clean solution, maintains security posture
-- ✅ Admin backdoor without exposing other users
-- ❌ Requires upstream PR (may not be accepted)
-- ❌ Or maintaining a fork
-- ❌ Patch maintenance burden
+### Add new components:
 
-**Verdict**: ⚠️ Best long-term solution but requires upstream engagement or fork maintenance.
+1. **termix-db-tools package**: Node.js scripts for decrypt/encrypt
+2. **termix-oidc-provision service**: Initial setup after first boot
+3. **termix-oidc-sync service**: Credential rotation handler
 
----
+### Service orchestration:
 
-### Approach F: Emergency Backdoor Endpoint
+```
+podman-termix.service
+    │
+    ├── termix-oidc-provision.service (oneshot, first boot only)
+    │   └── Creates throwaway admin, stops container, patches DB, restarts
+    │
+    └── [control plane callback]
+        └── termix-oidc-sync (stops container, patches DB, restarts)
+```
 
-**Concept**: Patch termix to add a local-only emergency endpoint.
+## Migration Path
 
-**Implementation**:
-- New endpoint: `POST /emergency/oidc-config`
-- Only accepts requests from localhost
-- Authenticates via secret file on disk (e.g., `/var/lib/termix/emergency-key`)
-- Allows OIDC reconfiguration without normal auth
+For existing termix installations:
 
-**Trade-offs**:
-- ✅ Minimal attack surface (localhost only + file secret)
-- ✅ Doesn't weaken normal auth model
-- ❌ Requires upstream patch or fork
-- ❌ Non-standard pattern (may not be accepted upstream)
+1. Deploy new code (services won't run yet - marker files don't exist)
+2. Manual one-time migration:
+   - Stop termix
+   - Run DB patch script with current OIDC creds
+   - Create marker file with current client_id
+   - Start termix
+3. Future credential rotations handled automatically
 
-**Verdict**: ⚠️ Elegant but requires patching termix.
+## Risks and Mitigations
 
----
-
-### Approach G: Pocket-ID Service Account Token Provider
-
-**Concept**: Expose pocket-id admin credentials via control plane for termix recovery.
-
-**Flow**:
-1. pocket-id exposes a `termix-recovery` capability
-2. Returns: API key for a service account, or fresh OTC
-3. termix-recovery service on the termix host:
-   - Detects OIDC failure
-   - Requests recovery credentials from pocket-id
-   - Uses pocket-id API to create fresh OIDC client
-   - Injects new client_id/secret into termix
-
-**Problem**: This still requires a way to inject the new credentials into termix. We're back to approaches B/C.
-
-**Verdict**: ⚠️ Addresses credential provisioning but not injection. Must combine with another approach.
-
----
-
-## Recommendation
-
-### Short-term (no upstream changes): Approach D
-
-1. Remove the password login disable step from bootstrap
-2. Add `registration-disabled` setting (if termix supports it) to prevent new local accounts
-3. Document that admin password is emergency recovery only
-4. Store admin credentials securely in `/var/lib/termix/admin-credentials.json`
-
-**Changes required**:
-- `apps/termix/default.nix`: Remove lines 164-168 (password disable)
-- Investigate termix registration settings
-
-### Long-term (with upstream engagement): Approach E or F
-
-1. File upstream issue/PR for per-user password exception OR emergency endpoint
-2. If accepted: Update our bootstrap to use the new mechanism
-3. If rejected: Evaluate fork maintenance cost vs security benefit
-
----
-
-## Open Questions
-
-1. **Does termix support disabling registration separately from password login?**
-   - If yes: Approach D becomes cleaner
-   - If no: Local account creation remains possible (minor risk)
-
-2. **What's termix's OIDC config storage format?**
-   - If documented: External injection (B) becomes more viable
-   - If undocumented: Risk of breakage on upgrades
-
-3. **Would upstream accept a per-user password exception patch?**
-   - Need to gauge maintainer receptiveness
-   - Alternative: Emergency endpoint might be more palatable
-
-4. **Is there an existing termix "admin CLI" that bypasses the API?**
-   - Some apps have CLI tools for emergency admin access
-   - Would eliminate need for patching
-
----
-
-## Next Steps
-
-1. **Test Approach D**: Remove password disable, verify behavior
-2. **Check registration settings**: `grep -r "registration" termix` or test in UI
-3. **File upstream issue**: Describe the self-jailing problem, propose solutions
-4. **Prototype Approach B**: If termix has predictable config storage, test injection
-
----
+| Risk | Mitigation |
+|------|------------|
+| Schema changes in upstream termix | Pin to known version; test upgrades before deploying |
+| Encryption format changes | Version check in decrypt script; fail loudly if unexpected |
+| Race between flush and stop | Use `systemctl stop` which sends SIGTERM, triggering clean shutdown |
+| Corrupt DB during patch | Atomic file replacement (write to temp, rename) |
 
 ## References
 
-- `apps/termix/default.nix` - Current bootstrap implementation
-- `apps/pocket-id/default.nix` - OIDC client registration capability
-- `common/fort/control-plane.nix` - Provider/need infrastructure
-- https://github.com/lukegus/termix - Upstream repository
+- `/tmp/termix-src/src/backend/database/db/index.ts` - DB lifecycle (in-memory, 15s flush)
+- `/tmp/termix-src/src/backend/utils/database-file-encryption.ts` - Encryption format
+- `/tmp/termix-src/src/backend/utils/system-crypto.ts` - Key handling
+- `apps/termix/default.nix` - Current bootstrap (to be replaced)
