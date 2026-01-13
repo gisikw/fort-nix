@@ -18,16 +18,23 @@ let
 
     mkdir -p "$CACHE"
 
-    # Get tailnet peers that match *.fort.<domain> (actual fort hosts)
-    # DNSName format is "hostname.fort.domain.ts.net." with trailing dot
+    # Get infrastructure hosts by filtering to peers owned by "fort" user
+    # Personal devices are registered under personal accounts, infra hosts under "fort"
     peers=$(${pkgs.tailscale}/bin/tailscale status --json 2>/dev/null | \
-      ${pkgs.jq}/bin/jq -r --arg domain "$DOMAIN" \
-        '.Peer // {} | to_entries[] | .value.DNSName // "" | select(test("^[a-z0-9-]+\\.fort\\." + $domain)) | split(".")[0]' \
-      || echo "")
+      ${pkgs.jq}/bin/jq -r '
+        .User as $users |
+        ($users | to_entries[] | select(.value.LoginName == "fort") | .key) as $fort_uid |
+        .Peer | to_entries[] | select(.value.UserID == ($fort_uid | tonumber)) | .value.HostName
+      ' || echo "")
 
-    # Always include self (not in peer list) - use proper DNS name, not localhost
-    LOCAL_HOST=$(hostname)
+    # Always include self (not in peer list)
+    LOCAL_HOST=$(${pkgs.hostname}/bin/hostname)
     peers="$LOCAL_HOST $peers"
+
+    if [ -z "$peers" ]; then
+      echo "No fort hosts found on tailnet"
+      exit 0
+    fi
 
     for host in $peers; do
       url="https://$host.fort.$DOMAIN/status.json"
