@@ -1,5 +1,5 @@
 {
-  apps = [ "headscale" ];
+  apps = [ "headscale" "gatus" ];
   aspects = [
     "mesh"
     "public-ingress"

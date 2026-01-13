@@ -16,6 +16,18 @@ let
   cominStore = "/var/lib/comin/store.json";
   deployRsInfo = "/var/lib/fort/deploy-info.json";
 
+  # Services with health monitoring info for Gatus
+  servicesJson = builtins.toJSON (map (svc: {
+    name = svc.name;
+    subdomain = if svc.subdomain != null then svc.subdomain else svc.name;
+    health = {
+      enabled = svc.health.enabled;
+      endpoint = svc.health.endpoint;
+      interval = svc.health.interval;
+      conditions = svc.health.conditions;
+    };
+  }) config.fort.cluster.services);
+
   statusScript = pkgs.writeShellScript "generate-host-status" ''
     set -euo pipefail
 
@@ -54,6 +66,7 @@ let
       --argjson uptime "$uptime_seconds" \
       --argjson failed "$failed_units" \
       --argjson deploy "$deploy_info" \
+      --argjson services '${servicesJson}' \
       --arg generated "$(date -Iseconds)" \
       '{
         hostname: $hostname,
@@ -61,6 +74,7 @@ let
         uptime_seconds: $uptime,
         failed_units: $failed,
         deploy: $deploy,
+        services: $services,
         generated_at: $generated
       }' > "${statusDir}/status.json.tmp"
 

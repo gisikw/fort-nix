@@ -183,6 +183,45 @@ in
 
                   default = { };
                 };
+
+                health = lib.mkOption {
+                  type = lib.types.submodule {
+                    options = {
+                      enabled = lib.mkOption {
+                        type = lib.types.bool;
+                        default = true;
+                        description = "Whether this service should be monitored by Gatus.";
+                      };
+
+                      endpoint = lib.mkOption {
+                        type = lib.types.str;
+                        default = "/";
+                        description = "Health check endpoint path.";
+                        example = "/api/health";
+                      };
+
+                      interval = lib.mkOption {
+                        type = lib.types.str;
+                        default = "5m";
+                        description = "Health check interval (Gatus duration format).";
+                        example = "2m";
+                      };
+
+                      conditions = lib.mkOption {
+                        type = lib.types.listOf lib.types.str;
+                        default = [ "[STATUS] == 200" "[RESPONSE_TIME] < 5000" ];
+                        description = ''
+                          Gatus condition expressions for health checks.
+                          Available placeholders: [STATUS], [BODY], [RESPONSE_TIME], etc.
+                        '';
+                        example = [ "[STATUS] == 200" "[BODY].status == ok" ];
+                      };
+                    };
+                  };
+
+                  default = { };
+                  description = "Health check configuration for Gatus monitoring.";
+                };
               };
             });
           default = [ ];
