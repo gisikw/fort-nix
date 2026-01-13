@@ -46,30 +46,14 @@ Every agent exposes these (no RBAC, cluster-internal only):
 |----------|--------------|
 | `POST /fort/status` | Returns health, uptime, version |
 | `POST /fort/manifest` | Returns this host's declared configuration |
-| `POST /fort/holdings` | Returns handles this host is currently using |
-| `POST /fort/release` | Release handles, trigger GC (see below) |
+| `POST /fort/needs` | Returns list of declared needs (for GC enumeration) |
 
-### The Release Endpoint
+### Needs-Based GC
 
-Two modes with different auth:
-
-**Self-release (no RBAC):** Host announces it's done with handles.
-```http
-POST /fort/release
-{ "handles": ["sha256:abc...", "sha256:def..."] }  # Specific handles
-{ "handles": [] }                                   # "Re-check my holdings now"
-{ "handles": [...], "force": "ignore-grace" }       # Skip grace period (fresh boot, lost state)
-```
-Removes handles from holdings, notifies relevant providers.
-
-**Admin sweep (RBAC: admin only):** Trigger cluster-wide GC.
-```http
-POST /fort/release
-{ "scope": "cluster" }                             # Sweep all hosts
-{ "scope": "cluster", "force": "ignore-grace" }    # Skip grace period
-{ "scope": "cluster", "force": "gc-unreachable" }  # Include unreachable hosts
-```
-For emergency rotation when credentials may be compromised.
+Providers query the `/fort/needs` endpoint to determine if state should be garbage collected:
+- If a need is still declared: keep provider-side state
+- If a need is absent (200 OK response): state is eligible for GC
+- On connection failure: assume still in use (Two Generals safe)
 
 ## Custom Capabilities
 
@@ -79,11 +63,11 @@ Hosts declare additional capabilities based on their role. These are just handle
 /etc/fort/handlers/
 ├── status              # Mandatory
 ├── manifest            # Mandatory
-├── holdings            # Mandatory
+├── needs               # Mandatory
 ├── oidc-register       # Forge only
 ├── proxy-configure     # Beacon only
 ├── backup-accept       # NAS only
-└── journal-tail        # Maybe everyone?
+└── journal             # Debug capability
 ```
 
 The agent doesn't know or care what these do. It just does auth, checks RBAC, and dispatches.
@@ -114,26 +98,23 @@ Content-Type: application/json
 { "client_id": "...", "client_secret": "..." }
 ```
 
-**Handle and TTL are headers**, not body fields. This:
-- Keeps protocol metadata separate from capability-specific content
-- Works for non-JSON responses (binary, streaming)
-- Lets handlers ignore the holdings protocol entirely if they don't need it
+**Metadata headers**: Protocol metadata (status, TTL) are separate from capability-specific response body.
 
-## Holdings Protocol
+## Needs-Based GC
 
-Some capabilities create server-side state that should be garbage-collected when no longer needed. The holdings protocol handles this.
+Some capabilities create server-side state that should be garbage-collected when no longer needed. GC is based on the `/fort/needs` endpoint.
 
 **Contract:**
-1. Provider returns `X-Fort-Handle` header with response
-2. Caller stores the handle and returns it from `/fort/holdings`
-3. Provider periodically checks holdings; if handle absent (with 200 response), eligible for GC
+1. Provider creates state keyed by `{origin}:{need_id}` when fulfilling a request
+2. Provider periodically queries consumer's `/fort/needs`
+3. If the need is absent (200 OK response), state is eligible for GC
 
 **GC Rules (Two Generals Safe):**
 ```
-GET /holdings returns 200, handle absent  → eligible for GC (after grace period)
-GET /holdings returns 200, handle present → still in use
-GET /holdings fails (timeout, 5xx, etc.)  → assume still in use
-Host removed from cluster manifest        → immediate GC
+/needs returns 200, need absent  → eligible for GC (after grace period)
+/needs returns 200, need present → still in use
+/needs fails (timeout, 5xx, etc.) → assume still in use
+Host removed from cluster manifest → immediate GC
 ```
 
 We only revoke on **positive absence**, never on failure to reach.
@@ -262,59 +243,40 @@ Nix knows what every host needs and where to get it. At eval time, we compute a 
 
 ```
 /var/lib/fort/
-├── needs.json              # What we need (from Nix)
-├── holdings.json           # Handles we're advertising
+├── fulfillment-state.json  # Consumer: {need_id -> {satisfied, last_sought}}
+├── provider-state.json     # Provider: {capability -> {origin:need -> {...}}}
 ├── oidc/
 │   └── outline/
-│       ├── response.json   # The actual credential data
-│       └── handle          # For holdings protocol
+│       └── response.json   # The actual credential data
 └── ssl/
     └── wildcard/
         ├── cert.pem
-        ├── key.pem
-        └── handle
+        └── key.pem
 ```
 
 ## Fulfillment Logic
 
-```bash
-#!/usr/bin/env bash
-# fort-fulfill: runs on activation
+The `fort-consumer` service processes needs at activation:
 
-for need in $(jq -c '.[]' /var/lib/fort/needs.json); do
-  id=$(echo "$need" | jq -r '.id')
-  handle_file="/var/lib/fort/${id}/handle"
+1. Read `/etc/fort/needs.json` (generated from Nix config)
+2. For each unsatisfied need (per `/var/lib/fort/fulfillment-state.json`):
+   - Check nag interval (don't spam providers)
+   - Call `fort <host> <capability> <request>`
+   - On success, invoke the need's handler script with response body
+   - Mark satisfied in state file
 
-  # Skip if already fulfilled
-  [ -f "$handle_file" ] && continue
+Handler scripts are responsible for storing credentials, transforming data, and restarting services.
 
-  # Try providers in order
-  for provider in $(echo "$need" | jq -r '.providers[]'); do
-    capability=$(echo "$need" | jq -r '.capability')
-    request=$(echo "$need" | jq -c '.request')
-
-    if response=$(fort "$provider" "$capability" "$request"); then
-      # Store response and handle
-      store_dir=$(echo "$need" | jq -r '.store // empty')
-      if [ -n "$store_dir" ]; then
-        mkdir -p "$store_dir"
-        echo "$response" > "$store_dir/response.json"
-        # Handle extracted from response headers by fort
-        echo "$FORT_HANDLE" > "$store_dir/handle"
-        add_to_holdings "$FORT_HANDLE"
-      fi
-
-      # Restart dependent service
-      restart=$(echo "$need" | jq -r '.restart // empty')
-      [ -n "$restart" ] && systemctl restart "$restart"
-
-      break  # Success, don't try other providers
-    fi
-  done
-done
+```nix
+fort.host.needs.oidc.outline = {
+  from = "drhorrible";
+  request = { client_name = "outline"; };
+  handler = pkgs.writeShellScript "handle-oidc" ''
+    jq -r '.client_secret' > /var/lib/outline/oidc-secret
+    systemctl restart outline
+  '';
+};
 ```
-
-Retries, backoff, etc. are implementation details of `fort`, not the fulfillment abstraction.
 
 ## Relationship to Agent
 
@@ -373,11 +335,10 @@ Providers declare what capabilities they expose. The system generates handlers, 
 }
 ```
 
-When `needsGC = true`, the system:
-- Wraps the handler to add `X-Fort-Handle` header to responses
-- Tracks issued handles in provider state
+When `mode = "async"`, the system:
+- Tracks requests in provider state (keyed by origin:need_id)
 - Adds a systemd timer for periodic GC sweeps
-- Wires up the holdings-check logic
+- Wires up the needs-based GC logic
 
 ## RBAC Derivation
 
@@ -411,13 +372,13 @@ A host can only request what it declares needing. The manifest IS the authorizat
 
 ## Migration Path
 
-1. **Add agent to all hosts** - Mandatory endpoints (`status`, `manifest`, `holdings`, `release`)
+1. **Add agent to all hosts** - Mandatory endpoints (`status`, `manifest`, `needs`)
 2. **Add custom handlers to forge/beacon** - Whatever capabilities they provide
-3. **Add `fort-fulfill.service`** - Runs on activation, processes needs.json
+3. **Add `fort-consumer.service`** - Runs on activation, processes needs.json
 4. **Run in parallel** - Both old (SSH push) and new (host pull) work
 5. **Validate** - All coordination patterns working
-6. **Remove SSH-based delivery** - service-registry aspect, etc.
-7. **Enable GC** - Start sweeping orphans
+6. **Remove SSH-based delivery** - service-registry aspect, etc. ✓
+7. **Enable GC** - Start sweeping orphans based on needs enumeration
 
 ## Summary
 

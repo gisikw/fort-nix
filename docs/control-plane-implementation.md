@@ -31,7 +31,7 @@ Audit of current state vs. `docs/control-plane-interfaces.md` spec, with impleme
 | git-token | forgejo | Generate Forgejo deploy tokens |
 | ssl-cert | certificate-broker | Return ACME certs (defined but unused) |
 
-Note: `holdings` endpoint exists but is superseded by `needs` for GC purposes.
+Note: The `holdings` endpoint was removed - GC uses the `needs` endpoint instead.
 
 **End-to-End Working (needs → fulfill → capability):**
 | Need | Consumer | Provider | Status |
@@ -80,7 +80,7 @@ Note: `service-registry` does a lot:
 3. `cacheResponse` option - not implemented
 4. `triggers` option - no initialize/systemd trigger support
 5. Provider state file - no `/var/lib/fort/provider-state.json`
-6. GC sweep - no periodic check of consumer holdings
+6. GC sweep - needs-based GC not yet implemented
 
 **Wire Protocol:**
 1. Callback POST - provider → consumer not implemented
@@ -135,9 +135,9 @@ Note: `service-registry` does a lot:
    - Inferred from absence of `mode = "rpc"`
    - All async capabilities need GC, RPC capabilities don't
 
-5. **`/fort/holdings` superseded by `/fort/needs`**
+5. **`/fort/holdings` removed** ✓
    - GC uses needs enumeration, not holdings
-   - Remove holdings from mandatory endpoints
+   - Holdings endpoint removed from mandatory capabilities
 
 ## Implementation Phases
 

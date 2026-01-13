@@ -58,7 +58,7 @@ All hosts expose these:
 |------------|---------|
 | `status` | Hostname, uptime, failed units, deploy info |
 | `manifest` | Apps, aspects, roles, exposed services |
-| `holdings` | GC handles currently in use |
+| `needs` | Declared needs (for GC enumeration) |
 
 ## Authentication & RBAC
 

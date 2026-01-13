@@ -4,97 +4,65 @@ Some capabilities create server-side state (OIDC clients, tokens, etc.). The GC 
 
 ## Overview
 
-1. **Provider** creates state with a handle (content-addressed SHA256)
-2. **Consumer** stores the handle and reports it via `/fort/holdings`
-3. **Provider** periodically checks holdings; if handle absent, eligible for GC
+1. **Provider** creates state when fulfilling a need, keyed by `{origin}:{need_id}`
+2. **Provider** periodically queries consumer's `/fort/needs` endpoint
+3. If the need is no longer declared, provider can garbage collect the associated state
 
 ## Enabling GC
 
+Capabilities that create persistent state should use async mode:
+
 ```nix
-fort.host.capabilities.my-capability = {
-  handler = ./handlers/my-capability;
-  needsGC = true;   # Enable handle tracking
-  ttl = 86400;      # 24-hour lease
+fort.host.capabilities.oidc-register = {
+  handler = ./handlers/oidc-register;
+  mode = "async";  # Enables state tracking and GC
 };
 ```
 
-## Handle Generation
+## Provider State Tracking
 
-When `needsGC = true`, `fort-provider`:
+When handling async capability requests, `fort-provider`:
 
-1. Executes the handler
-2. Computes SHA256 of response body
-3. Creates handle: `sha256:<hex-digest>`
-4. Stores response at `/var/lib/fort/handles/sha256-<hex>/response`
-5. Stores metadata at `/var/lib/fort/handles/sha256-<hex>/.meta`
-6. Returns `X-Fort-Handle` and `X-Fort-TTL` headers
-
-## Consumer Side
-
-Consumers using `fort.host.needs` automatically:
-
-1. Store the response at the configured `store` path
-2. Track the handle in `/var/lib/fort/holdings.json`
-3. Report holdings when queried via `/fort/holdings`
-
-## Manual Consumer
-
-If not using `fort.host.needs`, track handles manually:
-
-```bash
-# Make request
-response=$(fort provider my-capability)
-handle=$(echo "$response" | jq -r '.handle')
-body=$(echo "$response" | jq -r '.body')
-
-# Store response
-echo "$body" > /var/lib/myapp/response.json
-
-# Track handle (append to holdings)
-jq --arg h "$handle" '. += [$h] | unique' /var/lib/fort/holdings.json > tmp
-mv tmp /var/lib/fort/holdings.json
-```
+1. Records the request in `/var/lib/fort/provider-state.json`
+2. Structure: `{capability → {origin:need_id → {request, response?, updated_at}}}`
+3. Response can be cached for re-delivery if consumer re-requests
 
 ## GC Process (Provider Side)
 
-The provider runs a timer that:
+The provider runs a timer (`fort-provider-gc`) that:
 
-1. Lists all handles in `/var/lib/fort/handles/`
-2. For each handle, queries consumers via `/fort/holdings`
-3. If handle present in holdings: renew TTL
-4. If handle absent AND TTL expired: delete state
+1. Lists all state entries in `/var/lib/fort/provider-state.json`
+2. For each `{origin, need_id}`, queries the origin's `/fort/needs`
+3. If the need is still declared: keep the state
+4. If the need is absent: eligible for GC (after grace period)
 
-**Two Generals Safety**: Only delete on positive absence (200 OK with handle not in list). Never delete on connection failure or timeout.
-
-## TTL Semantics
-
-- TTL is a "lease" - how long to keep state without confirmation
-- Each successful holdings check renews the TTL
-- TTL countdown starts when handle is created
-- Short TTL (1 hour): aggressive cleanup, more network chatter
-- Long TTL (24 hours): less chatter, slower cleanup
+**Two Generals Safety**: Only delete on positive absence (200 OK with need not in list). Never delete on connection failure or timeout.
 
 ## Example: OIDC Client Lifecycle
 
-1. **Create**: Host A calls `oidc-register` on Identity Provider
-2. **Response**: IP creates OIDC client, returns credentials, handle = `sha256:abc123`
-3. **Store**: Host A stores credentials in `/var/lib/fort-auth/myapp/`
-4. **Track**: Host A adds `sha256:abc123` to holdings.json
-5. **Poll**: IP timer checks Host A's holdings - handle present, TTL renewed
-6. **Remove**: Host A is decommissioned, no longer reports holdings
-7. **GC**: IP timer sees handle absent, TTL expires, deletes OIDC client
+1. **Declare**: Host A declares `fort.host.needs.oidc.myapp = { from = "idp"; ... }`
+2. **Fulfill**: fort-consumer calls `oidc-register` on Identity Provider
+3. **Create**: IP creates OIDC client, stores state keyed by `hostA:oidc-myapp`
+4. **Poll**: IP timer queries Host A's `/fort/needs` - `oidc/myapp` present, keep state
+5. **Remove**: Host A removes the need from its manifest, deploys
+6. **GC**: IP timer sees `oidc/myapp` absent from needs, deletes OIDC client
 
 ## Debugging
 
-Check holdings on a host:
+Check declared needs on a host:
 
 ```bash
-fort hostname holdings
+fort hostname needs
 ```
 
-Check handle state on provider:
+Check provider state:
 
 ```bash
-ls -la /var/lib/fort/handles/
-cat /var/lib/fort/handles/sha256-abc123/.meta
+cat /var/lib/fort/provider-state.json
+```
+
+Check consumer fulfillment state:
+
+```bash
+cat /var/lib/fort/fulfillment-state.json
 ```

@@ -400,13 +400,13 @@ fort drhorrible status
 # Get a host's manifest (apps, aspects, roles, exposed services)
 fort joker manifest
 
-# List GC handles held by a host
-fort ursula holdings
+# Get list of declared needs (for debugging fulfillment)
+fort joker needs
 ```
 
-**Output format**: JSON envelope with `body`, `status`, `handle`, `ttl` fields.
+**Output format**: JSON envelope with `body`, `status` fields.
 
-**Available on all hosts**: `status`, `manifest`, `holdings`
+**Available on all hosts**: `status`, `manifest`, `needs`
 
 ### Debug Capabilities
 

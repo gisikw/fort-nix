@@ -408,6 +408,4 @@ The need existing in `/fort/needs` is what keeps the proxy vhost alive. Provider
 |-----------|-------|----------|
 | Consumer: declared needs | `/etc/fort/needs.json` | Build-time, read-only |
 | Consumer: fulfillment state | `/var/lib/fort/fulfillment-state.json` | `{need_id → {satisfied, last_sought}}` |
-| Consumer: holdings | `/var/lib/fort/holdings.json` | `{handles: [{id, handle}]}` for GC |
-| Consumer: handles | `/var/lib/fort/handles/<id>` | Individual handle files |
 | Provider: capability state | `/var/lib/fort/provider-state.json` | `{capability → {origin:need → {request, response?, updated_at}}}` |

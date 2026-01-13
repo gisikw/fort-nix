@@ -64,9 +64,9 @@ fort.host.capabilities = {
     handler = writeShellScript "manifest-handler" ''cat /var/lib/fort/host-manifest.json'';
     description = "Host manifest (apps, aspects, roles)";
   };
-  holdings = {
-    handler = writeShellScript "holdings-handler" ''cat /var/lib/fort/holdings.json'';
-    description = "GC handles currently held by this host";
+  needs = {
+    handler = writeShellScript "needs-handler" ''echo '{"needs": [...]}'';
+    description = "Declared needs for GC enumeration";
   };
 };
 ```

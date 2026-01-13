@@ -97,15 +97,6 @@ let
         /etc/fort/capabilities.json
     '';
 
-    # Return holdings (handles this host is actively using)
-    holdings = pkgs.writeShellScript "handler-holdings" ''
-      if [ -f /var/lib/fort/holdings.json ]; then
-        ${pkgs.coreutils}/bin/cat /var/lib/fort/holdings.json
-      else
-        echo '{"handles":[]}'
-      fi
-    '';
-
     # Return list of declared needs (for GC enumeration)
     needs = let
       needsList = lib.concatLists (lib.mapAttrsToList (capability:
@@ -244,7 +235,6 @@ let
   mandatoryCapabilities = {
     status = { mode = "rpc"; };
     manifest = { mode = "rpc"; };
-    holdings = { mode = "rpc"; };
     needs = { mode = "rpc"; };
     # Debug capabilities - restricted to dev-sandbox principal
     journal = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
@@ -468,8 +458,6 @@ let
     set -euo pipefail
 
     NEEDS_FILE="/etc/fort/needs.json"
-    HOLDINGS_FILE="/var/lib/fort/holdings.json"
-    HANDLES_DIR="/var/lib/fort/handles"
     FULFILLMENT_STATE_FILE="/var/lib/fort/fulfillment-state.json"
 
     log() { echo "[fort-fulfill] $*"; }
@@ -480,9 +468,6 @@ let
       exit 0
     fi
 
-    # Ensure handles directory exists
-    ${pkgs.coreutils}/bin/mkdir -p "$HANDLES_DIR"
-
     # Load fulfillment state (or init empty)
     if [ -f "$FULFILLMENT_STATE_FILE" ]; then
       fulfillment_state=$(${pkgs.coreutils}/bin/cat "$FULFILLMENT_STATE_FILE")
@@ -491,9 +476,6 @@ let
     fi
 
     now=$(${pkgs.coreutils}/bin/date +%s)
-
-    # Track holdings for final output
-    declare -A HOLDINGS
 
     # Read needs.json and process each need
     needs=$(${pkgs.jq}/bin/jq -c '.[]' "$NEEDS_FILE")
@@ -509,18 +491,10 @@ let
       handler=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.handler')
       nag_seconds=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.nag_seconds // 900')
 
-      handle_path="$HANDLES_DIR/$id"
-
       # Get current state for this need
       need_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" '.[$id] // {satisfied: false, last_sought: 0}')
       satisfied=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.satisfied')
       last_sought=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.last_sought')
-
-      # Load existing handle for holdings tracking
-      if [ -f "$handle_path" ] && [ -s "$handle_path" ]; then
-        handle=$(${pkgs.coreutils}/bin/cat "$handle_path")
-        HOLDINGS["$id"]="$handle"
-      fi
 
       # Check if already satisfied
       if [ "$satisfied" = "true" ]; then
@@ -544,7 +518,6 @@ let
 
       if result=$(${fortCli}/bin/fort "$from" "$capability" "$request" 2>&1); then
         status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
-        handle=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.handle // empty')
         body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')
 
         if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
@@ -557,14 +530,6 @@ let
             # Mark satisfied in state
             fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" \
               '.[$id].satisfied = true')
-
-            # Store handle if returned
-            if [ -n "$handle" ]; then
-              ${pkgs.coreutils}/bin/mkdir -p "$HANDLES_DIR"
-              echo "$handle" > "$handle_path"
-              HOLDINGS["$id"]="$handle"
-              log "[$id] Stored handle at $handle_path"
-            fi
           else
             log "[$id] Handler failed, will retry after nag interval"
           fi
@@ -579,26 +544,6 @@ let
     # Write fulfillment state
     echo "$fulfillment_state" | ${pkgs.jq}/bin/jq '.' > "$FULFILLMENT_STATE_FILE"
     log "Updated fulfillment state"
-
-    # Write holdings.json
-    # Disable strict unset checking - associative arrays can be tricky with set -u
-    set +u
-    holdings_json='{"handles":['
-    first=true
-    for id in "''${!HOLDINGS[@]}"; do
-      if [ "$first" = true ]; then
-        first=false
-      else
-        holdings_json+=','
-      fi
-      holdings_json+="{\"id\":\"$id\",\"handle\":\"''${HOLDINGS[$id]}\"}"
-    done
-    holdings_json+=']}'
-    holdings_count="''${#HOLDINGS[@]}"
-    set -u  # Re-enable strict mode
-
-    echo "$holdings_json" | ${pkgs.jq}/bin/jq '.' > "$HOLDINGS_FILE"
-    log "Updated holdings.json with $holdings_count handle(s)"
 
     exit 0
   '';
@@ -708,7 +653,6 @@ in
           # Install mandatory handlers
           install -Dm0755 ${mandatoryHandlers.status} /etc/fort/handlers/status
           install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort/handlers/manifest
-          install -Dm0755 ${mandatoryHandlers.holdings} /etc/fort/handlers/holdings
           install -Dm0755 ${mandatoryHandlers.needs} /etc/fort/handlers/needs
           install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
           install -Dm0755 ${mandatoryHandlers.restart} /etc/fort/handlers/restart
@@ -720,10 +664,9 @@ in
         '';
       };
 
-      # Runtime directory for socket and persistent handles storage
+      # Runtime directory for socket
       systemd.tmpfiles.rules = [
         "d /run/fort 0755 root root -"
-        "d /var/lib/fort/handles 0700 root root -"
       ];
 
       # Socket activation for the FastCGI provider
