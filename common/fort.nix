@@ -7,6 +7,7 @@
 }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+  vpnIpv4Prefix = rootManifest.fortConfig.settings.vpn.ipv4Prefix;
 
   # SSL cert consumer handler - decodes base64 certs and stores them
   sslCertConsumerHandler = pkgs.writeShellScript "ssl-cert-handler" ''
@@ -212,7 +213,7 @@ in
       services.nginx.commonHttpConfig = lib.mkBefore ''
         geo $is_vpn {
           default 0;
-          100.64.0.0/10 1;
+          ${vpnIpv4Prefix} 1;
         }
       '';
     }

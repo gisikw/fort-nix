@@ -5,6 +5,10 @@ rec {
     settings = {
       domain = "gisi.network";
       dnsProvider = "porkbun";
+      vpn = {
+        ipv4Prefix = "100.101.0.0/16";
+        ipv6Prefix = "fd7a:115c:a1e0:8249::/64";
+      };
 
       # Principal-based access control
       # Each principal has a publicKey (SSH or age) and roles determining access:
