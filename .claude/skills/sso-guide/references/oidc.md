@@ -2,17 +2,18 @@
 
 **Status**: Working, has examples
 
-Use `oidc` mode when the service supports OpenID Connect natively. The service-registry aspect automatically provisions credentials in pocket-id and delivers them to the target host.
+Use `oidc` mode when the service supports OpenID Connect natively. The control plane (`oidc-register` capability) automatically provisions credentials in pocket-id and delivers them to the target host.
 
 ## How It Works
 
 1. You declare `sso.mode = "oidc"` in `fort.cluster.services`
-2. service-registry (on the forge host) runs every 10 minutes
-3. It creates an OIDC client in pocket-id using the service's FQDN as the client name
-4. Credentials are SSHed to `/var/lib/fort-auth/<service-name>/`:
+2. `common/fort.nix` auto-generates a `fort.host.needs.oidc-register.<service>` declaration
+3. The consumer contacts the pocket-id host via the control plane
+4. The `oidc-register` capability creates/returns OIDC client credentials
+5. The consumer handler writes credentials to `/var/lib/fort-auth/<service-name>/`:
    - `client-id` - the OIDC client ID
    - `client-secret` - the OIDC client secret
-5. The service specified in `sso.restart` is restarted
+6. The service specified in `sso.restart` is restarted
 
 ## App Responsibilities
 
@@ -156,14 +157,15 @@ systemd.services.myapp.serviceConfig.ExecStartPre = pkgs.writeShellScript "injec
 On first deployment, credentials don't exist yet:
 
 1. Service starts with dummy/placeholder credentials
-2. service-registry runs (within 10 minutes)
+2. Control plane consumer triggers (on deploy or via retry timer)
 3. Real credentials are delivered
 4. Service is restarted with valid credentials
 
-This means the service may fail auth for up to 10 minutes on initial deployment. This is expected.
+The control plane retry interval is configurable via `nag` (default 15m for OIDC). Credentials should arrive shortly after deployment.
 
 ## See Also
 
 - `apps/outline/default.nix` - Full OIDC example
 - `apps/forgejo/default.nix` - OIDC with custom setup service
-- `aspects/service-registry/registry.rb` - The provisioning logic
+- `apps/pocket-id/default.nix` - The `oidc-register` capability provider
+- `common/fort.nix` - Auto-generation of OIDC needs from service declarations

@@ -10,6 +10,5 @@
   aspects = [
     "certificate-broker"
     "deployer"
-    "service-registry"
   ];
 }

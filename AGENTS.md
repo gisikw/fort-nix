@@ -63,12 +63,7 @@ Then add it to a host's `manifest.nix`:
 { apps = [ "myapp" ]; ... }
 ```
 
-After deploying a new app with a subdomain, refresh the service registry so DNS picks it up immediately:
-
-```bash
-just deploy <host>                                           # Wait for host deploy
-fort drhorrible restart '{"unit": "fort-service-registry"}'  # Refresh DNS
-```
+After deploying a new app with a subdomain, DNS is updated automatically via the control plane (`dns-headscale` and `dns-coredns` capabilities). The consumer needs trigger on deploy, so DNS should be available shortly after the host activates.
 
 Use restart **without** delay unless the service would kill the response (nginx, fort-agent, tailscale).
 
@@ -169,7 +164,7 @@ systemd.services.myapp-sync = {
 };
 ```
 
-See `aspects/service-registry/` (OIDC client sync with pocket-id) and `apps/pocket-id/default.nix` (service key rotation).
+See `apps/pocket-id/default.nix` (OIDC client management via `oidc-register` capability).
 
 Key principles for both patterns:
 - **Idempotent**: Check before creating, handle already-exists gracefully
@@ -426,7 +421,7 @@ fort joker journal '{"unit": "nginx", "lines": 50}'
 fort joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
 
 # Restart a service (immediate - preferred, fails if restart fails)
-fort joker restart '{"unit": "fort-service-registry"}'
+fort joker restart '{"unit": "pocket-id"}'
 
 # Restart with delay (only for nginx/fort-agent/tailscale - avoids killing response)
 fort joker restart '{"unit": "nginx", "delay": 2}'
