@@ -317,7 +317,7 @@ nix-shell -p age --run "age -d -i ~/.config/age/keys.txt <secret.age>"
 
 ```bash
 # For single-host changes (faster)
-nix flake check ./clusters/bedlam/hosts/<host>
+just test <host>
 
 # For multi-host or common/ changes
 just test                    # Flake check on all hosts/devices
@@ -468,7 +468,7 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 
 Before closing a ticket:
 
-1. **Stage and test**: `git add <files>` then `nix flake check ./clusters/bedlam/hosts/<host>` (or `just test` for multi-host changes) - Nix requires files to be staged.
+1. **Stage and test**: `git add <files>` then `just test <host>` (or `just test` for multi-host changes) - Nix requires files to be staged.
 
 2. **Commit and push**: This triggers GitOps for most hosts.
 

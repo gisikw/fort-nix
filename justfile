@@ -374,7 +374,7 @@ sync-services:
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no "root@${forge_host}.fort.{{domain}}" \
     'systemctl start fort-service-registry.service && journalctl -u fort-service-registry.service -n 50 --no-pager'
 
-test:
+test host="":
   #!/usr/bin/env bash
   set -euo pipefail
 
@@ -384,10 +384,18 @@ test:
     NIX_CONFIG=$'warn-dirty = false\n' nix flake check "${target}"
   }
 
-  run_flake_check "."
-
   hosts_root="./hosts"
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
+
+  # Single host mode
+  if [[ -n "{{host}}" ]]; then
+    run_flake_check "${hosts_root}/{{host}}"
+    exit 0
+  fi
+
+  # Full validation
+  run_flake_check "."
+
   for host in "${hosts_root}"/*; do
     [[ -d "${host}" ]] || continue
     run_flake_check "${host}"
