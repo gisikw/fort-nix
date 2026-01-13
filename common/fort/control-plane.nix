@@ -135,53 +135,116 @@ let
       fi
     '';
 
-    # Restart a systemd unit (debug capability)
-    # Optional delay parameter schedules restart in the future (useful for restarting nginx/fort-provider)
-    restart = pkgs.writeShellScript "handler-restart" ''
+    # Systemd operations (debug capability)
+    # Actions: restart, failed, status, list
+    systemd = pkgs.writeShellScript "handler-systemd" ''
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
-      unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
-      delay=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.delay // 0')
+      action=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.action // "restart"')
 
-      if [ -z "$unit" ]; then
-        echo '{"error": "unit parameter required"}'
-        exit 1
-      fi
+      case "$action" in
+        restart)
+          unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+          delay=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.delay // 0')
 
-      # Basic validation: unit name should be reasonable
-      if ! echo "$unit" | ${pkgs.gnugrep}/bin/grep -qE '^[a-zA-Z0-9@_.-]+$'; then
-        echo '{"error": "invalid unit name"}'
-        exit 1
-      fi
+          if [ -z "$unit" ]; then
+            echo '{"error": "unit parameter required"}'
+            exit 1
+          fi
 
-      # Validate delay is a number
-      if ! echo "$delay" | ${pkgs.gnugrep}/bin/grep -qE '^[0-9]+$'; then
-        echo '{"error": "delay must be a non-negative integer (seconds)"}'
-        exit 1
-      fi
+          # Basic validation: unit name should be reasonable
+          if ! echo "$unit" | ${pkgs.gnugrep}/bin/grep -qE '^[a-zA-Z0-9@_.-]+$'; then
+            echo '{"error": "invalid unit name"}'
+            exit 1
+          fi
 
-      if [ "$delay" -gt 0 ]; then
-        # Schedule restart in the future - allows response to complete first
-        if output=$(${pkgs.systemd}/bin/systemd-run --on-active="''${delay}s" \
-            ${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
-          ${pkgs.jq}/bin/jq -n --arg unit "$unit" --argjson delay "$delay" \
-            '{"status": "scheduled", "unit": $unit, "delay_seconds": $delay}'
-        else
-          ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
-            '{"error": "schedule failed", "unit": $unit, "details": $error}'
+          # Validate delay is a number
+          if ! echo "$delay" | ${pkgs.gnugrep}/bin/grep -qE '^[0-9]+$'; then
+            echo '{"error": "delay must be a non-negative integer (seconds)"}'
+            exit 1
+          fi
+
+          if [ "$delay" -gt 0 ]; then
+            # Schedule restart in the future - allows response to complete first
+            if output=$(${pkgs.systemd}/bin/systemd-run --on-active="''${delay}s" \
+                ${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --argjson delay "$delay" \
+                '{"status": "scheduled", "unit": $unit, "delay_seconds": $delay}'
+            else
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
+                '{"error": "schedule failed", "unit": $unit, "details": $error}'
+              exit 1
+            fi
+          else
+            # Immediate restart
+            if output=$(${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "restarted", "unit": $unit}'
+            else
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
+                '{"error": "restart failed", "unit": $unit, "details": $error}'
+              exit 1
+            fi
+          fi
+          ;;
+
+        failed)
+          # List failed units
+          failed_units=$(${pkgs.systemd}/bin/systemctl --failed --no-legend --plain | ${pkgs.gawk}/bin/awk '{print $1}')
+          if [ -z "$failed_units" ]; then
+            echo '{"units": [], "count": 0}'
+          else
+            echo "$failed_units" | ${pkgs.jq}/bin/jq -R -s -c \
+              'split("\n") | map(select(length > 0)) | {units: ., count: length}'
+          fi
+          ;;
+
+        status)
+          unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+
+          if [ -z "$unit" ]; then
+            echo '{"error": "unit parameter required"}'
+            exit 1
+          fi
+
+          if ! echo "$unit" | ${pkgs.gnugrep}/bin/grep -qE '^[a-zA-Z0-9@_.-]+$'; then
+            echo '{"error": "invalid unit name"}'
+            exit 1
+          fi
+
+          # Get unit properties as JSON
+          if props=$(${pkgs.systemd}/bin/systemctl show "$unit" --no-pager 2>&1); then
+            active=$(echo "$props" | ${pkgs.gnugrep}/bin/grep '^ActiveState=' | cut -d= -f2)
+            sub=$(echo "$props" | ${pkgs.gnugrep}/bin/grep '^SubState=' | cut -d= -f2)
+            load=$(echo "$props" | ${pkgs.gnugrep}/bin/grep '^LoadState=' | cut -d= -f2)
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg active "$active" --arg sub "$sub" --arg load "$load" \
+              '{unit: $unit, active: $active, sub: $sub, load: $load}'
+          else
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$props" \
+              '{"error": "status failed", "unit": $unit, "details": $error}'
+            exit 1
+          fi
+          ;;
+
+        list)
+          pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.pattern // "*"')
+
+          # List units matching pattern
+          units=$(${pkgs.systemd}/bin/systemctl list-units --no-legend --plain "$pattern" 2>/dev/null | ${pkgs.gawk}/bin/awk '{print $1}')
+          if [ -z "$units" ]; then
+            echo '{"units": [], "count": 0}'
+          else
+            echo "$units" | ${pkgs.jq}/bin/jq -R -s -c \
+              'split("\n") | map(select(length > 0)) | {units: ., count: length}'
+          fi
+          ;;
+
+        *)
+          ${pkgs.jq}/bin/jq -n --arg action "$action" \
+            '{"error": "unknown action", "action": $action, "valid_actions": ["restart", "failed", "status", "list"]}'
           exit 1
-        fi
-      else
-        # Immediate restart
-        if output=$(${pkgs.systemd}/bin/systemctl restart "$unit" 2>&1); then
-          ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "restarted", "unit": $unit}'
-        else
-          ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
-            '{"error": "restart failed", "unit": $unit, "details": $error}'
-          exit 1
-        fi
-      fi
+          ;;
+      esac
     '';
 
     # Force immediate retry of needs by resetting fulfillment state
@@ -238,7 +301,7 @@ let
     needs = { mode = "rpc"; };
     # Debug capabilities - restricted to dev-sandbox principal
     journal = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
-    restart = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
+    systemd = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     force-nag = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
   };
 
@@ -655,7 +718,7 @@ in
           install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort/handlers/manifest
           install -Dm0755 ${mandatoryHandlers.needs} /etc/fort/handlers/needs
           install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
-          install -Dm0755 ${mandatoryHandlers.restart} /etc/fort/handlers/restart
+          install -Dm0755 ${mandatoryHandlers.systemd} /etc/fort/handlers/systemd
           install -Dm0755 ${mandatoryHandlers.force-nag} /etc/fort/handlers/force-nag
 
           # Install RBAC and capabilities config (includes mandatory endpoints)

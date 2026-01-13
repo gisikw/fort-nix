@@ -368,7 +368,7 @@ Use `just deploy <host>` like any other host - it handles the confirmation autom
 ## Dev Sandbox Constraints
 
 The dev-sandbox environment has limited local privileges:
-- **No sudo access** - use `fort` to restart services or run privileged operations on hosts
+- **No sudo access** - use `fort <host> systemd` to restart services or run privileged operations on hosts
 - **No interactive SSH** - construct one-shot commands or use agent calls
 - **Age key for secrets** - can decrypt secrets on `main` branch only
 
@@ -420,11 +420,12 @@ fort drhorrible deploy '{"sha": "5563ac2"}'
 fort joker journal '{"unit": "nginx", "lines": 50}'
 fort joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
 
-# Restart a service (immediate - preferred, fails if restart fails)
-fort joker restart '{"unit": "pocket-id"}'
-
-# Restart with delay (only for nginx/fort-agent/tailscale - avoids killing response)
-fort joker restart '{"unit": "nginx", "delay": 2}'
+# Systemd operations
+fort joker systemd '{"action": "restart", "unit": "pocket-id"}'
+fort joker systemd '{"action": "restart", "unit": "nginx", "delay": 2}'  # delayed restart
+fort joker systemd '{"action": "failed"}'                                 # list failed units
+fort joker systemd '{"action": "status", "unit": "nginx"}'                # unit status
+fort joker systemd '{"action": "list", "pattern": "fort-*"}'              # list matching units
 
 # Force immediate retry of needs (resets fulfillment state)
 fort q force-nag '{}'                      # Reset all needs
@@ -435,7 +436,7 @@ fort q force-nag '{"pattern": "oidc"}'     # Reset only oidc-* needs
 |------------|---------|-------|
 | `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
 | `journal` | `{unit, lines?, since?}` | Returns journalctl output |
-| `restart` | `{unit, delay?}` | Restarts systemd unit; use delay only for nginx/fort-agent/tailscale |
+| `systemd` | `{action, unit?, delay?, pattern?}` | Actions: `restart`, `failed`, `status`, `list` |
 | `force-nag` | `{pattern?}` | Resets fulfillment state and restarts consumer; pattern filters by substring |
 
 **Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.
