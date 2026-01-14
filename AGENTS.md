@@ -436,7 +436,7 @@ fort q force-nag '{"pattern": "oidc"}'     # Reset only oidc-* needs
 |------------|---------|-------|
 | `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
 | `journal` | `{unit, lines?, since?}` | Returns journalctl output |
-| `systemd` | `{action, unit?, delay?, pattern?}` | Actions: `restart`, `failed`, `status`, `list` |
+| `systemd` | `{action, unit?, delay?, pattern?}` | Actions: `restart`, `stop`, `failed`, `status`, `list` |
 | `force-nag` | `{pattern?}` | Resets fulfillment state and restarts consumer; pattern filters by substring |
 
 **Custom capabilities**: Some hosts expose additional endpoints (e.g., `oidc-register` on the identity provider). The RBAC system determines which hosts can call which capabilities based on cluster topology.

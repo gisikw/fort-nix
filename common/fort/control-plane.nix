@@ -188,6 +188,28 @@ let
           fi
           ;;
 
+        stop)
+          unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+
+          if [ -z "$unit" ]; then
+            echo '{"error": "unit parameter required"}'
+            exit 1
+          fi
+
+          if ! echo "$unit" | ${pkgs.gnugrep}/bin/grep -qE '^[a-zA-Z0-9@_.-]+$'; then
+            echo '{"error": "invalid unit name"}'
+            exit 1
+          fi
+
+          if output=$(${pkgs.systemd}/bin/systemctl stop "$unit" 2>&1); then
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "stopped", "unit": $unit}'
+          else
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
+              '{"error": "stop failed", "unit": $unit, "details": $error}'
+            exit 1
+          fi
+          ;;
+
         failed)
           # List failed units
           failed_units=$(${pkgs.systemd}/bin/systemctl --failed --no-legend --plain | ${pkgs.gawk}/bin/awk '{print $1}')
@@ -241,7 +263,7 @@ let
 
         *)
           ${pkgs.jq}/bin/jq -n --arg action "$action" \
-            '{"error": "unknown action", "action": $action, "valid_actions": ["restart", "failed", "status", "list"]}'
+            '{"error": "unknown action", "action": $action, "valid_actions": ["restart", "stop", "failed", "status", "list"]}'
           exit 1
           ;;
       esac
