@@ -44,6 +44,7 @@ let
 
     # Shell/terminal
     tmux
+    zellij
     zsh
     starship
     fzf
