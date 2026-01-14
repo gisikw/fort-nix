@@ -160,7 +160,7 @@ in
     containers.sillytavern = {
       image = "containers.${fort.settings.domain}/ghcr.io/sillytavern/sillytavern:1.15.0";
       hostname = "sillytavern.${fort.settings.domain}";
-      ports = [ "8000:8000" ];
+      ports = [ "127.0.0.1:8000:8000" ];
       environment = {
         NODE_ENV = "production";
         FORCE_COLOR = "1";
