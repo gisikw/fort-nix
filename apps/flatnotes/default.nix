@@ -8,7 +8,7 @@ in
 {
   virtualisation.oci-containers.containers.flatnotes = {
     image = "docker.io/dullage/flatnotes:v5.5.4";
-    ports = [ "8089:8080" ];
+    ports = [ "127.0.0.1:8089:8080" ];
     environment = {
       FLATNOTES_AUTH_TYPE = "none";  # Using oauth2-proxy gatekeeper for auth
       PUID = "1000";

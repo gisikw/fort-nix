@@ -245,7 +245,7 @@ in
   virtualisation.oci-containers = {
     containers.termix = {
       image = "containers.${domain}/ghcr.io/lukegus/termix:release-1.10.0";
-      ports = [ "8080:8080" ];
+      ports = [ "127.0.0.1:8080:8080" ];
       volumes = [
         "/var/lib/termix:/app/data"
         "${proggyCleanFont}:/custom/ProggyCleanNerdFontMono-Regular.ttf:ro"

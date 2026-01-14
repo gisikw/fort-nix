@@ -14,7 +14,7 @@ in
   virtualisation.oci-containers = {
     containers.homepage = {
       image = "containers.${domain}/ghcr.io/gethomepage/homepage:v1.8.0";
-      ports = [ "8425:3000" ];
+      ports = [ "127.0.0.1:8425:3000" ];
       volumes = [ "/var/lib/homepage/config:/app/config" ];
       environment.HOMEPAGE_ALLOWED_HOSTS = "home.${domain}";
     };
