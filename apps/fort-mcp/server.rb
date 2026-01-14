@@ -72,3 +72,8 @@ post '/token' do
     { error: 'Invalid credentials' }.to_json
   end
 end
+
+get '/health' do
+  content_type :json
+  { status: 'ok' }.to_json
+end

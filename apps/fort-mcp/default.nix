@@ -54,6 +54,7 @@ in
       subdomain = subdomain;
       port = 9292;
       visibility = "public";
+      health.endpoint = "/health";
     }
   ];
 }
