@@ -190,10 +190,7 @@ in
       name = "sillytavern";
       subdomain = subdomain;
       port = 8000;
-      sso = {
-        mode = "headers";
-        groups = [ "users" ];
-      };
+      sso.mode = "headers";
     }
   ];
 
