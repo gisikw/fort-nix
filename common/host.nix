@@ -89,12 +89,16 @@ in
     system = deviceProfileManifest.system;
     modules = [
       {
-        nix.settings.experimental-features = [ "nix-command" "flakes" ];
-        # Include attic cache config if it exists (delivered by attic-key-sync)
-        # TODO: Re-enable once attic is resilient to network loss
-        # nix.extraOptions = ''
-        #   !include /var/lib/fort/nix/attic-cache.conf
-        # '';
+        nix.settings = {
+          experimental-features = [ "nix-command" "flakes" ];
+          # Make cache failures non-blocking: fall back to building from source
+          fallback = true;
+          connect-timeout = 5;
+        };
+        # Include attic cache config if it exists (delivered by attic-token capability)
+        nix.extraOptions = ''
+          !include /var/lib/fort/nix/attic-cache.conf
+        '';
         nixpkgs.config.allowUnfree = true;
         system.stateVersion = deviceManifest.stateVersion;
         networking.hostName = hostManifest.hostName;
