@@ -583,6 +583,16 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 		h.updateProviderResponse(capability, key, response)
 	}
 
+	// Detect revocations: keys that had responses but are now absent from handler output
+	var revokedKeys []string
+	for key, entry := range state {
+		if len(entry.Response) > 0 {
+			if _, stillPresent := handlerOutput[key]; !stillPresent {
+				revokedKeys = append(revokedKeys, key)
+			}
+		}
+	}
+
 	// Persist updated state
 	if err := h.saveProviderState(); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to save provider state: %v\n", err)
@@ -592,6 +602,16 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 	if len(changedKeys) > 0 {
 		fmt.Fprintf(os.Stderr, "[%s] responses changed for: %v\n", capability, changedKeys)
 		h.dispatchCallbacks(capability, changedKeys, handlerOutput)
+	}
+
+	// Dispatch revocation callbacks with empty payload
+	if len(revokedKeys) > 0 {
+		fmt.Fprintf(os.Stderr, "[%s] revoking: %v\n", capability, revokedKeys)
+		emptyResponses := make(AsyncHandlerOutput)
+		for _, key := range revokedKeys {
+			emptyResponses[key] = json.RawMessage("{}")
+		}
+		h.dispatchCallbacks(capability, revokedKeys, emptyResponses)
 	}
 
 	// Get response for the triggering request (using full key, not just origin)
@@ -917,13 +937,18 @@ func (h *AgentHandler) dispatchCallbacks(capability string, changedKeys []string
 // sendCallback POSTs a response to a consumer's callback endpoint
 // This is fire-and-forget - errors are logged but not retried
 func (h *AgentHandler) sendCallback(origin, path string, response json.RawMessage) {
-	// Use the fort CLI to send the callback (it handles signing)
-	// fort <host> callback <path> <body> - but we don't have a callback command yet
-	// For now, just log that we would send a callback
-	fmt.Fprintf(os.Stderr, "[callback] would POST to %s%s: %s\n", origin, path, string(response))
+	// Use fort CLI to send callback (it handles signing)
+	// path is like "/fort/needs/oidc/outline" -> capability is "needs/oidc/outline"
+	capability := strings.TrimPrefix(path, "/fort/")
 
-	// TODO: Implement actual callback dispatch using fort CLI or direct HTTP
-	// The callback needs to be signed with this host's key, which fort CLI handles
+	cmd := exec.Command("fort", origin, capability, string(response))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[callback] failed POST to %s%s: %v\n%s\n", origin, path, err, string(output))
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "[callback] sent to %s%s\n", origin, path)
 }
 
 // runTrigger runs a capability handler in response to a systemd trigger
@@ -1025,6 +1050,18 @@ func runTrigger(capability string) error {
 		entry.UpdatedAt = time.Now().Unix()
 		state[key] = entry
 	}
+
+	// Detect revocations: keys that had responses but are now absent from handler output
+	var revokedKeys []string
+	for key, entry := range state {
+		if len(entry.Response) > 0 {
+			if _, stillPresent := handlerOutput[key]; !stillPresent {
+				revokedKeys = append(revokedKeys, key)
+				fmt.Fprintf(os.Stderr, "[trigger] %s: revoking %s\n", capability, key)
+			}
+		}
+	}
+
 	providerState[capability] = state
 
 	// Persist updated state
@@ -1036,17 +1073,30 @@ func runTrigger(capability string) error {
 		return fmt.Errorf("write provider state: %w", err)
 	}
 
-	// Dispatch callbacks for changed responses only
+	// Create handler for callback dispatch
+	h := &AgentHandler{
+		providerState: providerState,
+		capabilities:  capabilities,
+	}
+
+	// Dispatch callbacks for changed responses
 	if len(changedKeys) > 0 {
 		fmt.Fprintf(os.Stderr, "[trigger] %s: dispatching callbacks for %d changed entries\n", capability, len(changedKeys))
-		// Create a temporary handler to dispatch callbacks
-		h := &AgentHandler{
-			providerState: providerState,
-			capabilities:  capabilities,
-		}
 		h.dispatchCallbacks(capability, changedKeys, handlerOutput)
-	} else {
-		fmt.Fprintf(os.Stderr, "[trigger] %s: no responses changed\n", capability)
+	}
+
+	// Dispatch revocation callbacks with empty payload
+	if len(revokedKeys) > 0 {
+		fmt.Fprintf(os.Stderr, "[trigger] %s: dispatching revocations for %d entries\n", capability, len(revokedKeys))
+		emptyResponses := make(AsyncHandlerOutput)
+		for _, key := range revokedKeys {
+			emptyResponses[key] = json.RawMessage("{}")
+		}
+		h.dispatchCallbacks(capability, revokedKeys, emptyResponses)
+	}
+
+	if len(changedKeys) == 0 && len(revokedKeys) == 0 {
+		fmt.Fprintf(os.Stderr, "[trigger] %s: no changes\n", capability)
 	}
 
 	fmt.Fprintf(os.Stderr, "[trigger] %s: complete\n", capability)
