@@ -455,6 +455,7 @@ Some hosts (beelink, evo-x2) use tmpfs root with `/persist/system` for state. Se
 - Don't commit unencrypted secrets
 - Don't use `:latest` container tags - pin to explicit versions (e.g., `:1.10.0`) for reproducible deploys
 - Don't expose container ports to all interfaces - use `"127.0.0.1:PORT:PORT"` for services behind nginx/oauth2-proxy (otherwise they're accessible directly on the VPN, bypassing auth)
+- Don't add proxy headers (`Host`, `X-Real-IP`, `X-Forwarded-*`) in nginx `extraConfig` when using `virtualHosts` with `proxyPass` - NixOS's `recommendedProxySettings` already includes them. Duplicates cause invalid HTTP (broke headscale). Only add headers not in the defaults (e.g., `Cookie`, `Remote-User`)
 - Don't use Write tool for large file transformations - prefer `mv` to rename then Edit for in-place changes (more token-efficient and avoids tool call overhead)
 
 ## Working on Tickets
