@@ -1,5 +1,5 @@
 { subdomain ? null, rootManifest, ... }:
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 let
   fort = rootManifest.fortConfig;
   yamlFormat = pkgs.formats.yaml { };
@@ -36,11 +36,7 @@ let
       "127.0.0.1"
     ];
     whitelistDockerHosts = true;
-    basicAuthMode = true;
-    basicAuthUser = {
-      username = "user";
-      password = "password";
-    };
+    basicAuthMode = false;
     enableCorsProxy = false;
     requestProxy = {
       enabled = false;
@@ -50,9 +46,9 @@ let
         "127.0.0.1"
       ];
     };
-    enableUserAccounts = false;
+    enableUserAccounts = true;
     enableDiscreetLogin = false;
-    autheliaAuth = false;
+    autheliaAuth = true;
     perUserBasicAuth = false;
     hostWhitelist = {
       enabled = false;
@@ -194,6 +190,16 @@ in
       name = "sillytavern";
       subdomain = subdomain;
       port = 8000;
+      sso = {
+        mode = "headers";
+        groups = [ "users" ];
+      };
     }
   ];
+
+  # SillyTavern's autheliaAuth mode expects Remote-User header, but oauth2-proxy sends X-Forwarded-User
+  # Translate the header name so SillyTavern can consume it
+  services.nginx.virtualHosts."${if subdomain != null then subdomain else "sillytavern"}.${fort.settings.domain}".locations."/".extraConfig = lib.mkAfter ''
+    proxy_set_header Remote-User $http_x_forwarded_user;
+  '';
 }
