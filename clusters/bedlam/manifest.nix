@@ -63,6 +63,14 @@ rec {
             };
           };
         };
+        "bz" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/bz";
+              tokenFile = ./github-mirror-token.age;
+            };
+          };
+        };
       };
     };
   };
