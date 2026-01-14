@@ -772,6 +772,7 @@ in
         requires = [ "fort-provider.socket" ];
         after = [ "fort-provider.socket" ];
         restartTriggers = [ fortProvider ];  # Restart when binary changes
+        path = [ fortCli ];  # For sendCallback to invoke fort CLI
 
         serviceConfig = {
           Type = "simple";
