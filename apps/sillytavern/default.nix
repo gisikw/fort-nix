@@ -175,8 +175,11 @@ in
   };
 
   system.activationScripts.sillytavernConfig = ''
-    install -Dm0640 ${configFile} /var/lib/sillytavern/config/config.yaml
+    install -Dm0644 ${configFile} /var/lib/sillytavern/config/config.yaml
   '';
+
+  # Restart container when config changes
+  systemd.services.podman-sillytavern.restartTriggers = [ configFile ];
 
   systemd.tmpfiles.rules = [
     "d /var/lib/sillytavern/config 0755 root root -"
