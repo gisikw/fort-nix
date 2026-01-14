@@ -57,7 +57,7 @@ let
     };
     sessionTimeout = -1;
     disableCsrfProtection = false;
-    securityOverride = false;
+    securityOverride = true;  # Required: suppresses exit on passwordless users when basic auth disabled
     logging = {
       enableAccessLog = true;
       minLogLevel = 0;
