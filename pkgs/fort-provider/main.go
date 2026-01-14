@@ -1228,13 +1228,58 @@ func runGC() error {
 	// Invoke handlers for modified capabilities (so they can clean up resources)
 	for capName := range modifiedCapabilities {
 		fmt.Fprintf(os.Stderr, "[gc] %s: invoking handler for cleanup\n", capName)
-		if err := invokeHandlerForGC(capName, capabilities[capName], providerState[capName]); err != nil {
+		if err := invokeHandlerForGC(capName, capabilities[capName], providerState[capName], false); err != nil {
 			fmt.Fprintf(os.Stderr, "[gc] %s: handler invocation failed: %v\n", capName, err)
 			// Continue with other capabilities, don't fail the whole GC
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "[gc] complete, removed %d entries\n", totalRemoved)
+	// Check for entries nearing TTL expiry and rotate them
+	// Rotation threshold: 2 hours (twice the GC interval)
+	rotationThreshold := int64(2 * 60 * 60) // 2 hours in seconds
+	now := time.Now().Unix()
+	rotationNeeded := make(map[string]bool)
+
+	for capName, capConfig := range capabilities {
+		if capConfig.TTL <= 0 {
+			continue // No TTL, no rotation needed
+		}
+
+		state := providerState[capName]
+		if state == nil || len(state) == 0 {
+			continue
+		}
+
+		// Check each entry for approaching expiry
+		for key, entry := range state {
+			if len(entry.Response) == 0 {
+				continue // No response yet, nothing to rotate
+			}
+
+			expiry := entry.UpdatedAt + int64(capConfig.TTL)
+			timeUntilExpiry := expiry - now
+
+			if timeUntilExpiry <= rotationThreshold {
+				fmt.Fprintf(os.Stderr, "[gc] %s: entry %s expires in %ds, scheduling rotation\n",
+					capName, key, timeUntilExpiry)
+				rotationNeeded[capName] = true
+				break // One expiring entry is enough to trigger rotation for the capability
+			}
+		}
+	}
+
+	// Invoke handlers for capabilities needing rotation (with callback dispatch)
+	for capName := range rotationNeeded {
+		if modifiedCapabilities[capName] {
+			continue // Already handled above
+		}
+		fmt.Fprintf(os.Stderr, "[gc] %s: invoking handler for TTL rotation\n", capName)
+		if err := invokeHandlerForGC(capName, capabilities[capName], providerState[capName], true); err != nil {
+			fmt.Fprintf(os.Stderr, "[gc] %s: rotation handler failed: %v\n", capName, err)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "[gc] complete, removed %d entries, rotated %d capabilities\n", totalRemoved, len(rotationNeeded))
 	return nil
 }
 
@@ -1300,9 +1345,10 @@ func needIDToPath(capName, needID string) string {
 	return needID[:idx] + "/" + needID[idx+1:]
 }
 
-// invokeHandlerForGC invokes a capability handler after GC cleanup
-// This allows the handler to clean up external resources (e.g., delete OIDC clients)
-func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[string]ProviderStateEntry) error {
+// invokeHandlerForGC invokes a capability handler after GC cleanup or for TTL rotation
+// When dispatchCallbacks is true, sends callbacks for changed responses (used for rotation)
+// When false, just updates state (used for cleanup after orphan removal)
+func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[string]ProviderStateEntry, dispatchCallbacks bool) error {
 	handlerPath := filepath.Join(handlersDir, capName)
 	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
 		return fmt.Errorf("handler not found: %s", handlerPath)
@@ -1341,19 +1387,33 @@ func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[st
 		return fmt.Errorf("handler exec failed: %w", err)
 	}
 
-	// Parse output (we don't dispatch callbacks during GC, just let handler do cleanup)
+	// Parse handler output
 	var handlerOutput AsyncHandlerOutput
 	if err := json.Unmarshal(output, &handlerOutput); err != nil {
 		return fmt.Errorf("handler returned invalid JSON: %w", err)
 	}
 
+	// Track changed responses for callback dispatch
+	var changedKeys []string
+
 	// Update state with any new responses from handler
 	for key, response := range handlerOutput {
 		if entry, ok := state[key]; ok {
+			// Check if response changed
+			if dispatchCallbacks && !bytes.Equal(entry.Response, response) {
+				changedKeys = append(changedKeys, key)
+			}
 			entry.Response = response
 			entry.UpdatedAt = time.Now().Unix()
 			state[key] = entry
 		}
+	}
+
+	// Dispatch callbacks for changed responses (rotation)
+	if dispatchCallbacks && len(changedKeys) > 0 {
+		fmt.Fprintf(os.Stderr, "[gc] %s: dispatching callbacks for %d rotated entries\n", capName, len(changedKeys))
+		h := &AgentHandler{} // Minimal handler for dispatch
+		h.dispatchCallbacks(capName, changedKeys, handlerOutput)
 	}
 
 	return nil
