@@ -12,6 +12,7 @@
       subdomain = subdomain;
       port = 8787;
       inEgressNamespace = true;
+      health.endpoint = "/ping";
     }
   ];
 }

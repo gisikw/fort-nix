@@ -53,6 +53,7 @@ in
       name = "containers";
       subdomain = subdomain;
       port = 5000;
+      health.endpoint = "/v2/";
     }
   ];
 }
