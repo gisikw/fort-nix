@@ -98,6 +98,10 @@ let
     ${pkgs.jq}/bin/jq -n \
       --argjson endpoints "$endpoints" \
       '{
+        storage: {
+          type: "sqlite",
+          path: "${dataDir}/data.db"
+        },
         web: { port: 8080 },
         endpoints: $endpoints
       }' | ${pkgs.yj}/bin/yj -jy > "$CONFIG.tmp"
