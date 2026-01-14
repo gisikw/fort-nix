@@ -819,6 +819,9 @@ in
         wants = [ "network-online.target" ];
         wantedBy = [ "multi-user.target" ];
 
+        # Restart when needs change so new needs are fulfilled immediately
+        restartTriggers = [ (pkgs.writeText "needs.json" needsJson) ];
+
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
