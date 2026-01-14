@@ -94,6 +94,7 @@ in
           # Make cache failures non-blocking: fall back to building from source
           fallback = true;
           connect-timeout = 5;
+          stalled-download-timeout = 60;
         };
         # Include attic cache config if it exists (delivered by attic-token capability)
         nix.extraOptions = ''
