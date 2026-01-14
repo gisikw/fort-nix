@@ -137,7 +137,7 @@ in
         # Attach to the most recently used session (by last_attached timestamp)
         LAST_SESSION=$(tmux list-sessions -F '#{session_last_attached} #{session_name}' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
         if [[ -n "$LAST_SESSION" ]]; then
-          exec tmux attach-session -t "$LAST_SESSION"
+          tmux attach-session -t "$LAST_SESSION"
         fi
       fi
 
