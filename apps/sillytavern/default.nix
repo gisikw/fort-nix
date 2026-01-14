@@ -194,6 +194,7 @@ in
       subdomain = subdomain;
       port = 8000;
       sso.mode = "headers";
+      health.endpoint = "/ready";
     }
   ];
 
