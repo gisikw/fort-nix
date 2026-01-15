@@ -210,6 +210,9 @@ let
     LDAP_ATTRIBUTE_USER_LAST_NAME = "last_name";
     LDAP_ATTRIBUTE_USER_PROFILE_PICTURE = "avatar";
 
+    # lldap uses groupOfUniqueNames with uniqueMember (not groupOfNames with member)
+    LDAP_USER_GROUP_SEARCH_FILTER = "(objectClass=groupOfUniqueNames)";
+    LDAP_ATTRIBUTE_GROUP_MEMBER = "uniqueMember";
     LDAP_ATTRIBUTE_GROUP_UNIQUE_IDENTIFIER = "cn";
     LDAP_ATTRIBUTE_GROUP_NAME = "cn";
     LDAP_ATTRIBUTE_ADMIN_GROUP = "admin";
