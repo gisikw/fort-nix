@@ -72,6 +72,15 @@ let
     nix-direnv
     just
 
+    # Go
+    go
+
+    # Rust
+    rustc
+    cargo
+    rustfmt
+    clippy
+
     # Claude/AI tools
     claude-code
     opencode
