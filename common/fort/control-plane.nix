@@ -608,9 +608,6 @@ let
         if [ "$status" = "202" ]; then
           # Async capability - credentials delivered via callback, not sync response
           log "[$id] Async request accepted (HTTP 202), waiting for callback"
-          # Mark as async so we don't overwrite callback updates at the end
-          fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" \
-            '.[$id]._async = true')
         elif [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
           log "[$id] Success from $from (HTTP $status)"
 
@@ -632,21 +629,25 @@ let
       fi
     done <<< "$needs"
 
-    # Write fulfillment state, merging with file to preserve callback updates for async needs
-    # Re-read current file to get callback updates, then merge our non-async updates
+    # Write fulfillment state, merging to preserve callback updates
+    # Callbacks update 'satisfied', we update 'last_sought' - merge both
     if [ -f "$FULFILLMENT_STATE_FILE" ]; then
       current_state=$(${pkgs.coreutils}/bin/cat "$FULFILLMENT_STATE_FILE")
     else
       current_state='{}'
     fi
 
-    # For each entry in our local state:
-    # - If marked _async, preserve the file's current state (callback may have updated it)
-    # - Otherwise, use our local state
+    # Merge: preserve file's 'satisfied' (set by callbacks), use our 'last_sought'
     merged_state=$(${pkgs.jq}/bin/jq -n \
       --argjson local "$fulfillment_state" \
       --argjson file "$current_state" \
-      '$file * ($local | with_entries(select(.value._async != true) | .value |= del(._async)))')
+      '$local | to_entries | map({
+        key: .key,
+        value: {
+          last_sought: .value.last_sought,
+          satisfied: ($file[.key].satisfied // .value.satisfied)
+        }
+      }) | from_entries')
 
     echo "$merged_state" | ${pkgs.jq}/bin/jq '.' > "$FULFILLMENT_STATE_FILE"
     log "Updated fulfillment state"
