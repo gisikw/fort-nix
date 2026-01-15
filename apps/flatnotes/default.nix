@@ -41,7 +41,7 @@ in
       visibility = "public";
       sso = {
         mode = "gatekeeper";
-        groups = [ "kids" ];  # TEST: should bounce non-kids users
+        groups = [ "admin" ];
       };
     }
   ];

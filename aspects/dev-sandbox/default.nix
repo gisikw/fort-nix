@@ -81,6 +81,10 @@ let
     rustfmt
     clippy
 
+    # C/build tools
+    gcc
+    pkg-config
+
     # Claude/AI tools
     claude-code
     opencode
