@@ -636,10 +636,11 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 		}
 	}
 
-	// Return 202 Accepted for async capabilities (response may still be in flight via callbacks)
+	// Return 202 Accepted for async capabilities
+	// Credentials are delivered via callback, not in sync response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	w.Write(triggerResponse)
+	w.Write([]byte(`{"status":"accepted"}`))
 }
 
 // computeHandle generates a content-addressed handle for the response

@@ -605,7 +605,11 @@ let
         status=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.status')
         body=$(echo "$result" | ${pkgs.jq}/bin/jq -c '.body')
 
-        if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+        if [ "$status" = "202" ]; then
+          # Async capability - credentials delivered via callback, not sync response
+          log "[$id] Async request accepted (HTTP 202), waiting for callback"
+          # Don't invoke handler or mark satisfied - callback will do that
+        elif [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
           log "[$id] Success from $from (HTTP $status)"
 
           # Invoke handler with response body on stdin
