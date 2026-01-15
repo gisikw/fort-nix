@@ -577,9 +577,21 @@ let
       nag_seconds=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.nag_seconds // 900')
 
       # Get current state for this need
-      need_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" '.[$id] // {satisfied: false, last_sought: 0}')
+      need_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" '.[$id] // {satisfied: false, last_sought: 0, request_hash: ""}')
       satisfied=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.satisfied')
       last_sought=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.last_sought')
+      stored_hash=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.request_hash // ""')
+
+      # Compute hash of current request (for change detection)
+      current_hash=$(echo "$request" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)
+
+      # Reset satisfaction if request changed (e.g., groups updated)
+      if [ "$satisfied" = "true" ] && [ "$stored_hash" != "$current_hash" ]; then
+        log "[$id] Request changed (hash mismatch), resetting satisfaction"
+        satisfied="false"
+        fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" \
+          '.[$id].satisfied = false')
+      fi
 
       # Check if already satisfied
       if [ "$satisfied" = "true" ]; then
@@ -595,9 +607,9 @@ let
         continue
       fi
 
-      # Update last_sought before requesting
-      fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" --argjson now "$now" \
-        '.[$id] = (.[$id] // {}) | .[$id].last_sought = $now | .[$id].satisfied = false')
+      # Update last_sought and request_hash before requesting
+      fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" --argjson now "$now" --arg hash "$current_hash" \
+        '.[$id] = (.[$id] // {}) | .[$id].last_sought = $now | .[$id].satisfied = false | .[$id].request_hash = $hash')
 
       log "[$id] Calling $from/$capability..."
 
@@ -637,7 +649,7 @@ let
       current_state='{}'
     fi
 
-    # Merge: preserve file's 'satisfied' (set by callbacks), use our 'last_sought'
+    # Merge: preserve file's 'satisfied' (set by callbacks), use our 'last_sought' and 'request_hash'
     merged_state=$(${pkgs.jq}/bin/jq -n \
       --argjson local "$fulfillment_state" \
       --argjson file "$current_state" \
@@ -645,6 +657,7 @@ let
         key: .key,
         value: {
           last_sought: .value.last_sought,
+          request_hash: .value.request_hash,
           satisfied: ($file[.key].satisfied // .value.satisfied)
         }
       }) | from_entries')

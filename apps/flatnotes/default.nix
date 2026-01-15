@@ -41,7 +41,7 @@ in
       visibility = "public";
       sso = {
         mode = "gatekeeper";
-        groups = [ "kids" ];  # TEST: verify pocket-id group restriction
+        groups = [ "admin" ];
       };
     }
   ];
