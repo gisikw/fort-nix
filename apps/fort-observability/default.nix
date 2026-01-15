@@ -93,7 +93,10 @@ in
       name = "monitor";
       subdomain = subdomain;
       port = 3000;
-      sso.mode = "headers";
+      sso = {
+        mode = "headers";
+        groups = [ "admin" ];
+      };
     }
   ];
 }

@@ -88,6 +88,7 @@ in
       visibility = "public";
       sso = {
         mode = "gatekeeper";
+        groups = [ "admin" ];
       };
     }
   ];
