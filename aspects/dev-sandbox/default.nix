@@ -184,6 +184,7 @@ in
     "d ${homeDir}/.config/vdirsyncer 0700 ${user} users -"
     "d ${homeDir}/.config/khal 0700 ${user} users -"
     "d ${homeDir}/.local/share/vdirsyncer 0700 ${user} users -"
+    "d ${homeDir}/.local/share/vdirsyncer/radicale 0700 ${user} users -"
   ];
 
   # Request RW git token from forge via control plane
@@ -201,6 +202,14 @@ in
     path = agentKeyPath;
     owner = user;
     group = "users";
+    mode = "0600";
+  };
+
+  # Radicale password for vdirsyncer (CalDAV sync)
+  age.secrets.radicale-password = {
+    file = ../../apps/radicale/password.age;
+    owner = "root";
+    group = "root";
     mode = "0600";
   };
 
@@ -224,6 +233,7 @@ in
       # Read secrets (only root can read these)
       CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
       CLIENT_SECRET=$(cat ${config.age.secrets.oauth-client-secret.path} | tr -d '\n')
+      RADICALE_PASSWORD=$(cat ${config.age.secrets.radicale-password.path} | tr -d '\n')
 
       # Ensure directories exist
       mkdir -p ${homeDir}/.config/vdirsyncer
@@ -250,6 +260,24 @@ in
       type = "filesystem"
       path = "${homeDir}/.local/share/vdirsyncer/calendars/"
       fileext = ".ics"
+
+      # Radicale CalDAV (personal calendar)
+      [pair radicale_calendar]
+      a = "radicale_remote"
+      b = "radicale_local"
+      collections = ["from a", "from b"]
+      metadata = ["color"]
+
+      [storage radicale_remote]
+      type = "caldav"
+      url = "https://calendar.${domain}/kevin/"
+      username = "kevin"
+      password = "$RADICALE_PASSWORD"
+
+      [storage radicale_local]
+      type = "filesystem"
+      path = "${homeDir}/.local/share/vdirsyncer/radicale/"
+      fileext = ".ics"
       EOF
 
       chown ${user}:users ${homeDir}/.config/vdirsyncer/config
@@ -263,6 +291,11 @@ in
       path = ${homeDir}/.local/share/vdirsyncer/calendars/*
       type = discover
 
+      [[radicale]]
+      path = ${homeDir}/.local/share/vdirsyncer/radicale/*
+      type = discover
+      color = dark green
+
       [locale]
       local_timezone = America/Chicago
       default_timezone = America/Chicago
@@ -274,6 +307,7 @@ in
 
       [default]
       highlight_event_days = True
+      default_calendar = radicale
       EOF
 
       chown ${user}:users ${homeDir}/.config/khal/config
@@ -329,7 +363,7 @@ in
   };
 
   systemd.services.vdirsyncer-sync = {
-    description = "Sync calendars with Google";
+    description = "Sync calendars with Google and Radicale";
     serviceConfig = {
       Type = "oneshot";
       User = user;
