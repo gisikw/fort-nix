@@ -1,6 +1,6 @@
 # Gatekeeper Mode
 
-**Status**: Defined in fort.nix, no working examples yet
+**Status**: Working examples in `apps/silverbullet/`, `apps/flatnotes/`, `apps/vdirsyncer-auth/`
 
 Use `gatekeeper` mode when you need a login wall but don't need to pass identity to the backend. Users must authenticate, but the app doesn't receive any user info.
 
@@ -45,11 +45,35 @@ Services that might benefit from gatekeeper mode:
 - Simple dashboards without user-specific views
 - Development/staging environments that need access control
 
+## VPN Bypass (Split-Gatekeeper)
+
+For services that should require login from the public internet but allow direct access from the VPN:
+
+```nix
+fort.cluster.services = [{
+  name = "status";
+  port = 8080;
+  visibility = "public";  # Must be public or local for vpnBypass to be useful
+  sso = {
+    mode = "gatekeeper";
+    vpnBypass = true;     # VPN requests skip auth entirely
+  };
+}];
+```
+
+**How it works:**
+- Requests from the VPN (`$is_vpn = 1`) go directly to the backend
+- Requests from the public internet go through oauth2-proxy
+
+This is useful for monitoring dashboards, internal tools, or any service where VPN membership implies sufficient trust.
+
+The `vpnBypass` option works with any SSO mode (`gatekeeper`, `headers`, `basicauth`), not just gatekeeper.
+
 ## TODO
 
-- [ ] Add a working example to the codebase
 - [ ] Consider whether to strip headers in gatekeeper mode
 
 ## See Also
 
-- `common/fort.nix:141-200` - oauth2-proxy service definition
+- `common/fort.nix:182-190` - vpnBypass option definition
+- `common/fort.nix:373-379` - nginx conditional routing

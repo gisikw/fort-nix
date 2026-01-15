@@ -63,7 +63,9 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(fort ratched needs)",
-      "Bash(fort drhorrible needs)"
+      "Bash(fort drhorrible needs)",
+      "Bash(go build:*)",
+      "Bash(fort ratched journal:*)"
     ],
     "deny": [],
     "ask": []

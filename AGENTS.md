@@ -79,6 +79,8 @@ Services can use SSO via `fort.cluster.services`:
 | `basicauth` | Service only supports HTTP Basic Auth |
 | `gatekeeper` | Login required but no identity passed to backend |
 
+**VPN Bypass**: Any SSO mode can be combined with `sso.vpnBypass = true` to skip auth for VPN requests while requiring it from the public internet.
+
 For detailed implementation guidance, mode-specific patterns, and troubleshooting, see the `sso-guide` skill (`.claude/skills/sso-guide/`). Working examples: `apps/outline/` (oidc), `apps/fort-observability/` (headers).
 
 ### Custom Derivations

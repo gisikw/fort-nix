@@ -178,6 +178,16 @@ in
                           Passed through to oauth2-proxy as `--allowed-group`.
                         '';
                       };
+
+                      vpnBypass = lib.mkOption {
+                        type = lib.types.bool;
+                        default = false;
+                        description = ''
+                          If true, requests from the VPN bypass authentication entirely.
+                          Non-VPN requests still go through the configured SSO mode.
+                          Requires an SSO mode other than "none" to have effect.
+                        '';
+                      };
                     };
                   };
 
@@ -337,6 +347,9 @@ in
             svc:
             let
               subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+              needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc";
+              directBackend = "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
+              authProxySocket = "http://unix:/run/fort-auth/${svc.name}.sock";
             in
             {
               name = "${subdomain}.${domain}";
@@ -356,11 +369,22 @@ in
                     (lib.optionalString (svc.maxBodySize != null) ''
                       client_max_body_size ${svc.maxBodySize};
                     '')
+                    # Conditional routing: VPN bypasses auth, non-VPN goes through oauth2-proxy
+                    (lib.optionalString (svc.sso.vpnBypass && needsAuthProxy) ''
+                      set $backend "${authProxySocket}";
+                      if ($is_vpn = 1) {
+                        set $backend "${directBackend}";
+                      }
+                      proxy_pass $backend;
+                    '')
                   ]);
-                  proxyPass = if (svc.sso.mode != "none" && svc.sso.mode != "oidc") then
-                    "http://unix:/run/fort-auth/${svc.name}.sock"
+                  # Only set proxyPass when not using vpnBypass conditional routing
+                  proxyPass = if (svc.sso.vpnBypass && needsAuthProxy) then
+                    null
+                  else if needsAuthProxy then
+                    authProxySocket
                   else
-                    "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
+                    directBackend;
                   proxyWebsockets = true;
                 };
               };
