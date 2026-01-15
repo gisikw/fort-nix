@@ -586,11 +586,13 @@ let
       current_hash=$(echo "$request" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)
 
       # Reset satisfaction if request changed (e.g., groups updated)
-      if [ "$satisfied" = "true" ] && [ "$stored_hash" != "$current_hash" ]; then
-        log "[$id] Request changed (hash mismatch), resetting satisfaction"
+      # Also reset last_sought to bypass nag interval for parameter changes
+      if [ "$stored_hash" != "$current_hash" ] && [ -n "$stored_hash" ]; then
+        log "[$id] Request changed (hash mismatch), resetting satisfaction and nag timer"
         satisfied="false"
+        last_sought=0
         fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" \
-          '.[$id].satisfied = false')
+          '.[$id].satisfied = false | .[$id].last_sought = 0')
       fi
 
       # Check if already satisfied
