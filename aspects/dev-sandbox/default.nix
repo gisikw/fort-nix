@@ -307,7 +307,7 @@ in
 
       [default]
       highlight_event_days = True
-      default_calendar = radicale
+      default_calendar = personal
       EOF
 
       chown ${user}:users ${homeDir}/.config/khal/config
