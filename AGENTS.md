@@ -81,6 +81,12 @@ Services can use SSO via `fort.cluster.services`:
 
 **VPN Bypass**: Any SSO mode can be combined with `sso.vpnBypass = true` to skip auth for VPN requests while requiring it from the public internet.
 
+**Group Restrictions**: Use `sso.groups = [ "admin" ]` to restrict access to specific LDAP groups. Groups are enforced at two levels:
+- **pocket-id**: OIDC client is configured with allowed groups - users outside those groups are rejected at login
+- **oauth2-proxy**: For non-oidc modes, `--allowed-group` flags filter after authentication
+
+This provides defense-in-depth: pocket-id blocks unauthorized users before they even get tokens.
+
 For detailed implementation guidance, mode-specific patterns, and troubleshooting, see the `sso-guide` skill (`.claude/skills/sso-guide/`). Working examples: `apps/outline/` (oidc), `apps/fort-observability/` (headers).
 
 ### Custom Derivations

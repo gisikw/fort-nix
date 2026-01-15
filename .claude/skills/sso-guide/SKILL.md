@@ -46,8 +46,28 @@ All SSO modes support:
 ```nix
 sso = {
   mode = "headers";  # or oidc, basicauth, gatekeeper
-  groups = [ "admins" ];  # Planned: restrict to LDAP groups (not yet working)
+  groups = [ "admin" ];  # Restrict access to specific LDAP groups
 };
 ```
 
-**Note**: The `groups` option is defined in the schema but **not yet functional**. See `fort-040` for tracking.
+### Group Restrictions
+
+The `groups` option restricts service access to users in specific LDAP groups. Groups are enforced at **two levels**:
+
+1. **pocket-id (OIDC provider)**: The OIDC client is configured with `allowedUserGroups`. Users outside those groups are rejected at login - they can't even get tokens.
+
+2. **oauth2-proxy**: For non-oidc modes, `--allowed-group` flags filter after OIDC authentication.
+
+This provides defense-in-depth: pocket-id blocks unauthorized users before token issuance, and oauth2-proxy validates group membership for proxy-mediated flows.
+
+**Example**: Restricting to admins only:
+```nix
+fort.cluster.services = [{
+  name = "admin-panel";
+  port = 8080;
+  sso = {
+    mode = "gatekeeper";
+    groups = [ "admin" ];  # Only admin group can access
+  };
+}];
+```
