@@ -806,11 +806,15 @@ func (h *AgentHandler) handleCallback(w http.ResponseWriter, r *http.Request, pa
 
 // updateFulfillmentState updates the fulfillment state for a need
 func (h *AgentHandler) updateFulfillmentState(needID string, satisfied bool) error {
+	fmt.Fprintf(os.Stderr, "[state] updating %s to satisfied=%v\n", needID, satisfied)
+
 	// Read current state
 	state := make(map[string]FulfillmentState)
 	data, err := os.ReadFile(fulfillmentStateFile)
 	if err == nil {
 		json.Unmarshal(data, &state)
+	} else {
+		fmt.Fprintf(os.Stderr, "[state] no existing state file, starting fresh\n")
 	}
 
 	// Update state for this need
@@ -829,6 +833,7 @@ func (h *AgentHandler) updateFulfillmentState(needID string, satisfied bool) err
 		return fmt.Errorf("write state: %w", err)
 	}
 
+	fmt.Fprintf(os.Stderr, "[state] wrote %s satisfied=%v to %s\n", needID, satisfied, fulfillmentStateFile)
 	return nil
 }
 
