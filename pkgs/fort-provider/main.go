@@ -768,11 +768,19 @@ func (h *AgentHandler) handleCallback(w http.ResponseWriter, r *http.Request, pa
 			"FORT_CAPABILITY="+capability,
 		)
 
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+
 		if err := cmd.Run(); err != nil {
 			// Handler failed - need becomes unsatisfied
+			fmt.Fprintf(os.Stderr, "[callback] handler failed for %s: %v\n", needID, err)
+			if stderr.Len() > 0 {
+				fmt.Fprintf(os.Stderr, "[callback] handler stderr: %s\n", stderr.String())
+			}
 			satisfied = false
 		} else {
 			// Handler succeeded - need is satisfied
+			fmt.Fprintf(os.Stderr, "[callback] handler succeeded for %s\n", needID)
 			satisfied = true
 		}
 	} else {
