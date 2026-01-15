@@ -187,8 +187,11 @@ EOF
     name = "gatus";
     subdomain = subdomain;
     port = 8080;
-    visibility = "vpn";
-    sso.mode = "none";
+    visibility = "public";
+    sso = {
+      mode = "gatekeeper";
+      vpnBypass = true;
+    };
     health.enabled = false;  # Don't monitor the monitor
   }];
 }
