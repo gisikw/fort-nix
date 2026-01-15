@@ -442,6 +442,7 @@ in
             from = "drhorrible";  # pocket-id host
             request = {
               client_name = fqdn;
+              groups = svc.sso.groups;  # LDAP groups allowed to access this client
             };
             handler = mkOidcHandler svc.name restartTarget;
             nag = "15m";

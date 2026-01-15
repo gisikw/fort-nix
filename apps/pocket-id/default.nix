@@ -69,9 +69,48 @@ let
       echo "$all_clients"
     }
 
+    # Look up group UUID from group name (returns empty if not found)
+    get_group_id() {
+      local group_name="$1"
+      local response=$(api_call GET "/api/user-groups?search=$group_name")
+      # Find exact match by name
+      echo "$response" | ${pkgs.jq}/bin/jq -r --arg name "$group_name" \
+        '.data[] | select(.name == $name) | .id // empty'
+    }
+
+    # Set allowed user groups on an OIDC client
+    # Takes client_id and JSON array of group names
+    set_allowed_groups() {
+      local client_id="$1"
+      local groups_json="$2"
+
+      # If no groups specified (empty array), clear restrictions
+      local group_count=$(echo "$groups_json" | ${pkgs.jq}/bin/jq 'length')
+      if [ "$group_count" = "0" ]; then
+        api_call PUT "/api/oidc/clients/$client_id/allowed-user-groups" '{"userGroupIds": []}' >/dev/null
+        return 0
+      fi
+
+      # Look up group UUIDs from names
+      local group_ids="[]"
+      for group_name in $(echo "$groups_json" | ${pkgs.jq}/bin/jq -r '.[]'); do
+        local group_id=$(get_group_id "$group_name")
+        if [ -n "$group_id" ]; then
+          group_ids=$(echo "$group_ids" | ${pkgs.jq}/bin/jq --arg id "$group_id" '. + [$id]')
+        else
+          echo "WARNING: Group '$group_name' not found in pocket-id" >&2
+        fi
+      done
+
+      # Update allowed groups
+      local payload=$(${pkgs.jq}/bin/jq -n --argjson ids "$group_ids" '{"userGroupIds": $ids}')
+      api_call PUT "/api/oidc/clients/$client_id/allowed-user-groups" "$payload" >/dev/null
+    }
+
     # Create a new OIDC client and return its secret
     create_client() {
       local client_name="$1"
+      local groups_json="$2"
 
       # Create the client
       local create_response=$(api_call POST "/api/oidc/clients" "{
@@ -87,6 +126,11 @@ let
       if [ -z "$client_id" ]; then
         echo "ERROR: Failed to create client $client_name" >&2
         return 1
+      fi
+
+      # Set allowed groups if specified
+      if [ -n "$groups_json" ]; then
+        set_allowed_groups "$client_id" "$groups_json"
       fi
 
       # Generate client secret
@@ -116,6 +160,8 @@ let
 
       # Client name is the FQDN (e.g., "outline.gisi.network")
       client_name=$(echo "$request" | ${pkgs.jq}/bin/jq -r '.client_name // empty')
+      # Allowed groups (array of LDAP group names)
+      groups_json=$(echo "$request" | ${pkgs.jq}/bin/jq -c '.groups // []')
 
       if [ -z "$client_name" ]; then
         output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
@@ -136,7 +182,8 @@ let
           'any(.[]; .id == $id)')
 
         if [ "$client_exists" = "true" ] && [ -n "$cached_secret" ]; then
-          # Reuse cached credentials
+          # Reuse cached credentials, but sync groups (true-up)
+          set_allowed_groups "$cached_id" "$groups_json"
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson resp "$cached_response" \
             '.[$k] = $resp')
           continue
@@ -150,6 +197,8 @@ let
       if [ "$existing_client" != "null" ] && [ -n "$existing_client" ]; then
         # Client exists but we don't have the secret cached - regenerate it
         existing_id=$(echo "$existing_client" | ${pkgs.jq}/bin/jq -r '.id')
+        # Sync groups (true-up)
+        set_allowed_groups "$existing_id" "$groups_json"
         secret_response=$(api_call POST "/api/oidc/clients/$existing_id/secret" "{}")
         client_secret=$(echo "$secret_response" | ${pkgs.jq}/bin/jq -r '.secret // empty')
 
@@ -162,7 +211,7 @@ let
         fi
       else
         # Create new client
-        if new_creds=$(create_client "$client_name"); then
+        if new_creds=$(create_client "$client_name" "$groups_json"); then
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson creds "$new_creds" \
             '.[$k] = $creds')
         else
