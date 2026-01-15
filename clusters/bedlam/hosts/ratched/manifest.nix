@@ -13,6 +13,7 @@ rec {
       dataGroup = "users";
     }
     "vdirsyncer-auth"
+    "radicale"
   ];
 
   aspects = [
