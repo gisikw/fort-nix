@@ -66,47 +66,50 @@ in
   }
 
   {
-    alias = "!automation__egress_door_opened";
+    alias = "!automation__security_door_opened";
     mode = "single";
     triggers = [
       { platform = "state"; entity_id = egress_doors; to = "on"; }
     ];
     conditions = [
       {
-        condition = "time";
-        after = "input_datetime.egress_monitor_start";
-        before = "input_datetime.egress_monitor_end";
+        condition = "not";
+        conditions = [{
+          condition = "state";
+          entity_id = "input_select.security_mode";
+          state = "Disarmed";
+        }];
       }
       {
         condition = "state";
-        entity_id = "timer.egress_snooze";
+        entity_id = "timer.security_snooze";
         state = "idle";
       }
     ];
     actions = [
       {
         action = "timer.start";
-        target.entity_id = "timer.egress_alert";
+        target.entity_id = "timer.security_alert";
         data.duration = "00:02:30";
       }
       {
         action = devices.notify__adult_1.service;
         data = {
-          title = "Exterior Door Opened";
-          message = "Open app to dismiss if expected";
+          title = "🚨 Door Opened While Armed";
+          message = "{{ trigger.to_state.attributes.friendly_name }} - tap to dismiss";
         };
       }
     ];
   }
 
   {
-    alias = "!automation__egress_escalate";
+    alias = "!automation__security_escalate";
     mode = "single";
     triggers = [
       {
         platform = "event";
         event_type = "timer.finished";
-        event_data.entity_id = "timer.egress_alert";
+        event_data.entity_id = "timer.security_alert";
       }
     ];
     actions = [
@@ -130,24 +133,24 @@ in
       }
       {
         action = "timer.start";
-        target.entity_id = "timer.egress_alert";
+        target.entity_id = "timer.security_alert";
         data.duration = "00:00:30";
       }
     ];
   }
 
   {
-    alias = "!automation__egress_dismiss";
+    alias = "!automation__security_dismiss";
     mode = "single";
     triggers = [
-      { platform = "state"; entity_id = "input_button.egress_alert_dismiss"; }
+      { platform = "state"; entity_id = "input_button.security_dismiss"; }
     ];
     conditions = [
       {
         condition = "not";
         conditions = [{
           condition = "state";
-          entity_id = "input_button.egress_alert_dismiss";
+          entity_id = "input_button.security_dismiss";
           state = ["unavailable" "unknown"];
         }];
       }
@@ -155,7 +158,7 @@ in
     actions = [
       {
         action = "timer.cancel";
-        target.entity_id = "timer.egress_alert";
+        target.entity_id = "timer.security_alert";
       }
       {
         action = "switch.turn_off";
@@ -163,52 +166,7 @@ in
       }
       {
         action = devices.notify__adult_1.service;
-        data.message = "Door alert cleared";
-      }
-    ];
-  }
-
-  {
-    alias = "!automation__egress_snooze";
-    mode = "single";
-    triggers = [
-      { platform = "state"; entity_id = "input_select.egress_snooze"; }
-    ];
-    conditions = [
-      {
-        condition = "not";
-        conditions = [{
-          condition = "state";
-          entity_id = "input_select.egress_snooze";
-          state = ["unavailable" "unknown" "Off"];
-        }];
-      }
-    ];
-    actions = [
-      {
-        choose = [
-          {
-            conditions = [{ condition = "state"; entity_id = "input_select.egress_snooze"; state = "2 minutes"; }];
-            sequence = [{ action = "timer.start"; target.entity_id = "timer.egress_snooze"; data.duration = "00:02:00"; }];
-          }
-          {
-            conditions = [{ condition = "state"; entity_id = "input_select.egress_snooze"; state = "15 minutes"; }];
-            sequence = [{ action = "timer.start"; target.entity_id = "timer.egress_snooze"; data.duration = "00:15:00"; }];
-          }
-          {
-            conditions = [{ condition = "state"; entity_id = "input_select.egress_snooze"; state = "1 hour"; }];
-            sequence = [{ action = "timer.start"; target.entity_id = "timer.egress_snooze"; data.duration = "01:00:00"; }];
-          }
-          {
-            conditions = [{ condition = "state"; entity_id = "input_select.egress_snooze"; state = "Until morning"; }];
-            sequence = [{ action = "timer.start"; target.entity_id = "timer.egress_snooze"; data.duration = "08:00:00"; }];
-          }
-        ];
-      }
-      {
-        action = "input_select.select_option";
-        target.entity_id = "input_select.egress_snooze";
-        data.option = "Off";
+        data.message = "Alert dismissed (system remains armed)";
       }
     ];
   }

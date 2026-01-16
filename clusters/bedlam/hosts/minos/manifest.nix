@@ -14,6 +14,7 @@ rec {
       declarative.scenes = ./scenes.nix;
       declarative.scripts = ./scripts.nix;
       declarative.helpers = ./helpers.nix;
+      declarative.dashboards = ./dashboards.nix;
     }
   ];
 

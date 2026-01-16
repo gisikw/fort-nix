@@ -9,6 +9,19 @@ let
   scriptsFile = yamlFormat.generate "hass-scripts.yaml" (import declarative.scripts);
   helpers = if declarative ? helpers then import declarative.helpers else {};
 
+  # Dashboard support - each dashboard is { title, icon, config }
+  dashboards = if declarative ? dashboards then import declarative.dashboards else {};
+  dashboardFiles = lib.mapAttrs (name: dash:
+    yamlFormat.generate "hass-dashboard-${name}.yaml" dash.config
+  ) dashboards;
+  lovelaceDashboards = lib.mapAttrs (name: dash: {
+    mode = "yaml";
+    title = dash.title;
+    icon = dash.icon;
+    show_in_sidebar = true;
+    filename = "dashboards/${name}.yaml";
+  }) dashboards;
+
   # RPC handler that relays notifications to Home Assistant webhook
   # Input: { title?, message, url?, actions?: [{action, title, uri?}] }
   # Output: { status: "sent" } or { error: "..." }
@@ -89,6 +102,12 @@ in
         use_x_forwarded_for = true;
         trusted_proxies = [ "127.0.0.1" ];
       };
+
+      # Lovelace dashboard configuration
+      lovelace = lib.mkIf (dashboards != {}) {
+        mode = "storage";  # Keep default dashboard UI-editable
+        dashboards = lovelaceDashboards;
+      };
     } // helpers;
   };
 
@@ -97,7 +116,7 @@ in
     lightsFile
     scenesFile
     scriptsFile
-  ];
+  ] ++ (lib.attrValues dashboardFiles);
 
   systemd.services.home-assistant-config-fixup = {
     description = "Substitute entity IDs in Home Assistant config";
@@ -112,7 +131,7 @@ in
       lightsFile
       scriptsFile
       scenesFile
-    ];
+    ] ++ (lib.attrValues dashboardFiles);
     script = ''
       rm -f /var/lib/hass/automations.yaml
       rm -f /var/lib/hass/lights.yaml
@@ -122,6 +141,12 @@ in
       cp ${lightsFile} /var/lib/hass/lights.yaml
       cp ${scenesFile} /var/lib/hass/scenes.yaml
       cp ${scriptsFile} /var/lib/hass/scripts.yaml
+
+      # Copy dashboard files
+      mkdir -p /var/lib/hass/dashboards
+      ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
+        cp ${file} /var/lib/hass/dashboards/${name}.yaml
+      '') dashboardFiles)}
 
       while IFS=: read ieee script_name friendly_name; do
         [ -z "$ieee" ] && continue
