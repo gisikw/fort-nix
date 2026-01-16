@@ -212,4 +212,32 @@ in
       }
     ];
   }
+
+  # Fort notification relay - receives notifications from control plane and forwards to mobile app
+  {
+    alias = "!automation__fort_notify_relay";
+    mode = "queued";
+    max = 10;
+    triggers = [
+      {
+        platform = "webhook";
+        webhook_id = "fort-notify";
+        local_only = true;
+        allowed_methods = ["POST"];
+      }
+    ];
+    actions = [
+      {
+        action = devices.notify__adult_1.service;
+        data = {
+          title = "{{ trigger.json.title | default('Fort Alert', true) }}";
+          message = "{{ trigger.json.message | default('No message provided', true) }}";
+          data = {
+            url = "{{ trigger.json.url | default(None) }}";
+            actions = "{{ trigger.json.actions | default([]) }}";
+          };
+        };
+      }
+    ];
+  }
 ]

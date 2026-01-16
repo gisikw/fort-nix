@@ -8,6 +8,37 @@ let
   scenesFile = yamlFormat.generate "hass-scenes.yaml" (import declarative.scenes);
   scriptsFile = yamlFormat.generate "hass-scripts.yaml" (import declarative.scripts);
   helpers = if declarative ? helpers then import declarative.helpers else {};
+
+  # RPC handler that relays notifications to Home Assistant webhook
+  # Input: { title?, message, url?, actions?: [{action, title, uri?}] }
+  # Output: { status: "sent" } or { error: "..." }
+  notifyHandler = pkgs.writeShellScript "handler-notify" ''
+    set -euo pipefail
+
+    request=$(${pkgs.coreutils}/bin/cat)
+
+    # Validate message is present
+    message=$(echo "$request" | ${pkgs.jq}/bin/jq -r '.message // empty')
+    if [ -z "$message" ]; then
+      echo '{"error": "message field is required"}'
+      exit 1
+    fi
+
+    # Forward to Home Assistant webhook (local only)
+    response=$(${pkgs.curl}/bin/curl -s -w "\n%{http_code}" -X POST \
+      "http://127.0.0.1:8123/api/webhook/fort-notify" \
+      -H "Content-Type: application/json" \
+      -d "$request")
+
+    http_code=$(echo "$response" | ${pkgs.coreutils}/bin/tail -n1)
+
+    if [ "$http_code" = "200" ]; then
+      ${pkgs.jq}/bin/jq -n '{"status": "sent"}'
+    else
+      ${pkgs.jq}/bin/jq -n --arg code "$http_code" '{"error": ("webhook returned " + $code)}'
+      exit 1
+    fi
+  '';
 in
 {
   age.secrets.${mqttPasswordSecretName} = {
@@ -110,4 +141,11 @@ in
       port = 8123;
     }
   ];
+
+  # Expose notify capability for cluster-wide notifications
+  fort.host.capabilities.notify = {
+    handler = notifyHandler;
+    mode = "rpc";
+    description = "Send push notification via Home Assistant";
+  };
 }
