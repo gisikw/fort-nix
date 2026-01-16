@@ -50,18 +50,13 @@ in
               };
             }
 
-            # Current security mode
+            # Current security mode (display only - buttons below for changing)
             {
               type = "tile";
               entity = "input_select.security_mode";
               name = "Security Status";
               icon = "mdi:shield-home";
               vertical = true;
-              features = [
-                {
-                  type = "select-options";
-                }
-              ];
             }
 
             # Quick arm/disarm buttons
@@ -123,18 +118,6 @@ in
                   entity = devices.mudroom__door__grg.contact;
                   name = "Mudroom (Garage)";
                   icon = "mdi:door";
-                }
-              ];
-            }
-
-            # Siren status (for debugging/awareness)
-            {
-              type = "entities";
-              title = "Alarm Device";
-              entities = [
-                {
-                  entity = devices.bedroom_4__alarm.switch;
-                  name = "Siren";
                 }
               ];
             }
