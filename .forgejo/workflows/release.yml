@@ -12,6 +12,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Scan for PII
+        run: |
+          PII_DENYLIST='clusters/bedlam/pii-denylist.age'
+
+          if [ -f "$PII_DENYLIST" ]; then
+            echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
+            trap 'rm -f /tmp/ci-age-key.txt' EXIT
+
+            age -d -i /tmp/ci-age-key.txt "$PII_DENYLIST" > /tmp/pii-patterns.txt
+
+            found=0
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              [[ "$pattern" =~ ^# ]] && continue
+              if grep -rliE "\b${pattern}\b" --include="*.nix" . 2>/dev/null; then
+                echo "::error::PII pattern detected: $pattern"
+                found=1
+              fi
+            done < /tmp/pii-patterns.txt
+            rm -f /tmp/pii-patterns.txt
+
+            if [ "$found" -eq 1 ]; then
+              echo "::error::PII detected - blocking build"
+              exit 1
+            fi
+            echo "PII scan passed"
+          else
+            echo "::warning::No PII denylist at $PII_DENYLIST"
+          fi
+        env:
+          CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
+
       - name: Check root flake
         run: nix flake check --no-build
         env:
@@ -238,44 +270,6 @@ jobs:
           git commit -m "release: ${main_sha} - $(date -Iseconds)" \
             || echo "No changes to commit"
           git push origin release
-
-      - name: Scan for PII before mirror sync
-        run: |
-          # Switch back to main for scanning
-          git checkout main
-
-          # PII denylist is encrypted since it contains the patterns we're protecting
-          PII_DENYLIST='clusters/bedlam/pii-denylist.age'
-
-          if [ -f "$PII_DENYLIST" ]; then
-            echo "Scanning for PII patterns..."
-            echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
-            trap 'rm -f /tmp/ci-age-key.txt' EXIT
-
-            age -d -i /tmp/ci-age-key.txt "$PII_DENYLIST" > /tmp/pii-patterns.txt
-
-            # Scan all nix files for patterns (case insensitive, word boundaries)
-            found=0
-            while IFS= read -r pattern; do
-              [ -z "$pattern" ] && continue
-              [[ "$pattern" =~ ^# ]] && continue
-              if grep -rliE "\b${pattern}\b" --include="*.nix" . 2>/dev/null; then
-                echo "::error::PII pattern detected: $pattern"
-                found=1
-              fi
-            done < /tmp/pii-patterns.txt
-            rm -f /tmp/pii-patterns.txt
-
-            if [ "$found" -eq 1 ]; then
-              echo "::error::PII detected in source - mirror sync blocked"
-              exit 1
-            fi
-            echo "PII scan passed"
-          else
-            echo "::warning::No PII denylist at $PII_DENYLIST - skipping scan"
-          fi
-        env:
-          CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
 
       - name: Push to GitHub mirror
         env:
