@@ -138,6 +138,31 @@ in
                 }
               ];
             }
+
+            # Schedule section
+            {
+              type = "entities";
+              title = "Schedule";
+              entities = [
+                {
+                  entity = "input_datetime.security_arm_time";
+                  name = "Arm at";
+                }
+                {
+                  entity = "input_boolean.security_arm_schedule_enabled";
+                  name = "Arm schedule enabled";
+                }
+                { type = "divider"; }
+                {
+                  entity = "input_datetime.security_disarm_time";
+                  name = "Disarm at";
+                }
+                {
+                  entity = "input_boolean.security_disarm_schedule_enabled";
+                  name = "Disarm schedule enabled";
+                }
+              ];
+            }
           ];
         }
       ];

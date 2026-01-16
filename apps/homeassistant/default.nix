@@ -151,10 +151,9 @@ in
       cp ${scenesFile} /var/lib/hass/scenes.yaml
       cp ${scriptsFile} /var/lib/hass/scripts.yaml
 
-      # Copy dashboard files (rm first - nix store files are read-only)
+      # Copy dashboard files
       mkdir -p /var/lib/hass/dashboards
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
-        rm -f /var/lib/hass/dashboards/${name}.yaml
         cp ${file} /var/lib/hass/dashboards/${name}.yaml
       '') dashboardFiles)}
 
@@ -164,9 +163,6 @@ in
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/scripts.yaml
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/scenes.yaml
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/lights.yaml
-        for dashboard in /var/lib/hass/dashboards/*.yaml; do
-          [ -f "$dashboard" ] && sed -i "s/$script_name/$ieee/g" "$dashboard"
-        done
       done < <(grep -v -e '^$' -e '^#' ${config.age.secrets.iotManifest.path})
     '';
   };

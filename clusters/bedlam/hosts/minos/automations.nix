@@ -172,6 +172,58 @@ in
     ];
   }
 
+  # Scheduled arm - triggers at configured time if enabled
+  {
+    alias = "!automation__security_scheduled_arm";
+    mode = "single";
+    triggers = [
+      {
+        platform = "time";
+        at = "input_datetime.security_arm_time";
+      }
+    ];
+    conditions = [
+      {
+        condition = "state";
+        entity_id = "input_boolean.security_arm_schedule_enabled";
+        state = "on";
+      }
+    ];
+    actions = [
+      {
+        action = "input_select.select_option";
+        target.entity_id = "input_select.security_mode";
+        data.option = "Armed (Home)";
+      }
+    ];
+  }
+
+  # Scheduled disarm - triggers at configured time if enabled
+  {
+    alias = "!automation__security_scheduled_disarm";
+    mode = "single";
+    triggers = [
+      {
+        platform = "time";
+        at = "input_datetime.security_disarm_time";
+      }
+    ];
+    conditions = [
+      {
+        condition = "state";
+        entity_id = "input_boolean.security_disarm_schedule_enabled";
+        state = "on";
+      }
+    ];
+    actions = [
+      {
+        action = "input_select.select_option";
+        target.entity_id = "input_select.security_mode";
+        data.option = "Disarmed";
+      }
+    ];
+  }
+
   # Fort notification relay - receives notifications from control plane and forwards to mobile app
   {
     alias = "!automation__fort_notify_relay";

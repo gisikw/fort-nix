@@ -16,6 +16,28 @@
     };
   };
 
+  input_datetime = {
+    security_arm_time = {
+      icon = "mdi:shield-lock-outline";
+      has_time = true;
+      has_date = false;
+    };
+    security_disarm_time = {
+      icon = "mdi:shield-off-outline";
+      has_time = true;
+      has_date = false;
+    };
+  };
+
+  input_boolean = {
+    security_arm_schedule_enabled = {
+      icon = "mdi:calendar-clock";
+    };
+    security_disarm_schedule_enabled = {
+      icon = "mdi:calendar-clock";
+    };
+  };
+
   timer = {
     security_snooze = {
       icon = "mdi:timer-sand";
