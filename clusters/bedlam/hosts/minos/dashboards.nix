@@ -85,7 +85,7 @@ in
                 {
                   entity = devices.mudroom__door__grg.contact;
                   name = "Mudroom (Garage)";
-                  icon = "mdi:garage-variant";
+                  icon = "mdi:door";
                 }
               ];
             }
