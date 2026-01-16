@@ -13,7 +13,44 @@ in
           path = "security";
           icon = "mdi:shield-home";
           cards = [
-            # Current security mode - large, prominent
+            # Alert section (top priority when active)
+            {
+              type = "conditional";
+              conditions = [
+                {
+                  condition = "state";
+                  entity = "timer.security_alert";
+                  state_not = "idle";
+                }
+              ];
+              card = {
+                type = "vertical-stack";
+                cards = [
+                  {
+                    type = "markdown";
+                    content = "## Alert Active\nDoor was opened while armed. Dismiss to silence.";
+                  }
+                  {
+                    type = "tile";
+                    entity = "timer.security_alert";
+                    name = "Time Until Siren";
+                    color = "red";
+                  }
+                  {
+                    type = "button";
+                    name = "DISMISS ALERT";
+                    icon = "mdi:bell-cancel";
+                    tap_action = {
+                      action = "call-service";
+                      service = "input_button.press";
+                      target.entity_id = "input_button.security_dismiss";
+                    };
+                  }
+                ];
+              };
+            }
+
+            # Current security mode
             {
               type = "tile";
               entity = "input_select.security_mode";
@@ -88,43 +125,6 @@ in
                   icon = "mdi:door";
                 }
               ];
-            }
-
-            # Alert section - shows timer status and dismiss button
-            {
-              type = "conditional";
-              conditions = [
-                {
-                  condition = "state";
-                  entity = "timer.security_alert";
-                  state_not = "idle";
-                }
-              ];
-              card = {
-                type = "vertical-stack";
-                cards = [
-                  {
-                    type = "markdown";
-                    content = "## Alert Active\nDoor was opened while armed. Dismiss to silence.";
-                  }
-                  {
-                    type = "tile";
-                    entity = "timer.security_alert";
-                    name = "Time Until Siren";
-                    color = "red";
-                  }
-                  {
-                    type = "button";
-                    name = "DISMISS ALERT";
-                    icon = "mdi:bell-cancel";
-                    tap_action = {
-                      action = "call-service";
-                      service = "input_button.press";
-                      target.entity_id = "input_button.security_dismiss";
-                    };
-                  }
-                ];
-              };
             }
 
             # Siren status (for debugging/awareness)

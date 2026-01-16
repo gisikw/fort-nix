@@ -96,7 +96,8 @@ in
         action = devices.notify__adult_1.service;
         data = {
           title = "🚨 Door Opened While Armed";
-          message = "{{ trigger.to_state.attributes.friendly_name }} - tap to dismiss";
+          message = "{{ trigger.to_state.attributes.friendly_name }}";
+          data.url = "/security-panel/security";
         };
       }
     ];
