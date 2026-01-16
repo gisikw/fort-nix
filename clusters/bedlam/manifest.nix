@@ -71,6 +71,14 @@ rec {
             };
           };
         };
+        "dwim" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/dwim";
+              tokenFile = ./github-mirror-token.age;
+            };
+          };
+        };
       };
     };
   };
