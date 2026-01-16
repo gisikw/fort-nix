@@ -152,9 +152,12 @@ in
       cp ${scriptsFile} /var/lib/hass/scripts.yaml
 
       # Copy dashboard files
+      # - rm -f: remove existing (may be read-only from prior nix store cp)
+      # - install -m 644: copy with writable permissions for future updates
       mkdir -p /var/lib/hass/dashboards
+      rm -f /var/lib/hass/dashboards/*.yaml
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
-        cp ${file} /var/lib/hass/dashboards/${name}.yaml
+        install -m 644 ${file} /var/lib/hass/dashboards/${name}.yaml
       '') dashboardFiles)}
 
       while IFS=: read ieee script_name friendly_name; do
@@ -163,6 +166,9 @@ in
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/scripts.yaml
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/scenes.yaml
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/lights.yaml
+        for dashboard in /var/lib/hass/dashboards/*.yaml; do
+          [ -f "$dashboard" ] && sed -i "s/$script_name/$ieee/g" "$dashboard"
+        done
       done < <(grep -v -e '^$' -e '^#' ${config.age.secrets.iotManifest.path})
     '';
   };
