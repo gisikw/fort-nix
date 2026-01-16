@@ -55,6 +55,7 @@ in
               type = "tile";
               entity = "input_select.security_mode";
               name = "Security Status";
+              icon = "mdi:shield";
               vertical = true;
             }
 
@@ -187,6 +188,28 @@ in
                 }
                 { type = "divider"; }
                 {
+                  entity = devices.bedroom_3__temp_sensor.temperature;
+                  name = "Bedroom 3";
+                  icon = "mdi:thermometer";
+                }
+                {
+                  entity = devices.bedroom_3__temp_sensor.humidity;
+                  name = "Bedroom 3 Humidity";
+                  icon = "mdi:water-percent";
+                }
+                { type = "divider"; }
+                {
+                  entity = devices.bedroom_4__temp_sensor.temperature;
+                  name = "Bedroom 4";
+                  icon = "mdi:thermometer";
+                }
+                {
+                  entity = devices.bedroom_4__temp_sensor.humidity;
+                  name = "Bedroom 4 Humidity";
+                  icon = "mdi:water-percent";
+                }
+                { type = "divider"; }
+                {
                   entity = devices.boiler__temp_sensor.temperature;
                   name = "Boiler Room";
                   icon = "mdi:thermometer";
@@ -199,10 +222,17 @@ in
               ];
             }
 
+            # Garage thermostat
+            {
+              type = "thermostat";
+              entity = devices.garage__thermostat.climate;
+              name = "Garage";
+            }
+
             # Boiler room controls
             {
               type = "entities";
-              title = "Boiler Room";
+              title = "Boiler Room Controls";
               entities = [
                 {
                   entity = devices.boiler__dehumidifier.switch;
@@ -211,14 +241,11 @@ in
                 }
                 {
                   entity = devices.boiler__dehumidifier.power;
-                  name = "Power Usage";
+                  name = "Dehumidifier Power";
                   icon = "mdi:flash";
                 }
               ];
             }
-
-            # Garage thermostat (placeholder - entity TBD)
-            # TODO: Add garage thermostat once entity is identified
           ];
         }
       ];
@@ -232,99 +259,77 @@ in
       title = "Lights & Switches";
       views = [
         {
-          title = "Lights";
+          title = "Lights & Switches";
           path = "lights";
           icon = "mdi:lightbulb-group";
           cards = [
-            # Bedroom 2
+            # Bedroom 2 - light card with brightness/color
             {
-              type = "vertical-stack";
-              cards = [
+              type = "light";
+              entity = "light.bedroom_2__lights";
+              name = "Bedroom 2";
+            }
+
+            # Bedroom 3 - light card with brightness/color
+            {
+              type = "light";
+              entity = "light.bedroom_3__lights";
+              name = "Bedroom 3";
+            }
+
+            # Upstairs Bathroom - light card with brightness/color
+            {
+              type = "light";
+              entity = "light.bath_2__lights";
+              name = "Upstairs Bathroom";
+            }
+
+            # Exterior lights
+            {
+              type = "entities";
+              title = "Exterior";
+              entities = [
                 {
-                  type = "markdown";
-                  content = "## Bedroom 2";
-                }
-                {
-                  type = "horizontal-stack";
-                  cards = [
-                    {
-                      type = "light";
-                      entity = devices.bedroom_2__light__ne.light;
-                      name = "NE";
-                    }
-                    {
-                      type = "light";
-                      entity = devices.bedroom_2__light__sw.light;
-                      name = "SW";
-                    }
-                  ];
+                  entity = devices.exterior_light_flood.light;
+                  name = "Floodlight";
+                  icon = "mdi:outdoor-lamp";
                 }
               ];
             }
 
-            # Bedroom 3
+            # Switches
             {
-              type = "vertical-stack";
-              cards = [
+              type = "entities";
+              title = "Switches";
+              entities = [
                 {
-                  type = "markdown";
-                  content = "## Bedroom 3";
+                  entity = devices.kitchen__disposal_switch.switch;
+                  name = "Kitchen Disposal";
+                  icon = "mdi:water-pump";
                 }
                 {
-                  type = "horizontal-stack";
-                  cards = [
-                    {
-                      type = "light";
-                      entity = devices.bedroom_3__light__nw.light;
-                      name = "NW";
-                    }
-                    {
-                      type = "light";
-                      entity = devices.bedroom_3__light__ne.light;
-                      name = "NE";
-                    }
-                  ];
-                }
-                {
-                  type = "horizontal-stack";
-                  cards = [
-                    {
-                      type = "light";
-                      entity = devices.bedroom_3__light__sw.light;
-                      name = "SW";
-                    }
-                    {
-                      type = "light";
-                      entity = devices.bedroom_3__light__se.light;
-                      name = "SE";
-                    }
-                  ];
+                  entity = devices.boiler__dehumidifier.switch;
+                  name = "Boiler Dehumidifier";
+                  icon = "mdi:air-humidifier";
                 }
               ];
             }
 
-            # All lights quick controls
+            # All lights off
             {
-              type = "horizontal-stack";
-              cards = [
-                {
-                  type = "button";
-                  name = "All Off";
-                  icon = "mdi:lightbulb-off";
-                  tap_action = {
-                    action = "call-service";
-                    service = "light.turn_off";
-                    target.entity_id = [
-                      devices.bedroom_2__light__ne.light
-                      devices.bedroom_2__light__sw.light
-                      devices.bedroom_3__light__nw.light
-                      devices.bedroom_3__light__ne.light
-                      devices.bedroom_3__light__sw.light
-                      devices.bedroom_3__light__se.light
-                    ];
-                  };
-                }
-              ];
+              type = "button";
+              name = "All Lights Off";
+              icon = "mdi:lightbulb-off";
+              tap_action = {
+                action = "call-service";
+                service = "light.turn_off";
+                target.entity_id = [
+                  "light.bedroom_2__lights"
+                  "light.bedroom_3__lights"
+                  "light.bath_2__lights"
+                  devices.exterior_light_flood.light
+                ];
+              };
             }
           ];
         }

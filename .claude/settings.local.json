@@ -65,7 +65,13 @@
       "Bash(fort ratched needs)",
       "Bash(fort drhorrible needs)",
       "Bash(go build:*)",
-      "Bash(fort ratched journal:*)"
+      "Bash(fort ratched journal:*)",
+      "Bash(bd add:*)",
+      "Bash(bd --help:*)",
+      "Bash(nix flake show:*)",
+      "Bash(nix-instantiate:*)",
+      "Bash(fort minos systemd:*)",
+      "Bash(fort minos journal:*)"
     ],
     "deny": [],
     "ask": []

@@ -55,25 +55,81 @@ let
       service = "notify.${name}";
     };
   };
+
+  # Z-Wave lights (via zwave-js-ui)
+  mkZwaveLight = name: {
+    ${name} = {
+      light = "light.${name}";
+    };
+  };
+
+  # Z-Wave dimmer switch (controls a light)
+  mkZwaveDimmer = name: {
+    ${name} = {
+      light = "light.${name}";
+    };
+  };
+
+  # Aqara switch (simple on/off)
+  mkAqaraSwitch = name: {
+    ${name} = {
+      switch = "switch.${name}";
+    };
+  };
+
+  # Climate/thermostat
+  mkThermostat = name: {
+    ${name} = {
+      climate = "climate.${name}";
+      temperature = "sensor.${name}_temperature";
+    };
+  };
 in
+  # bedroom_2
   mkHueLight "bedroom_2__light__ne" //
   mkHueLight "bedroom_2__light__sw" //
   mkAqaraTemperatureSensor "bedroom_2__temp_sensor" //
   mkHueRemote "bedroom_2__remote" //
+  mkZwaveDimmer "bedroom_2__switch" //
 
-  mkAqaraContactSensor "family_room__door__ext" //
-
+  # bedroom_3
   mkHueLight "bedroom_3__light__ne" //
   mkHueLight "bedroom_3__light__nw" //
   mkHueLight "bedroom_3__light__se" //
   mkHueLight "bedroom_3__light__sw" //
+  mkAqaraTemperatureSensor "bedroom_3__temp_sensor" //
+  mkHueRemote "bedroom_3__remote" //
+  mkSenckitSiren "bedroom_3__alarm" //
 
+  # Kevin's Room (bedroom_4)
+  mkAqaraTemperatureSensor "bedroom_4__temp_sensor" //
+  mkSenckitSiren "bedroom_4__alarm" //
+
+  # Upstairs Bathroom (bath_2)
+  mkZwaveLight "bath_2__light__vanity_left" //
+  mkZwaveLight "bath_2__light__vanity_center" //
+  mkZwaveLight "bath_2__light__vanity_right" //
+  mkZwaveLight "bath_2__light__toilet" //
+
+  # Family Room
+  mkAqaraContactSensor "family_room__door__ext" //
+
+  # Mudroom
   mkAqaraContactSensor "mudroom__door__ext" //
   mkAqaraContactSensor "mudroom__door__grg" //
 
+  # Kitchen
+  mkAqaraSwitch "kitchen__disposal_switch" //
+
+  # Boiler Room
   mkAqaraTemperatureSensor "boiler__temp_sensor" //
   mkThirdRealityOutlet "boiler__dehumidifier" //
 
-  mkSenckitSiren "bedroom_4__alarm" //
+  # Garage
+  mkThermostat "garage__thermostat" //
 
+  # Exterior
+  mkZwaveLight "exterior_light_flood" //
+
+  # Notifications
   mkNotify "notify__adult_1"
