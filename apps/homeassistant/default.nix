@@ -163,6 +163,9 @@ in
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/scripts.yaml
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/scenes.yaml
         sed -i "s/$script_name/$ieee/g" /var/lib/hass/lights.yaml
+        for dashboard in /var/lib/hass/dashboards/*.yaml; do
+          [ -f "$dashboard" ] && sed -i "s/$script_name/$ieee/g" "$dashboard"
+        done
       done < <(grep -v -e '^$' -e '^#' ${config.age.secrets.iotManifest.path})
     '';
   };
