@@ -55,7 +55,14 @@ in
               type = "tile";
               entity = "input_select.security_mode";
               name = "Security Status";
-              icon = "mdi:shield-home";
+              icon = ''
+                {% if is_state('input_select.security_mode', 'Disarmed') %}
+                  mdi:shield-off
+                {% elif is_state('input_select.security_mode', 'Armed (Away)') %}
+                  mdi:shield-lock
+                {% else %}
+                  mdi:shield-home
+                {% endif %}'';
               vertical = true;
             }
 
