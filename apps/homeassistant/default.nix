@@ -14,13 +14,17 @@ let
   dashboardFiles = lib.mapAttrs (name: dash:
     yamlFormat.generate "hass-dashboard-${name}.yaml" dash.config
   ) dashboards;
-  lovelaceDashboards = lib.mapAttrs (name: dash: {
-    mode = "yaml";
-    title = dash.title;
-    icon = dash.icon;
-    show_in_sidebar = true;
-    filename = "dashboards/${name}.yaml";
-  }) dashboards;
+  # HA requires dashboard URL paths to contain a hyphen
+  lovelaceDashboards = lib.listToAttrs (lib.mapAttrsToList (name: dash: {
+    name = "${name}-panel";  # URL path must contain hyphen
+    value = {
+      mode = "yaml";
+      title = dash.title;
+      icon = dash.icon;
+      show_in_sidebar = true;
+      filename = "dashboards/${name}.yaml";  # File uses original name
+    };
+  }) dashboards);
 
   # RPC handler that relays notifications to Home Assistant webhook
   # Input: { title?, message, url?, actions?: [{action, title, uri?}] }
