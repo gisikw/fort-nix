@@ -71,6 +71,11 @@ in
     path = "/var/lib/hass/secrets.yaml";
   };
 
+  # Create dashboards directory with correct ownership
+  systemd.tmpfiles.rules = lib.mkIf (dashboards != {}) [
+    "d /var/lib/hass/dashboards 0755 hass hass -"
+  ];
+
   services.home-assistant = {
     enable = true;
 
