@@ -151,9 +151,10 @@ in
       cp ${scenesFile} /var/lib/hass/scenes.yaml
       cp ${scriptsFile} /var/lib/hass/scripts.yaml
 
-      # Copy dashboard files
+      # Copy dashboard files (rm first - nix store files are read-only)
       mkdir -p /var/lib/hass/dashboards
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
+        rm -f /var/lib/hass/dashboards/${name}.yaml
         cp ${file} /var/lib/hass/dashboards/${name}.yaml
       '') dashboardFiles)}
 
