@@ -42,4 +42,5 @@ in
   "./aspects/dev-sandbox/oauth-client-secret.age".publicKeys = activeKeys;
   "./apps/radicale/htpasswd.age".publicKeys = activeKeys;
   "./apps/radicale/password.age".publicKeys = activeKeys;
+  "./clusters/bedlam/pii-denylist.age".publicKeys = activeKeys;
 }

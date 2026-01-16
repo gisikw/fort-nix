@@ -399,26 +399,6 @@ in
             -d "{\"name\": \"$repo_name\", \"private\": true}"
         fi
 
-        # Configure push mirrors for this repo
-        for mirror_name in $(echo "$REPOS" | jq -r --arg r "$repo_name" '.[$r].mirrors | keys[]'); do
-          remote=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].remote')
-          token_path=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].tokenPath')
-          token=$(cat "$token_path")
-
-          # Build mirror URL (credentials passed separately)
-          mirror_url="https://$remote.git"
-
-          # Check if mirror already exists
-          existing=$(api "$API_URL/repos/$FORGEJO_ORG/$repo_name/push_mirrors" | jq -r --arg r "$remote" '.[] | select(.remote_address | contains($r)) | .id' || true)
-
-          if [ -z "$existing" ]; then
-            echo "Adding push mirror to $repo_name: $mirror_name ($remote)"
-            api -X POST "$API_URL/repos/$FORGEJO_ORG/$repo_name/push_mirrors" \
-              -d "{\"remote_address\": \"$mirror_url\", \"remote_username\": \"x-access-token\", \"remote_password\": \"$token\", \"interval\": \"8h0m0s\", \"sync_on_commit\": true}"
-          else
-            echo "Push mirror already configured for $repo_name: $mirror_name"
-          fi
-        done
       done
 
       # Register runner with Forgejo using shared secret

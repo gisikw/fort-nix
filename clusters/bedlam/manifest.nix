@@ -52,6 +52,7 @@ rec {
             github = {
               remote = "github.com/gisikw/fort-nix";
               tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];  # Explicitly exclude release - CI scans before push
             };
           };
         };
@@ -60,6 +61,7 @@ rec {
             github = {
               remote = "github.com/gisikw/wicket";
               tokenFile = ./github-mirror-token.age;
+              branches = [ "main" "release" ];
             };
           };
         };
@@ -68,6 +70,7 @@ rec {
             github = {
               remote = "github.com/gisikw/bz";
               tokenFile = ./github-mirror-token.age;
+              branches = [ "main" "release" ];
             };
           };
         };
@@ -76,6 +79,7 @@ rec {
             github = {
               remote = "github.com/gisikw/dwim";
               tokenFile = ./github-mirror-token.age;
+              branches = [ "main" "release" ];
             };
           };
         };
