@@ -272,18 +272,9 @@ jobs:
           git push origin release
 
       - name: Push to GitHub mirror
-        env:
-          CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
         run: |
-          echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
-          trap 'rm -f /tmp/ci-age-key.txt' EXIT
-
-          # Decrypt GitHub mirror token
-          GITHUB_TOKEN=$(age -d -i /tmp/ci-age-key.txt clusters/bedlam/github-mirror-token.age)
-
-          # Push only main branch to GitHub (release excluded per manifest config)
-          # This matches the branches config in clusters/bedlam/manifest.nix
           echo "Pushing main to GitHub mirror..."
-          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/gisikw/fort-nix.git" main:main
-
+          git push --force "https://x-access-token:${MIRROR_TOKEN}@github.com/gisikw/fort-nix.git" main:main
           echo "Mirror sync complete"
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
