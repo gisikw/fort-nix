@@ -36,8 +36,9 @@ rec {
         };
         ci = {
           description = "Forgejo CI - secret re-keying only";
-          publicKey = "age1r7ezaxn5zvzlkas0fkvuhwduxcj9t2kzdrfe4zjftrlchrngk5ls6tsxke";
+          publicKey = "age17yvth7hknu2n9gcgh0wfcas2tcw7stfae4hs6r6g6jmwntquwqeqf2q7xu";
           # Private key stored in Forgejo secrets (CI_AGE_KEY)
+          # Also stored encrypted at clusters/bedlam/ci-age-key.age for easy provisioning
           roles = [ "secrets" ];
         };
       };
