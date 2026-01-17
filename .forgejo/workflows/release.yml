@@ -207,6 +207,8 @@ jobs:
         env:
           CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
         run: |
+          set -e
+
           echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
           trap 'rm -f /tmp/ci-age-key.txt' EXIT
 
@@ -223,6 +225,13 @@ jobs:
 
             # Decrypt with CI key, re-encrypt for all recipients
             age -d -i /tmp/ci-age-key.txt "$secret_path" > /tmp/decrypted.tmp
+
+            # Validate decryption produced content (belt-and-suspenders with set -e)
+            if [ ! -s /tmp/decrypted.tmp ]; then
+              echo "::error::Secret $secret_path decrypted to empty content"
+              exit 1
+            fi
+
             age -e -R /tmp/recipients.txt -o "$secret_path.new" /tmp/decrypted.tmp
             mv "$secret_path.new" "$secret_path"
             rm -f /tmp/decrypted.tmp /tmp/recipients.txt
