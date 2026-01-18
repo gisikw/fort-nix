@@ -63,7 +63,9 @@ let
 
     revoke_token() {
       echo "revoke_token called with: $1" >&2
-      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token $1" 2>&1 || true
+      local revoke_result
+      revoke_result=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token-name $1" 2>&1) || true
+      echo "revoke_result: $revoke_result" >&2
     }
 
     generate_token() {
