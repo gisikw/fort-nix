@@ -37,8 +37,10 @@ let
   #   - Revokes and deletes orphaned tokens
   #   - Returns credentials only for survivors
   gitTokenHandler = pkgs.writeShellScript "handler-git-token" ''
+    exec 2>>/tmp/git-token-debug.log
     set -euo pipefail
 
+    echo "=== $(date) ===" >&2
     echo "git-token handler starting" >&2
 
     # Read aggregate input
@@ -60,11 +62,16 @@ let
     }
 
     revoke_token() {
-      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token $1" 2>/dev/null || true
+      echo "revoke_token called with: $1" >&2
+      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token $1" 2>&1 || true
     }
 
     generate_token() {
-      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name $1 --scopes $2 --raw" 2>/dev/null
+      echo "generate_token called with: $1 | $2" >&2
+      local result
+      result=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name $1 --scopes $2 --raw" 2>&1) || true
+      echo "generate_token result: $result" >&2
+      echo "$result"
     }
 
     #
