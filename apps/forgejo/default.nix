@@ -71,8 +71,13 @@ let
     generate_token() {
       echo "generate_token called with: $1 | $2" >&2
       local result
-      result=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name $1 --scopes $2 --raw" 2>&1) || true
-      echo "generate_token result: $result" >&2
+      local exit_code
+      result=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name $1 --scopes $2 --raw" 2>&1) && exit_code=0 || exit_code=$?
+      echo "generate_token result (exit=$exit_code): $result" >&2
+      if [ $exit_code -ne 0 ] || [[ "$result" == *"error"* ]] || [[ "$result" == *"Error"* ]]; then
+        echo "generate_token failed" >&2
+        return 1
+      fi
       echo "$result"
     }
 
