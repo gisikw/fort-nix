@@ -283,9 +283,11 @@ jobs:
       - name: Push to GitHub mirror
         run: |
           echo "Pushing main to GitHub mirror..."
-          TOKEN=$(echo -n "$MIRROR_TOKEN" | tr -d '[:space:]')
+          echo "$CI_AGE_KEY" > /tmp/ci-age-key.txt
+          trap 'rm -f /tmp/ci-age-key.txt' EXIT
+          TOKEN=$(age -d -i /tmp/ci-age-key.txt clusters/bedlam/github-mirror-token.age | tr -d '[:space:]')
           echo "${TOKEN:0:8}..."
           git push --force "https://gisikw:${TOKEN}@github.com/gisikw/fort-nix.git" main:main
           echo "Mirror sync complete"
         env:
-          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          CI_AGE_KEY: ${{ secrets.CI_AGE_KEY }}
