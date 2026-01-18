@@ -63,9 +63,12 @@ let
 
     revoke_token() {
       echo "revoke_token called with: $1" >&2
-      local revoke_result
-      revoke_result=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token-name $1" 2>&1) || true
-      echo "revoke_result: $revoke_result" >&2
+      local admin_token
+      admin_token=$(${pkgs.coreutils}/bin/cat ${bootstrapDir}/admin-token)
+      ${pkgs.curl}/bin/curl -sf -X DELETE \
+        -H "Authorization: token $admin_token" \
+        "http://localhost:3001/api/v1/users/forge-admin/tokens/$1" 2>&1 || true
+      echo "revoke_token done" >&2
     }
 
     generate_token() {
@@ -381,7 +384,7 @@ in
         TOKEN=$(forgejo admin user generate-access-token \
           --username "$ADMIN_USER" \
           --token-name "bootstrap" \
-          --scopes "write:organization,write:repository,write:admin" \
+          --scopes "write:organization,write:repository,write:admin,write:user" \
           --raw)
         echo "$TOKEN" > "$TOKEN_FILE"
         chmod 600 "$TOKEN_FILE"
