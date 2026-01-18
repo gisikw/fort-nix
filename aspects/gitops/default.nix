@@ -30,6 +30,8 @@ let
     ${pkgs.coreutils}/bin/mkdir -p "${credDir}"
     ${pkgs.jq}/bin/jq -r '.token' > "${tokenFile}"
     ${pkgs.coreutils}/bin/chmod 600 "${tokenFile}"
+    # Restart comin to pick up new credentials
+    ${pkgs.systemd}/bin/systemctl restart comin
   '';
 
   # Handler for attic-token: stores cache config and push token
