@@ -283,7 +283,9 @@ jobs:
       - name: Push to GitHub mirror
         run: |
           echo "Pushing main to GitHub mirror..."
-          REPO_URL="https://${MIRROR_TOKEN}@github.com/gisikw/fort-nix.git"
+          TOKEN=$(echo -n "$MIRROR_TOKEN" | tr -d '[:space:]')
+          REPO_URL="https://${TOKEN}@github.com/gisikw/fort-nix.git"
+          echo "URL hash: $(echo -n "$REPO_URL" | sha256sum | cut -c1-16) (expected: 8026ab37f122a7cc)"
           GIT_TERMINAL_PROMPT=0 git push --force "$REPO_URL" main:main
           echo "Mirror sync complete"
         env:
