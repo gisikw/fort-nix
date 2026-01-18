@@ -284,7 +284,7 @@ jobs:
         run: |
           echo "Pushing main to GitHub mirror..."
           TOKEN=$(echo -n "$MIRROR_TOKEN" | tr -d '[:space:]')
-          git push --force "https://${TOKEN}@github.com/gisikw/fort-nix.git" main:main
+          GIT_TERMINAL_PROMPT=0 git push --force "https://${TOKEN}@github.com/gisikw/fort-nix.git" main:main
           echo "Mirror sync complete"
         env:
           MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
