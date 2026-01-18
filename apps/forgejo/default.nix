@@ -56,23 +56,23 @@ let
       " -- "$@"
     }
 
-    # Helper to revoke a token by name
     revoke_token() {
       local token_name="$1"
-      run_forgejo admin user delete-access-token \
-        --username forge-admin \
-        --token "$token_name" 2>/dev/null || true
+      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "
+        GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom \
+        ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token \
+          --username forge-admin --token \"$token_name\"
+      " 2>/dev/null || true
     }
 
-    # Helper to generate a new token
     generate_token() {
       local token_name="$1"
       local scopes="$2"
-      run_forgejo admin user generate-access-token \
-        --username forge-admin \
-        --token-name "$token_name" \
-        --scopes "$scopes" \
-        --raw 2>/dev/null
+      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "
+        GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom \
+        ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token \
+          --username forge-admin --token-name \"$token_name\" --scopes \"$scopes\" --raw
+      " 2>/dev/null
     }
 
     #
