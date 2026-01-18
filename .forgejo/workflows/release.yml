@@ -283,6 +283,7 @@ jobs:
       - name: Push to GitHub mirror
         run: |
           echo "Pushing main to GitHub mirror..."
+          echo ${MIRROR_TOKEN:0:8}
           git push --force "https://x-access-token:${MIRROR_TOKEN}@github.com/gisikw/fort-nix.git" main:main
           echo "Mirror sync complete"
         env:
