@@ -39,8 +39,11 @@ let
   gitTokenHandler = pkgs.writeShellScript "handler-git-token" ''
     set -euo pipefail
 
+    echo "git-token handler starting" >&2
+
     # Read aggregate input
     input=$(${pkgs.coreutils}/bin/cat)
+    echo "got input: $input" >&2
     ${pkgs.coreutils}/bin/mkdir -p "${tokenDir}"
 
     # Token TTL and rotation threshold
@@ -149,15 +152,19 @@ let
 
       # Generate new token if needed
       if [ "$need_regenerate" = "true" ]; then
+        echo "regenerating token: $token_name with scopes: $scopes" >&2
         # Revoke old token first (if exists)
         revoke_token "$token_name"
 
         # Generate new token
+        echo "calling generate_token" >&2
         if ! token=$(generate_token "$token_name" "$scopes"); then
+          echo "generate_token failed" >&2
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
             '.[$k] = {"error": "failed to generate token"}')
           continue
         fi
+        echo "got token: $token" >&2
 
         # Store token with expiry
         expiry=$((now + TOKEN_TTL))
