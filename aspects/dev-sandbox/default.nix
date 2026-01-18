@@ -71,6 +71,7 @@ let
     direnv
     nix-direnv
     just
+    gnumake
 
     # Go
     go
