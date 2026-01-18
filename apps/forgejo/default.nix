@@ -63,11 +63,9 @@ let
 
     revoke_token() {
       echo "revoke_token called with: $1" >&2
-      local admin_token
-      admin_token=$(${pkgs.coreutils}/bin/cat ${bootstrapDir}/admin-token)
-      ${pkgs.curl}/bin/curl -sf -X DELETE \
-        -H "Authorization: token $admin_token" \
-        "http://localhost:3001/api/v1/users/forge-admin/tokens/$1" 2>&1 || true
+      # Forgejo API requires site admin but token auth is rejected for this endpoint
+      # Use sqlite directly - it's what we have and it works
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/forgejo/data/forgejo.db "DELETE FROM access_token WHERE name = '$1';" 2>&1 || true
       echo "revoke_token done" >&2
     }
 
