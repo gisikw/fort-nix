@@ -57,18 +57,11 @@ let
     }
 
     revoke_token() {
-      local token_name="$1"
-      local cmd
-      cmd=$(${pkgs.coreutils}/bin/printf 'GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token %q' "$token_name")
-      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "$cmd" 2>/dev/null || true
+      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user delete-access-token --username forge-admin --token $1" 2>/dev/null || true
     }
 
     generate_token() {
-      local token_name="$1"
-      local scopes="$2"
-      local cmd
-      cmd=$(${pkgs.coreutils}/bin/printf 'GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name %q --scopes %q --raw' "$token_name" "$scopes")
-      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "$cmd" 2>/dev/null
+      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name $1 --scopes $2 --raw" 2>/dev/null
     }
 
     #
