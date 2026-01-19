@@ -97,6 +97,9 @@ let
     # Calendar
     vdirsyncer
     khal
+
+    # Matrix
+    matrix-conduit
   ];
 in
 {
