@@ -923,6 +923,7 @@ func (h *AgentHandler) recordProviderRequest(capability, origin string, request 
 // Skips caching if the response contains an "error" field
 func (h *AgentHandler) updateProviderResponse(capability, key string, response json.RawMessage) {
 	if h.providerState[capability] == nil {
+		fmt.Fprintf(os.Stderr, "[%s] updateProviderResponse: capability state is nil for key %s\n", capability, key)
 		return
 	}
 
@@ -939,6 +940,9 @@ func (h *AgentHandler) updateProviderResponse(capability, key string, response j
 		entry.Response = response
 		entry.UpdatedAt = time.Now().Unix()
 		h.providerState[capability][key] = entry
+		fmt.Fprintf(os.Stderr, "[%s] cached response for %s\n", capability, key)
+	} else {
+		fmt.Fprintf(os.Stderr, "[%s] updateProviderResponse: entry not found for key %s\n", capability, key)
 	}
 }
 
