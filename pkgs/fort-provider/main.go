@@ -209,7 +209,10 @@ func NewAgentHandler() (*AgentHandler, error) {
 
 // initializeCapabilities runs handlers for capabilities with triggers.initialize = true
 func (h *AgentHandler) initializeCapabilities() {
+	fmt.Fprintf(os.Stderr, "[init] checking %d capabilities\n", len(h.capabilities))
 	for capName, capConfig := range h.capabilities {
+		fmt.Fprintf(os.Stderr, "[init] %s: initialize=%v, mode=%s, cacheResponse=%v\n",
+			capName, capConfig.Triggers.Initialize, capConfig.Mode, capConfig.CacheResponse)
 		if !capConfig.Triggers.Initialize {
 			continue
 		}
