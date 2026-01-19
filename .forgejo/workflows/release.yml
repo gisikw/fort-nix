@@ -49,7 +49,7 @@ jobs:
           for provider_dir in ./apps/*/provider ./aspects/*/provider; do
             if [ -d "$provider_dir" ] && [ -f "$provider_dir/go.mod" ]; then
               echo "::group::Testing $provider_dir"
-              nix shell nixpkgs#go -c sh -c "cd $provider_dir && go test -v ./..."
+              nix shell nixpkgs#go -c sh -c "cd $provider_dir && CGO_ENABLED=0 go test -v ./..."
               echo "::endgroup::"
             fi
           done
