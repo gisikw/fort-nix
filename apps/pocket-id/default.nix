@@ -149,8 +149,8 @@ let
     # Get existing clients for lookup
     existing_clients=$(get_all_clients)
 
-    # Track which client names are needed (for GC)
-    needed_names="[]"
+    # Track which client IDs we're keeping (for GC - handles duplicates)
+    kept_ids="[]"
 
     # Build output for all requesters
     output='{}'
@@ -169,8 +169,10 @@ let
         continue
       fi
 
-      # Track this name as needed
-      needed_names=$(echo "$needed_names" | ${pkgs.jq}/bin/jq --arg n "$client_name" '. + [$n]')
+      # Helper to track a client ID as kept
+      track_kept_id() {
+        kept_ids=$(echo "$kept_ids" | ${pkgs.jq}/bin/jq --arg id "$1" '. + [$id]')
+      }
 
       # Check if we have a cached response with valid credentials
       if [ "$cached_response" != "null" ]; then
@@ -184,6 +186,7 @@ let
         if [ "$client_exists" = "true" ] && [ -n "$cached_secret" ]; then
           # Reuse cached credentials, but sync groups (true-up)
           set_allowed_groups "$cached_id" "$groups_json"
+          track_kept_id "$cached_id"
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson resp "$cached_response" \
             '.[$k] = $resp')
           continue
@@ -203,6 +206,7 @@ let
         client_secret=$(echo "$secret_response" | ${pkgs.jq}/bin/jq -r '.secret // empty')
 
         if [ -n "$client_secret" ]; then
+          track_kept_id "$existing_id"
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --arg id "$existing_id" --arg secret "$client_secret" \
             '.[$k] = {client_id: $id, client_secret: $secret}')
         else
@@ -210,6 +214,8 @@ let
           echo "Warning: secret regeneration failed for $client_name, recreating client" >&2
           api_call DELETE "/api/oidc/clients/$existing_id" || true
           if new_creds=$(create_client "$client_name" "$groups_json"); then
+            new_id=$(echo "$new_creds" | ${pkgs.jq}/bin/jq -r '.client_id')
+            track_kept_id "$new_id"
             output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson creds "$new_creds" \
               '.[$k] = $creds')
           else
@@ -220,6 +226,8 @@ let
       else
         # Create new client
         if new_creds=$(create_client "$client_name" "$groups_json"); then
+          new_id=$(echo "$new_creds" | ${pkgs.jq}/bin/jq -r '.client_id')
+          track_kept_id "$new_id"
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson creds "$new_creds" \
             '.[$k] = $creds')
         else
@@ -229,14 +237,16 @@ let
       fi
     done
 
-    # GC: Delete clients that are no longer needed
-    for client_json in $(echo "$existing_clients" | ${pkgs.jq}/bin/jq -c '.[]'); do
+    # GC: Delete clients that aren't in our kept list (handles orphans AND duplicates)
+    # Re-fetch to catch any clients created during this run
+    current_clients=$(get_all_clients)
+    for client_json in $(echo "$current_clients" | ${pkgs.jq}/bin/jq -c '.[]'); do
       client_name=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.name')
       client_id=$(echo "$client_json" | ${pkgs.jq}/bin/jq -r '.id')
 
-      is_needed=$(echo "$needed_names" | ${pkgs.jq}/bin/jq -r --arg n "$client_name" 'any(. == $n)')
-      if [ "$is_needed" = "false" ]; then
-        echo "GC: Deleting orphaned client: $client_name" >&2
+      is_kept=$(echo "$kept_ids" | ${pkgs.jq}/bin/jq -r --arg id "$client_id" 'any(. == $id)')
+      if [ "$is_kept" = "false" ]; then
+        echo "GC: Deleting client $client_name (id: $client_id) - not in kept list" >&2
         api_call DELETE "/api/oidc/clients/$client_id" || true
       fi
     done
