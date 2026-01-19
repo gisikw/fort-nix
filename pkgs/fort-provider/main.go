@@ -888,9 +888,19 @@ func (h *AgentHandler) recordProviderRequest(capability, origin string, request 
 }
 
 // updateProviderResponse updates the response for a state key
+// Skips caching if the response contains an "error" field
 func (h *AgentHandler) updateProviderResponse(capability, key string, response json.RawMessage) {
 	if h.providerState[capability] == nil {
 		return
+	}
+
+	// Check if response contains an error field - don't cache errors
+	var respObj map[string]interface{}
+	if err := json.Unmarshal(response, &respObj); err == nil {
+		if _, hasError := respObj["error"]; hasError {
+			fmt.Fprintf(os.Stderr, "[%s] skipping cache for %s: response contains error\n", capability, key)
+			return
+		}
 	}
 
 	if entry, ok := h.providerState[capability][key]; ok {

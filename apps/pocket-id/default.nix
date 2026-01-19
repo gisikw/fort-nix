@@ -206,8 +206,16 @@ let
           output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --arg id "$existing_id" --arg secret "$client_secret" \
             '.[$k] = {client_id: $id, client_secret: $secret}')
         else
-          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
-            '.[$k] = {error: "Failed to regenerate secret for existing client"}')
+          # Secret regeneration failed - delete and recreate the client
+          echo "Warning: secret regeneration failed for $client_name, recreating client" >&2
+          api_call DELETE "/api/oidc/clients/$existing_id" || true
+          if new_creds=$(create_client "$client_name" "$groups_json"); then
+            output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" --argjson creds "$new_creds" \
+              '.[$k] = $creds')
+          else
+            output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
+              '.[$k] = {error: "Failed to recreate client after secret regeneration failure"}')
+          fi
         fi
       else
         # Create new client
