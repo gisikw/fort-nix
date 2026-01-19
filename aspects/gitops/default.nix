@@ -160,8 +160,9 @@ EOF
 in
 {
   # Ensure credential directories exist
+  # Note: credDir is 0755 so dev-sandbox credential helper can read token files
   systemd.tmpfiles.rules = [
-    "d ${credDir} 0700 root root -"
+    "d ${credDir} 0755 root root -"
     "d ${cacheDir} 0755 root root -"
   ];
 
