@@ -419,4 +419,12 @@ in
       safe.directory = "${homeDir}/Projects/fort-nix";
     };
   };
+
+  # Development services
+  fort.cluster.services = [{
+    name = "bz";
+    port = 6167;
+    visibility = "vpn";
+    sso.mode = "none";
+  }];
 }
