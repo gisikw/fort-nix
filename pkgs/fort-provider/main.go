@@ -948,6 +948,21 @@ func (h *AgentHandler) updateProviderResponse(capability, key string, response j
 
 // saveProviderState persists the provider state to disk
 func (h *AgentHandler) saveProviderState() error {
+	// Debug: log state before save
+	for cap, entries := range h.providerState {
+		for key, entry := range entries {
+			if len(entry.Response) > 0 {
+				preview := string(entry.Response)
+				if len(preview) > 50 {
+					preview = preview[:50] + "..."
+				}
+				fmt.Fprintf(os.Stderr, "[save] %s/%s has response: %s\n", cap, key, preview)
+			} else {
+				fmt.Fprintf(os.Stderr, "[save] %s/%s has NO response\n", cap, key)
+			}
+		}
+	}
+
 	data, err := json.MarshalIndent(h.providerState, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal provider state: %w", err)
