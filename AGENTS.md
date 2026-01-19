@@ -65,7 +65,7 @@ Then add it to a host's `manifest.nix`:
 
 After deploying a new app with a subdomain, DNS is updated automatically via the control plane (`dns-headscale` and `dns-coredns` capabilities). The consumer needs trigger on deploy, so DNS should be available shortly after the host activates.
 
-Use restart **without** delay unless the service would kill the response (nginx, fort-agent, tailscale).
+Use restart **without** delay unless the service would kill the response (nginx, fort-provider, tailscale).
 
 ### SSO Modes
 
@@ -426,7 +426,7 @@ fort drhorrible deploy '{"sha": "5563ac2"}'
 
 # Fetch journal logs for a service
 fort joker journal '{"unit": "nginx", "lines": 50}'
-fort joker journal '{"unit": "fort-agent", "since": "5 min ago"}'
+fort joker journal '{"unit": "fort-provider", "since": "5 min ago"}'
 
 # Systemd operations
 fort joker systemd '{"action": "restart", "unit": "pocket-id"}'
