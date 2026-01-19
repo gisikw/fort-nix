@@ -29,6 +29,16 @@ jobs:
             exit 1
           fi
 
+      - name: Run Go provider tests
+        run: |
+          for provider_dir in ./apps/*/provider ./aspects/*/provider; do
+            if [ -d "$provider_dir" ] && [ -f "$provider_dir/go.mod" ]; then
+              echo "::group::Testing $provider_dir"
+              (cd "$provider_dir" && go test -v ./...)
+              echo "::endgroup::"
+            fi
+          done
+
       - name: Check host flake
         run: |
           hostname="${{ steps.extract.outputs.hostname }}"

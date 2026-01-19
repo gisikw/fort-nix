@@ -10,11 +10,15 @@ let
   user = "pocket-id";
   group = "pocket-id";
 
-  # Handler for oidc-register capability (async aggregate mode)
-  # Input: {key -> {request: {client_name}, response?: {client_id, client_secret}}}
-  # Output: {key -> {client_id, client_secret}}
-  # Creates/manages pocket-id OIDC clients for SSO services
-  oidcRegisterHandler = pkgs.writeShellScript "handler-oidc-register" ''
+  # Go handler for oidc-register capability (symmetric format)
+  # Input/Output: {key -> {request: {client_name, groups?}, response: {client_id, client_secret}}}
+  oidcRegisterProvider = import ./provider {
+    inherit pkgs;
+    inherit domain;
+  };
+
+  # Legacy bash handler preserved for reference/rollback
+  _legacyOidcRegisterHandler = pkgs.writeShellScript "handler-oidc-register-legacy" ''
     set -euo pipefail
 
     SERVICE_KEY_FILE="${dataDir}/service-key"
@@ -413,9 +417,14 @@ in
 
   # Expose oidc-register capability for OIDC client management
   fort.host.capabilities.oidc-register = {
-    handler = oidcRegisterHandler;
-    mode = "async";  # Returns handles, needs GC
+    handler = "${oidcRegisterProvider}/bin/oidc-register-provider";
+    mode = "async";
+    format = "symmetric";  # Go handler uses symmetric input/output format
     cacheResponse = true;  # Preserve client secrets across restarts
+    triggers = {
+      initialize = true;
+      systemd = [ "pocket-id.service" ];
+    };
     description = "Register and manage OIDC clients for SSO services";
   };
 }

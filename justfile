@@ -407,3 +407,11 @@ test host="":
     [[ -d "${device}" ]] || continue
     run_flake_check "${device}"
   done
+
+  # Run Go tests for provider directories
+  for provider_dir in ./apps/*/provider ./aspects/*/provider; do
+    if [[ -d "$provider_dir" ]] && [[ -f "$provider_dir/go.mod" ]]; then
+      echo "[Fort] go test ${provider_dir}"
+      (cd "$provider_dir" && go test -v ./...)
+    fi
+  done

@@ -55,11 +55,12 @@ type HostInfo struct {
 
 // CapabilityConfig contains settings for a capability
 type CapabilityConfig struct {
-	NeedsGC       bool           `json:"needsGC"`
-	TTL           int            `json:"ttl"` // seconds, 0 means no expiry
-	Mode          string         `json:"mode"`          // "rpc" or "async"
-	CacheResponse bool           `json:"cacheResponse"` // persist responses for reuse
-	Triggers      TriggerConfig  `json:"triggers"`      // boot/systemd triggers
+	NeedsGC       bool          `json:"needsGC"`
+	TTL           int           `json:"ttl"`           // seconds, 0 means no expiry
+	Mode          string        `json:"mode"`          // "rpc" or "async"
+	CacheResponse bool          `json:"cacheResponse"` // persist responses for reuse
+	Triggers      TriggerConfig `json:"triggers"`      // boot/systemd triggers
+	Format        string        `json:"format"`        // "legacy" or "symmetric"
 }
 
 // TriggerConfig defines when to automatically invoke a capability handler
@@ -265,9 +266,9 @@ func (h *AgentHandler) initializeCapabilities() {
 			continue
 		}
 
-		// Parse aggregate output
-		var handlerOutput AsyncHandlerOutput
-		if err := json.Unmarshal(output, &handlerOutput); err != nil {
+		// Parse aggregate output (format-aware)
+		handlerOutput, err := parseHandlerOutput(output, capConfig.Format)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "[init] %s: handler returned invalid JSON: %v\n", capName, err)
 			continue
 		}
@@ -515,9 +516,40 @@ type AsyncHandlerInput map[string]struct {
 	Response json.RawMessage `json:"response,omitempty"`
 }
 
-// AsyncHandlerOutput is the aggregate output format from async handlers
+// AsyncHandlerOutput is the aggregate output format from async handlers (legacy format)
 // Key is origin, value is the response for that origin
 type AsyncHandlerOutput map[string]json.RawMessage
+
+// SymmetricHandlerOutput is the symmetric output format from async handlers
+// Key is origin, value contains both request (echoed) and response
+type SymmetricHandlerOutput map[string]struct {
+	Request  json.RawMessage `json:"request"`
+	Response json.RawMessage `json:"response"`
+}
+
+// parseHandlerOutput parses handler output based on format configuration
+// Returns responses in the internal AsyncHandlerOutput format regardless of input format
+func parseHandlerOutput(data []byte, format string) (AsyncHandlerOutput, error) {
+	if format == "symmetric" {
+		var sym SymmetricHandlerOutput
+		if err := json.Unmarshal(data, &sym); err != nil {
+			return nil, err
+		}
+		// Extract just responses for internal use
+		result := make(AsyncHandlerOutput)
+		for key, entry := range sym {
+			result[key] = entry.Response
+		}
+		return result, nil
+	}
+
+	// Legacy format: key -> response directly
+	var legacy AsyncHandlerOutput
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return nil, err
+	}
+	return legacy, nil
+}
 
 // executeAsyncHandler runs an async handler with aggregate state
 func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte, capConfig CapabilityConfig) {
@@ -565,9 +597,9 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 		return
 	}
 
-	// Parse aggregate output (keys are "origin:needID" format)
-	var handlerOutput AsyncHandlerOutput
-	if err := json.Unmarshal(output, &handlerOutput); err != nil {
+	// Parse aggregate output (format-aware, keys are "origin:needID" format)
+	handlerOutput, err := parseHandlerOutput(output, capConfig.Format)
+	if err != nil {
 		h.errorResponse(w, http.StatusInternalServerError,
 			fmt.Sprintf("handler returned invalid JSON: %v", err))
 		return
@@ -1053,9 +1085,9 @@ func runTrigger(capability string) error {
 		return fmt.Errorf("handler exec failed: %w", err)
 	}
 
-	// Parse aggregate output
-	var handlerOutput AsyncHandlerOutput
-	if err := json.Unmarshal(output, &handlerOutput); err != nil {
+	// Parse aggregate output (format-aware)
+	handlerOutput, err := parseHandlerOutput(output, capabilities[capability].Format)
+	if err != nil {
 		return fmt.Errorf("handler returned invalid JSON: %w", err)
 	}
 
@@ -1411,9 +1443,9 @@ func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[st
 		return fmt.Errorf("handler exec failed: %w", err)
 	}
 
-	// Parse handler output
-	var handlerOutput AsyncHandlerOutput
-	if err := json.Unmarshal(output, &handlerOutput); err != nil {
+	// Parse handler output (format-aware)
+	handlerOutput, err := parseHandlerOutput(output, capConfig.Format)
+	if err != nil {
 		return fmt.Errorf("handler returned invalid JSON: %w", err)
 	}
 

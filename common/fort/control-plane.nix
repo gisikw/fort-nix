@@ -343,10 +343,11 @@ let
       inherit (cfg) mode;
       cacheResponse = cfg.cacheResponse or false;
       triggers = cfg.triggers or { initialize = false; systemd = []; };
+      format = cfg.format or "legacy";
     } // lib.optionalAttrs (cfg ? allowed) { inherit (cfg) allowed; }
   ) mandatoryCapabilities // lib.mapAttrs (name: cfg:
     (modeToGcConfig cfg.mode) // {
-      inherit (cfg) mode cacheResponse triggers;
+      inherit (cfg) mode cacheResponse triggers format;
     } // lib.optionalAttrs (cfg.allowed != null) { inherit (cfg) allowed; }
   ) config.fort.host.capabilities;
 
@@ -499,6 +500,20 @@ let
         If specified, only the listed principals are allowed (not hosts).
       '';
       example = [ "dev-sandbox" ];
+    };
+
+    format = lib.mkOption {
+      type = lib.types.enum [ "legacy" "symmetric" ];
+      default = "legacy";
+      description = ''
+        Handler output format:
+        - "legacy": Asymmetric format - output is {key: response}
+        - "symmetric": Symmetric format - output is {key: {request, response}}
+
+        New Go handlers should use "symmetric" for consistency.
+        Existing bash handlers default to "legacy" for backward compatibility.
+      '';
+      example = "symmetric";
     };
   };
 
