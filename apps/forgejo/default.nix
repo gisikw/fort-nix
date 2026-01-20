@@ -7,7 +7,6 @@ let
   oidcPath = "/user/oauth2/Pocket%20ID";
   bootstrapDir = "/var/lib/forgejo/bootstrap";
   runnerDir = "/var/lib/forgejo-runner";
-  tokenDir = "/var/lib/forgejo/tokens";
   repoNames = builtins.attrNames forgeConfig.repos;
 
   # Collect all mirrors across all repos as flat list: [{repo, mirror, tokenFile}, ...]
@@ -21,184 +20,11 @@ let
     }) (builtins.attrNames (repo.mirrors or {}))
   ) repoNames);
 
-  # Token TTL in seconds (24 hours)
-  tokenTTL = 86400;
-  # Rotation threshold - regenerate when less than 2 hours remain
-  rotationThreshold = 7200;
-
-  # Handler for git-token capability (async aggregate mode)
-  # Input: {key -> {request: {access, _fort_need_id?}, response?}}
-  #   key format: "origin:needID" or just "origin" for legacy requests
-  # Output: {key -> {token, username, ttl}}
-  # Creates Forgejo deploy tokens on-demand with appropriate access levels
-  #
-  # GC mode (FORT_TRIGGER=gc):
-  #   - Compares survivors against token files on disk
-  #   - Revokes and deletes orphaned tokens
-  #   - Returns credentials only for survivors
-  gitTokenHandler = pkgs.writeShellScript "handler-git-token" ''
-    exec 2>>/tmp/git-token-debug.log
-    set -euo pipefail
-
-    echo "=== $(date) ===" >&2
-    echo "git-token handler starting" >&2
-
-    # Read aggregate input
-    input=$(${pkgs.coreutils}/bin/cat)
-    echo "got input: $input" >&2
-    ${pkgs.coreutils}/bin/mkdir -p "${tokenDir}"
-
-    # Token TTL and rotation threshold
-    TOKEN_TTL=${toString tokenTTL}
-    ROTATION_THRESHOLD=${toString rotationThreshold}
-    now=$(${pkgs.coreutils}/bin/date +%s)
-
-    # Helper to run forgejo CLI as forgejo user
-    run_forgejo() {
-      ${pkgs.su}/bin/su -s /bin/sh forgejo -c "
-        GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom \
-        ${config.services.forgejo.package}/bin/forgejo \"\$@\"
-      " -- "$@"
-    }
-
-    revoke_token() {
-      echo "revoke_token called with: $1" >&2
-      # Forgejo API requires site admin but token auth is rejected for this endpoint
-      # Use sqlite directly - it's what we have and it works
-      ${pkgs.sqlite}/bin/sqlite3 /var/lib/forgejo/data/forgejo.db "DELETE FROM access_token WHERE name = '$1';" 2>&1 || true
-      echo "revoke_token done" >&2
-    }
-
-    generate_token() {
-      echo "generate_token called with: $1 | $2" >&2
-      local result
-      local exit_code
-      result=$(${pkgs.su}/bin/su -s /bin/sh forgejo -c "GITEA_WORK_DIR=/var/lib/forgejo GITEA_CUSTOM=/var/lib/forgejo/custom ${config.services.forgejo.package}/bin/forgejo admin user generate-access-token --username forge-admin --token-name $1 --scopes $2 --raw" 2>&1) && exit_code=0 || exit_code=$?
-      echo "generate_token result (exit=$exit_code): $result" >&2
-      if [ $exit_code -ne 0 ] || [[ "$result" == *"error"* ]] || [[ "$result" == *"Error"* ]]; then
-        echo "generate_token failed" >&2
-        return 1
-      fi
-      echo "$result"
-    }
-
-    #
-    # GC mode: clean up orphaned tokens
-    #
-    if [ "''${FORT_TRIGGER:-}" = "gc" ]; then
-      # Build list of expected token files from survivors
-      expected_files=""
-      for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
-        origin=$(echo "$key" | ${pkgs.coreutils}/bin/cut -d: -f1)
-        access=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg k "$key" '.[$k].request.access // "ro"')
-        expected_files="$expected_files ${tokenDir}/$origin-$access"
-      done
-
-      # Find and revoke orphaned tokens
-      for token_file in "${tokenDir}"/*; do
-        [ -f "$token_file" ] || continue
-        if ! echo "$expected_files" | ${pkgs.gnugrep}/bin/grep -qF "$token_file"; then
-          token_name=$(${pkgs.coreutils}/bin/basename "$token_file")
-          echo "GC: revoking orphaned token $token_name" >&2
-          revoke_token "$token_name"
-          ${pkgs.coreutils}/bin/rm -f "$token_file"
-        fi
-      done
-    fi
-
-    #
-    # Process each key and build aggregate output
-    #
-    output='{}'
-
-    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
-      # Extract origin from key (format: "origin:needID" or just "origin")
-      origin=$(echo "$key" | ${pkgs.coreutils}/bin/cut -d: -f1)
-
-      # Extract request for this key
-      access=$(echo "$input" | ${pkgs.jq}/bin/jq -r --arg k "$key" '.[$k].request.access // "ro"')
-
-      # Validate access level
-      if [ "$access" != "ro" ] && [ "$access" != "rw" ]; then
-        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
-          '.[$k] = {"error": "access must be ro or rw"}')
-        continue
-      fi
-
-      # RBAC: Only hosts with dev-sandbox aspect can request rw access
-      if [ "$access" = "rw" ] && [ "$origin" != "ratched" ]; then
-        output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
-          '.[$k] = {"error": "rw access requires dev-sandbox host (ratched)"}')
-        continue
-      fi
-
-      # Token storage: JSON file with token and expiry
-      token_file="${tokenDir}/$origin-$access"
-      token_name="$origin-$access"
-      scopes="read:repository"
-      [ "$access" = "rw" ] && scopes="read:repository,write:repository"
-
-      # Check if token exists and is not near expiry
-      need_regenerate=true
-      if [ -s "$token_file" ]; then
-        stored=$(${pkgs.coreutils}/bin/cat "$token_file")
-        # Handle both JSON format (new) and plain text (migration from old format)
-        if echo "$stored" | ${pkgs.jq}/bin/jq -e '.token' >/dev/null 2>&1; then
-          stored_token=$(echo "$stored" | ${pkgs.jq}/bin/jq -r '.token')
-          stored_expiry=$(echo "$stored" | ${pkgs.jq}/bin/jq -r '.expiry // 0')
-        else
-          # Old format: plain token text, no expiry - will regenerate
-          stored_token=""
-          stored_expiry=0
-        fi
-
-        if [ -n "$stored_token" ]; then
-          remaining=$((stored_expiry - now))
-          if [ "$remaining" -gt "$ROTATION_THRESHOLD" ]; then
-            # Token still valid, reuse it
-            token="$stored_token"
-            ttl=$remaining
-            need_regenerate=false
-          else
-            echo "Rotating token $token_name (''${remaining}s remaining)" >&2
-          fi
-        fi
-      fi
-
-      # Generate new token if needed
-      if [ "$need_regenerate" = "true" ]; then
-        echo "regenerating token: $token_name with scopes: $scopes" >&2
-        # Revoke old token first (if exists)
-        revoke_token "$token_name"
-
-        # Generate new token
-        echo "calling generate_token" >&2
-        if ! token=$(generate_token "$token_name" "$scopes"); then
-          echo "generate_token failed" >&2
-          output=$(echo "$output" | ${pkgs.jq}/bin/jq --arg k "$key" \
-            '.[$k] = {"error": "failed to generate token"}')
-          continue
-        fi
-        echo "got token: $token" >&2
-
-        # Store token with expiry
-        expiry=$((now + TOKEN_TTL))
-        ttl=$TOKEN_TTL
-        echo "{\"token\": \"$token\", \"expiry\": $expiry}" > "$token_file"
-        ${pkgs.coreutils}/bin/chmod 600 "$token_file"
-      fi
-
-      # Add token to output with TTL
-      output=$(echo "$output" | ${pkgs.jq}/bin/jq \
-        --arg k "$key" \
-        --arg t "$token" \
-        --argjson ttl "$ttl" \
-        '.[$k] = {"token": $t, "username": "forge-admin", "ttl": $ttl}')
-    done
-
-    # Return aggregate output
-    echo "$output"
-  '';
+  # Git token provider (Go handler)
+  gitTokenProvider = import ./provider {
+    inherit pkgs;
+    forgejoPackage = config.services.forgejo.package;
+  };
 in
 {
   # Age secrets for mirror tokens (per repo-mirror pair) and runner
@@ -568,8 +394,9 @@ EOF
 
   # Expose git-token capability for on-demand token generation
   fort.host.capabilities.git-token = {
-    handler = gitTokenHandler;
-    mode = "async";  # Returns handles, needs GC
+    handler = "${gitTokenProvider}/bin/git-token-provider";
+    mode = "async";
+    format = "symmetric";  # Go handler uses symmetric input/output format
     description = "Generate Forgejo deploy tokens on-demand";
   };
 }
