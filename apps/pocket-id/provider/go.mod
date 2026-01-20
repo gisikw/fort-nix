@@ -1,3 +1,3 @@
-module fort-nix/apps/pocket-id/provider
+module oidc-register-provider
 
 go 1.21

@@ -16,11 +16,6 @@ pkgs.buildGoModule {
     "-X main.defaultSqlite3Path=${pkgs.sqlite}/bin/sqlite3"
   ];
 
-  # Go names binary after directory (provider), rename to match capability
-  postInstall = ''
-    mv $out/bin/provider $out/bin/git-token-provider
-  '';
-
   meta = with pkgs.lib; {
     description = "Git token generation handler for Forgejo";
     license = licenses.mit;

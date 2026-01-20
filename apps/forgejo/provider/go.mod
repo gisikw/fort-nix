@@ -1,3 +1,3 @@
-module forgejo-provider
+module git-token-provider
 
 go 1.21
