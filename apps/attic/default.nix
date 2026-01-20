@@ -6,74 +6,12 @@ let
   cacheUrl = "https://cache.${domain}";
   cacheName = "fort";
 
-  # Handler for attic-token capability (async aggregate mode)
-  # Input: {key -> {request: {}, response?}}
-  # Output: {key -> {cacheUrl, cacheName, publicKey, pushToken}}
-  # Returns cache configuration and push token for binary cache access
-  atticTokenHandler = pkgs.writeShellScript "handler-attic-token" ''
-    set -euo pipefail
-
-    # Read aggregate input
-    input=$(${pkgs.coreutils}/bin/cat)
-
-    CI_TOKEN_FILE="${bootstrapDir}/ci-token"
-    PUBLIC_KEY_FILE="${bootstrapDir}/public-key"
-
-    # Ensure we have the CI token
-    if [ ! -s "$CI_TOKEN_FILE" ]; then
-      # Return error for all keys
-      echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "CI token not yet created"}}) | from_entries'
-      exit 0
-    fi
-
-    # Cache the public key if not already cached
-    if [ ! -s "$PUBLIC_KEY_FILE" ]; then
-      # Configure attic client to get cache info
-      export HOME=$(${pkgs.coreutils}/bin/mktemp -d)
-      trap '${pkgs.coreutils}/bin/rm -rf "$HOME"' EXIT
-      ${pkgs.coreutils}/bin/mkdir -p "$HOME/.config/attic"
-
-      ADMIN_TOKEN_FILE="${bootstrapDir}/admin-token"
-      if [ ! -s "$ADMIN_TOKEN_FILE" ]; then
-        echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "Admin token not yet created"}}) | from_entries'
-        exit 0
-      fi
-
-      ${pkgs.coreutils}/bin/cat > "$HOME/.config/attic/config.toml" <<EOF
-default-server = "local"
-
-[servers.local]
-endpoint = "${cacheUrl}"
-token = "$(${pkgs.coreutils}/bin/cat $ADMIN_TOKEN_FILE)"
-EOF
-
-      # Get the cache public key
-      PUBLIC_KEY=$(${pkgs.attic-client}/bin/attic cache info ${cacheName} 2>&1 | ${pkgs.gawk}/bin/awk '/Public Key:/ {print $NF}')
-      if [ -z "$PUBLIC_KEY" ]; then
-        echo "$input" | ${pkgs.jq}/bin/jq 'to_entries | map({key: .key, value: {error: "Could not get cache public key"}}) | from_entries'
-        exit 0
-      fi
-
-      echo "$PUBLIC_KEY" > "$PUBLIC_KEY_FILE"
-    fi
-
-    CI_TOKEN=$(${pkgs.coreutils}/bin/cat "$CI_TOKEN_FILE")
-    PUBLIC_KEY=$(${pkgs.coreutils}/bin/cat "$PUBLIC_KEY_FILE")
-
-    # Build response for all requesters (same config for everyone)
-    output='{}'
-    for key in $(echo "$input" | ${pkgs.jq}/bin/jq -r 'keys[]'); do
-      output=$(echo "$output" | ${pkgs.jq}/bin/jq \
-        --arg k "$key" \
-        --arg url "${cacheUrl}" \
-        --arg name "${cacheName}" \
-        --arg pk "$PUBLIC_KEY" \
-        --arg token "$CI_TOKEN" \
-        '.[$k] = {cacheUrl: $url, cacheName: $name, publicKey: $pk, pushToken: $token}')
-    done
-
-    echo "$output"
-  '';
+  # Go handler for attic-token capability
+  atticTokenProvider = import ./provider {
+    inherit pkgs;
+    cacheURL = cacheUrl;
+    inherit cacheName;
+  };
 in
 {
   services.atticd = {
@@ -258,9 +196,10 @@ EOF
 
   # Expose attic-token capability for cache config distribution
   fort.host.capabilities.attic-token = {
-    handler = atticTokenHandler;
-    mode = "async";  # Returns handles, needs GC
-    cacheResponse = true;  # Reuse same token for all consumers
+    handler = "${atticTokenProvider}/bin/attic-token-provider";
+    mode = "async";
+    format = "symmetric";  # Go handler uses symmetric input/output format
+    cacheResponse = true;  # Reuse same config for all consumers
     description = "Distribute binary cache config and push token";
   };
 }
