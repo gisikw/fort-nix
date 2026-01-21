@@ -388,6 +388,34 @@ in
     '';
   };
 
+  # Daily briefing (12:30am)
+  systemd.timers.daily-briefing = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 00:30:00";
+      Persistent = true;  # Run if missed while system was off
+    };
+  };
+
+  systemd.services.daily-briefing = {
+    description = "Generate daily briefing";
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      Group = "users";
+      WorkingDirectory = "${homeDir}/Projects/exocortex/scripts/daily-briefing";
+    };
+    environment = {
+      HOME = homeDir;
+      FORT_SSH_KEY = agentKeyPath;
+      FORT_ORIGIN = "dev-sandbox";
+    };
+    path = devTools;
+    script = ''
+      ${homeDir}/Projects/exocortex/scripts/daily-briefing/run.sh
+    '';
+  };
+
   # Git credential helper for Forgejo access
   # Prefers RW dev-token, falls back to RO deploy-token
   environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
