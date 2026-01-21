@@ -280,7 +280,7 @@ func (h *AgentHandler) initializeCapabilities() {
 		var changedKeys []string
 		for key, response := range handlerOutput {
 			previousResponse := state[key].Response
-			if !bytes.Equal(previousResponse, response) {
+			if !jsonEqual(previousResponse, response) {
 				changedKeys = append(changedKeys, key)
 			}
 			h.updateProviderResponse(capName, key, response)
@@ -459,6 +459,44 @@ func (h *AgentHandler) verifySignature(method, path, timestamp string, body []by
 	return nil
 }
 
+// jsonEqual compares two JSON blobs for semantic equality
+// Returns true if both represent the same data, regardless of field ordering
+func jsonEqual(a, b []byte) bool {
+	// Empty checks
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+
+	// Quick byte comparison first (fast path for identical serialization)
+	if bytes.Equal(a, b) {
+		return true
+	}
+
+	// Parse and normalize both
+	var aVal, bVal interface{}
+	if err := json.Unmarshal(a, &aVal); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(b, &bVal); err != nil {
+		return false
+	}
+
+	// Re-marshal to canonical form (Go's json.Marshal sorts map keys)
+	aNorm, err := json.Marshal(aVal)
+	if err != nil {
+		return false
+	}
+	bNorm, err := json.Marshal(bVal)
+	if err != nil {
+		return false
+	}
+
+	return bytes.Equal(aNorm, bNorm)
+}
+
 // armorSignature wraps raw signature bytes in SSH signature armor
 func armorSignature(sig []byte) string {
 	encoded := base64.StdEncoding.EncodeToString(sig)
@@ -612,7 +650,7 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 	var changedKeys []string
 	for key, response := range handlerOutput {
 		previousResponse := state[key].Response
-		if !bytes.Equal(previousResponse, response) {
+		if !jsonEqual(previousResponse, response) {
 			changedKeys = append(changedKeys, key)
 		}
 		h.updateProviderResponse(capability, key, response)
@@ -1117,7 +1155,7 @@ func runTrigger(capability string) error {
 	var changedKeys []string
 	for key, response := range handlerOutput {
 		previousResponse := state[key].Response
-		if !bytes.Equal(previousResponse, response) {
+		if !jsonEqual(previousResponse, response) {
 			changedKeys = append(changedKeys, key)
 			fmt.Fprintf(os.Stderr, "[trigger] %s: response changed for %s\n", capability, key)
 		}
@@ -1478,7 +1516,7 @@ func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[st
 	for key, response := range handlerOutput {
 		if entry, ok := state[key]; ok {
 			// Check if response changed
-			if dispatchCallbacks && !bytes.Equal(entry.Response, response) {
+			if dispatchCallbacks && !jsonEqual(entry.Response, response) {
 				changedKeys = append(changedKeys, key)
 			}
 			entry.Response = response
