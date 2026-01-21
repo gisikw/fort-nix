@@ -388,12 +388,13 @@ in
     '';
   };
 
-  # Daily briefing (12:30am)
+  # Daily briefing (12:45am Central, temporary for testing)
   systemd.timers.daily-briefing = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*-*-* 00:30:00";
+      OnCalendar = "*-*-* 00:45:00";
       Persistent = true;  # Run if missed while system was off
+      OnTimezone = "America/Chicago";
     };
   };
 
