@@ -393,7 +393,7 @@ in
   systemd.timers.daily-briefing = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*-*-* 06:52:00";  # TEMPORARY: testing in 2 min
+      OnCalendar = "*-*-* 06:58:00";  # TEMPORARY: testing
       Persistent = true;  # Run if missed while system was off
     };
   };
@@ -411,7 +411,7 @@ in
       FORT_SSH_KEY = agentKeyPath;
       FORT_ORIGIN = "dev-sandbox";
     };
-    path = devTools;
+    path = devTools ++ [ pkgs.bash ];
     script = ''
       ${homeDir}/Projects/exocortex/scripts/daily-briefing/run.sh
     '';
