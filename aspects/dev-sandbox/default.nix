@@ -388,13 +388,13 @@ in
     '';
   };
 
-  # Daily briefing (12:45am Central, temporary for testing)
+  # Daily briefing (06:45 UTC = 00:45 Central during CST)
+  # TODO: Adjust for DST or find timezone-aware solution
   systemd.timers.daily-briefing = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*-*-* 00:45:00";
+      OnCalendar = "*-*-* 06:52:00";  # TEMPORARY: testing in 2 min
       Persistent = true;  # Run if missed while system was off
-      OnTimezone = "America/Chicago";
     };
   };
 
