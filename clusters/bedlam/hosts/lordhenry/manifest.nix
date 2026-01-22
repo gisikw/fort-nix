@@ -8,6 +8,7 @@ rec {
     "ollama"
     "open-webui"
     "sillytavern"
+    "whisper"
   ];
 
   aspects = [
