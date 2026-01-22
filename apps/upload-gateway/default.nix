@@ -59,6 +59,7 @@ in
       sso = {
         mode = "gatekeeper";
         groups = [ "admin" ];
+        vpnBypass = true;
       };
     }
   ];
