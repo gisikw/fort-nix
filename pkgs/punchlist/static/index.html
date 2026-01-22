@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#fafafa">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -17,6 +17,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #fafafa;
       color: #2d2a2e;
+      overflow: hidden;
     }
 
     body {
@@ -24,31 +25,50 @@
       flex-direction: column;
       max-width: 600px;
       margin: 0 auto;
-      padding: 24px 16px;
-      padding-top: calc(env(safe-area-inset-top, 0px) + 24px);
-      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+      padding: 16px;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
     }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 4px 12px;
+      font-size: 13px;
+      color: #939293;
+      letter-spacing: 0.5px;
+    }
+
+    .header span { font-weight: 500; }
 
     .list {
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      padding-bottom: 8px;
     }
 
     .item {
       display: flex;
       align-items: center;
-      padding: 14px 12px;
+      padding: 14px 8px 14px 12px;
       margin-bottom: 8px;
       background: #fff;
       border-radius: 8px;
-      cursor: pointer;
       -webkit-tap-highlight-color: transparent;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      transition: background 0.1s ease;
     }
 
-    .item:active { background: #f0f0f0; }
+    .item-main {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      cursor: pointer;
+      min-width: 0;
+    }
+
+    .item:active .item-main { opacity: 0.7; }
 
     .circle {
       width: 22px;
@@ -90,6 +110,18 @@
       color: #939293;
     }
 
+    .bump {
+      padding: 8px 4px 8px 12px;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 12px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .bump:hover { color: #939293; }
+    .bump:active { color: #78dce8; }
+    .item.done .bump { display: none; }
+
     .input-bar {
       margin-top: 12px;
       flex-shrink: 0;
@@ -122,6 +154,7 @@
   </style>
 </head>
 <body>
+  <div class="header"><span>punchlist</span></div>
   <div class="list" id="list"></div>
   <div class="offline-notice">offline - will sync when reconnected</div>
   <div class="input-bar">
@@ -131,6 +164,7 @@
   <script>
     const input = document.getElementById('input');
     const list = document.getElementById('list');
+    const isDesktop = !('ontouchstart' in window);
     let items = [];
     let ws = null;
     let reconnectTimer = null;
@@ -141,8 +175,11 @@
     function render() {
       list.innerHTML = items.map(item => `
         <div class="item ${item.done ? 'done' : ''}" data-id="${item.id}">
-          <div class="circle"></div>
-          <div class="text">${escapeHtml(item.text)}</div>
+          <div class="item-main">
+            <div class="circle"></div>
+            <div class="text">${escapeHtml(item.text)}</div>
+          </div>
+          <div class="bump" title="Move to top">&#9650;</div>
         </div>
       `).join('');
     }
@@ -161,7 +198,7 @@
         document.body.classList.remove('offline');
         clearTimeout(reconnectTimer);
         clearTimeout(offlineTimer);
-        reconnectDelay = 1000; // Reset backoff on successful connect
+        reconnectDelay = 1000;
         while (pendingQueue.length > 0) {
           const action = pendingQueue.shift();
           action();
@@ -174,13 +211,10 @@
       };
 
       ws.onclose = () => {
-        // Only show offline notice after 3 seconds
         clearTimeout(offlineTimer);
         offlineTimer = setTimeout(() => {
           document.body.classList.add('offline');
         }, 3000);
-
-        // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
         reconnectTimer = setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 30000);
       };
@@ -235,6 +269,28 @@
       }
     }
 
+    async function bumpItem(id) {
+      const action = async () => {
+        try {
+          await fetch(`/api/items/${id}/bump`, { method: 'POST' });
+        } catch (e) {
+          console.error('Failed to bump item:', e);
+        }
+      };
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        action();
+      } else {
+        const idx = items.findIndex(i => i.id === id);
+        if (idx > 0) {
+          const [item] = items.splice(idx, 1);
+          items.unshift(item);
+          render();
+        }
+        pendingQueue.push(action);
+      }
+    }
+
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && input.value.trim()) {
         addItem(input.value.trim());
@@ -243,11 +299,23 @@
     });
 
     list.addEventListener('click', (e) => {
-      const item = e.target.closest('.item');
-      if (item) {
-        toggleItem(item.dataset.id);
+      if (e.target.closest('.bump')) {
+        const item = e.target.closest('.item');
+        if (item) bumpItem(item.dataset.id);
+        return;
+      }
+      const itemMain = e.target.closest('.item-main');
+      if (itemMain) {
+        const item = itemMain.closest('.item');
+        if (item) toggleItem(item.dataset.id);
       }
     });
+
+    // Desktop: auto-focus and refocus on blur
+    if (isDesktop) {
+      input.focus();
+      input.addEventListener('blur', () => setTimeout(() => input.focus(), 10));
+    }
 
     fetch('/api/items')
       .then(r => r.json())

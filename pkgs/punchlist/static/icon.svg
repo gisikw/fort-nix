@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#fafafa"/>
-  <circle cx="256" cy="256" r="120" fill="none" stroke="#a9dc76" stroke-width="24"/>
-  <path d="M200 260l40 40 72-80" fill="none" stroke="#a9dc76" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" rx="96" fill="#fafafa"/>
+  <!-- Boxing glove body -->
+  <ellipse cx="256" cy="280" rx="140" ry="120" fill="#ff6188"/>
+  <!-- Glove cuff -->
+  <rect x="180" y="360" width="152" height="60" rx="12" fill="#fc9867"/>
+  <!-- Thumb -->
+  <ellipse cx="145" cy="260" rx="45" ry="55" fill="#ff6188"/>
+  <!-- Highlight -->
+  <ellipse cx="290" cy="240" rx="40" ry="30" fill="#ff7e9a" opacity="0.6"/>
+  <!-- Stitching line -->
+  <path d="M200 280 Q256 260 312 280" stroke="#2d2a2e" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="12 8"/>
 </svg>

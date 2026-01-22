@@ -74,6 +74,9 @@ func main() {
 	http.HandleFunc("/api/items/", handleItem)
 	http.HandleFunc("/ws", handleWebSocket)
 
+	// Bump endpoint (move item to top)
+	http.HandleFunc("/api/items/{id}/bump", handleBump)
+
 	log.Printf("Punchlist listening on %s (data: %s)", *addr, storePath)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
@@ -309,4 +312,50 @@ func handleItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func handleBump(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path: /api/items/{id}/bump
+	path := strings.TrimPrefix(r.URL.Path, "/api/items/")
+	id := strings.TrimSuffix(path, "/bump")
+	if id == "" || id == path {
+		http.Error(w, "ID required", http.StatusBadRequest)
+		return
+	}
+
+	storeMu.Lock()
+	found := false
+	var bumpedItem Item
+	for i := range store.Items {
+		if store.Items[i].ID == id {
+			bumpedItem = store.Items[i]
+			found = true
+			// Remove from current position
+			store.Items = append(store.Items[:i], store.Items[i+1:]...)
+			// Add to front
+			store.Items = append([]Item{bumpedItem}, store.Items...)
+			break
+		}
+	}
+	storeMu.Unlock()
+
+	if !found {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	if err := saveStore(); err != nil {
+		http.Error(w, "Failed to save", http.StatusInternalServerError)
+		return
+	}
+
+	broadcast()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(bumpedItem)
 }
