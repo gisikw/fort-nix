@@ -15,8 +15,10 @@ in
   };
 
   # Data directory - group writable so dev user can edit items.json
+  # ACL ensures punchlist user can always write, even if dev replaces the file
   systemd.tmpfiles.rules = [
     "d ${dataDir} 0775 punchlist users -"
+    "a+ ${dataDir} - - - - default:user:punchlist:rw,default:group:users:rw"
   ];
 
   systemd.services.punchlist = {
