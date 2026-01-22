@@ -230,8 +230,9 @@ in
     };
     path = with pkgs; [ coreutils ];
     script = ''
-      # Ensure token file is group-readable (dev user is in vdirsyncer group)
+      # Ensure token file is owned by vdirsyncer and group-readable
       if [ -f /var/lib/vdirsyncer/token ]; then
+        chown vdirsyncer:vdirsyncer /var/lib/vdirsyncer/token
         chmod 640 /var/lib/vdirsyncer/token
       fi
 
