@@ -43,7 +43,6 @@ in
       visibility = "public";
       sso = {
         mode = "gatekeeper";
-        vpnBypass = true;
         groups = [ "admin" ];
       };
     }
