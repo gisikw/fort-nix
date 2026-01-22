@@ -258,8 +258,14 @@ in
 
   config = lib.mkMerge [
     # VPN geo block - always defined so aspects (like host-status) can use it
+    # Also configure realip to trust X-Real-IP from VPN (beacon proxy)
     {
       services.nginx.commonHttpConfig = lib.mkBefore ''
+        # Trust X-Real-IP header from VPN peers (beacon proxy)
+        set_real_ip_from ${vpnIpv4Prefix};
+        real_ip_header X-Real-IP;
+        real_ip_recursive on;
+
         geo $is_vpn {
           default 0;
           ${vpnIpv4Prefix} 1;
