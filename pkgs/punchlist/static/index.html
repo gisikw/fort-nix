@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#1a1a1a">
+  <meta name="theme-color" content="#fafafa">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Punchlist</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
@@ -15,8 +15,8 @@
     html, body {
       height: 100%;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #1a1a1a;
-      color: #e0e0e0;
+      background: #fafafa;
+      color: #2d2a2e;
     }
 
     body {
@@ -26,22 +26,8 @@
       margin: 0 auto;
       padding: 16px;
       padding-top: env(safe-area-inset-top, 16px);
+      padding-bottom: env(safe-area-inset-bottom, 16px);
     }
-
-    input {
-      width: 100%;
-      padding: 14px 16px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      background: #2a2a2a;
-      color: #e0e0e0;
-      outline: none;
-      margin-bottom: 16px;
-    }
-
-    input::placeholder { color: #666; }
-    input:focus { background: #333; }
 
     .list {
       flex: 1;
@@ -52,18 +38,22 @@
     .item {
       display: flex;
       align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid #2a2a2a;
+      padding: 14px 12px;
+      margin-bottom: 8px;
+      background: #fff;
+      border-radius: 8px;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: background 0.1s ease;
     }
 
-    .item:active { background: #252525; }
+    .item:active { background: #f0f0f0; }
 
     .circle {
-      width: 24px;
-      height: 24px;
-      border: 2px solid #555;
+      width: 22px;
+      height: 22px;
+      border: 2px solid #939293;
       border-radius: 50%;
       margin-right: 14px;
       flex-shrink: 0;
@@ -74,15 +64,15 @@
     }
 
     .item.done .circle {
-      border-color: #4a9;
-      background: #4a9;
+      border-color: #a9dc76;
+      background: #a9dc76;
     }
 
     .item.done .circle::after {
       content: "";
-      width: 6px;
-      height: 10px;
-      border: solid #1a1a1a;
+      width: 5px;
+      height: 9px;
+      border: solid #fff;
       border-width: 0 2px 2px 0;
       transform: rotate(45deg) translateY(-1px);
     }
@@ -92,16 +82,37 @@
       font-size: 16px;
       line-height: 1.4;
       word-break: break-word;
+      color: #2d2a2e;
     }
 
     .item.done .text {
       text-decoration: line-through;
-      color: #666;
+      color: #939293;
     }
+
+    .input-bar {
+      margin-top: 12px;
+      flex-shrink: 0;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #fff;
+      color: #2d2a2e;
+      outline: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    input::placeholder { color: #939293; }
+    input:focus { box-shadow: 0 0 0 2px #78dce8; }
 
     .offline-banner {
       display: none;
-      background: #c44;
+      background: #ff6188;
       color: white;
       text-align: center;
       padding: 8px;
@@ -110,6 +121,7 @@
       top: 0;
       left: 0;
       right: 0;
+      z-index: 100;
     }
 
     body.offline .offline-banner { display: block; }
@@ -118,8 +130,10 @@
 </head>
 <body>
   <div class="offline-banner">Offline - changes will sync when reconnected</div>
-  <input type="text" id="input" placeholder="Add item..." autocomplete="off" autofocus>
   <div class="list" id="list"></div>
+  <div class="input-bar">
+    <input type="text" id="input" placeholder="Add item..." autocomplete="off">
+  </div>
 
   <script>
     const input = document.getElementById('input');
@@ -151,7 +165,6 @@
       ws.onopen = () => {
         document.body.classList.remove('offline');
         clearTimeout(reconnectTimer);
-        // Flush pending queue
         while (pendingQueue.length > 0) {
           const action = pendingQueue.shift();
           action();
@@ -187,7 +200,6 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         action();
       } else {
-        // Optimistic local add
         items.unshift({ id: Date.now().toString(), text, done: false, created: new Date().toISOString() });
         render();
         pendingQueue.push(action);
@@ -206,11 +218,9 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         action();
       } else {
-        // Optimistic local toggle
         const item = items.find(i => i.id === id);
         if (item) {
           item.done = !item.done;
-          // Move to bottom if done
           if (item.done) {
             items = items.filter(i => i.id !== id);
             items.push(item);
@@ -235,7 +245,6 @@
       }
     });
 
-    // Initial load via HTTP (in case WS fails)
     fetch('/api/items')
       .then(r => r.json())
       .then(data => {
@@ -246,7 +255,6 @@
 
     connect();
 
-    // Register service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }

@@ -248,18 +248,17 @@ func handleItem(w http.ResponseWriter, r *http.Request) {
 	case "PATCH":
 		storeMu.Lock()
 		found := false
-		var toggledItem *Item
+		var toggledItem Item
 		for i := range store.Items {
 			if store.Items[i].ID == id {
 				store.Items[i].Done = !store.Items[i].Done
-				toggledItem = &store.Items[i]
+				toggledItem = store.Items[i] // Copy value before slice manipulation
 				found = true
 
 				// Move completed items to bottom, incomplete to top
 				if store.Items[i].Done {
-					item := store.Items[i]
 					store.Items = append(store.Items[:i], store.Items[i+1:]...)
-					store.Items = append(store.Items, item)
+					store.Items = append(store.Items, toggledItem)
 				}
 				break
 			}
