@@ -14,6 +14,7 @@ rec {
     }
     "vdirsyncer-auth"
     "radicale"
+    "punchlist"
   ];
 
   aspects = [
