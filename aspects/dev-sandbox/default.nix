@@ -49,6 +49,7 @@ let
     starship
     fzf
     zoxide
+    htop
 
     # Search/navigation
     ripgrep
