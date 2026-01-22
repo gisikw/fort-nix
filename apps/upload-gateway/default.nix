@@ -56,6 +56,7 @@ in
       subdomain = "upload";
       inherit port;
       visibility = "public";
+      maxBodySize = "500M";
       sso = {
         mode = "gatekeeper";
         groups = [ "admin" ];
