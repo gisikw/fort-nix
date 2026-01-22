@@ -17,6 +17,7 @@ rec {
     "super-productivity"
     "termix"
     "silverbullet"
+    "upload-gateway"
   ];
 
   aspects = [
