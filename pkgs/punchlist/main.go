@@ -71,11 +71,8 @@ func main() {
 
 	// API
 	http.HandleFunc("/api/items", handleItems)
-	http.HandleFunc("/api/items/", handleItem)
+	http.HandleFunc("/api/items/", handleItem) // handles PATCH, DELETE, and /bump
 	http.HandleFunc("/ws", handleWebSocket)
-
-	// Bump endpoint (move item to top)
-	http.HandleFunc("/api/items/{id}/bump", handleBump)
 
 	log.Printf("Punchlist listening on %s (data: %s)", *addr, storePath)
 	log.Fatal(http.ListenAndServe(*addr, nil))
@@ -130,11 +127,13 @@ func watchFile() {
 	for range ticker.C {
 		info, err := os.Stat(storePath)
 		if err != nil {
+			// File might have been deleted, check again next tick
 			continue
 		}
 
 		storeMu.RLock()
-		changed := info.ModTime().After(lastMod)
+		// Use != instead of After to catch any mtime change (including file replacement)
+		changed := !info.ModTime().Equal(lastMod)
 		storeMu.RUnlock()
 
 		if changed {
@@ -241,7 +240,16 @@ func handleItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleItem(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/items/")
+	path := strings.TrimPrefix(r.URL.Path, "/api/items/")
+
+	// Check for bump action: /api/items/{id}/bump
+	if strings.HasSuffix(path, "/bump") {
+		id := strings.TrimSuffix(path, "/bump")
+		handleBump(w, r, id)
+		return
+	}
+
+	id := path
 	if id == "" {
 		http.Error(w, "ID required", http.StatusBadRequest)
 		return
@@ -314,16 +322,13 @@ func handleItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleBump(w http.ResponseWriter, r *http.Request) {
+func handleBump(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract ID from path: /api/items/{id}/bump
-	path := strings.TrimPrefix(r.URL.Path, "/api/items/")
-	id := strings.TrimSuffix(path, "/bump")
-	if id == "" || id == path {
+	if id == "" {
 		http.Error(w, "ID required", http.StatusBadRequest)
 		return
 	}
