@@ -25,6 +25,12 @@ let
   # Comin binary for CLI commands
   cominBin = config.services.comin.package;
 
+  # Go handler for deploy capability
+  deployProvider = import ./provider {
+    inherit pkgs;
+    cominPath = "${cominBin}/bin/comin";
+  };
+
   # Handler for git-token: extracts token from JSON response and stores it
   gitTokenHandler = pkgs.writeShellScript "git-token-handler" ''
     ${pkgs.coreutils}/bin/mkdir -p "${credDir}"
@@ -58,61 +64,6 @@ EOF
     # Write push token
     echo "$pushToken" > "${pushTokenFile}"
     ${pkgs.coreutils}/bin/chmod 600 "${pushTokenFile}"
-  '';
-
-  # Deploy handler - verifies SHA then confirms deployment
-  deployHandler = pkgs.writeShellScript "handler-deploy" ''
-    set -euo pipefail
-    export PATH="${lib.makeBinPath [ pkgs.git pkgs.jq pkgs.coreutils cominBin ]}:$PATH"
-
-    # Read expected SHA from request
-    input=$(cat)
-    expected_sha=$(echo "$input" | jq -r '.sha // empty')
-
-    if [ -z "$expected_sha" ]; then
-      echo '{"error": "sha parameter required"}'
-      exit 1
-    fi
-
-    COMIN_REPO="/var/lib/comin/repository"
-
-    # Get release branch HEAD commit message
-    # Format: "release: 5563ac2 - 2025-12-31T19:44:27+00:00"
-    if ! release_msg=$(git -C "$COMIN_REPO" log -1 --format=%s HEAD 2>&1); then
-      jq -n --arg err "$release_msg" '{"error": "failed to read release HEAD", "details": $err}'
-      exit 1
-    fi
-
-    # Parse the main SHA from the commit message
-    pending_sha=$(echo "$release_msg" | sed -n 's/^release: \([a-f0-9]*\) -.*/\1/p')
-
-    if [ -z "$pending_sha" ]; then
-      jq -n --arg msg "$release_msg" '{"error": "could not parse SHA from release commit", "commit_message": $msg}'
-      exit 1
-    fi
-
-    # Verify SHA matches (allow prefix match for short SHAs)
-    if [[ ! "$pending_sha" == "$expected_sha"* ]] && [[ ! "$expected_sha" == "$pending_sha"* ]]; then
-      jq -n --arg expected "$expected_sha" --arg pending "$pending_sha" \
-        '{"error": "sha_mismatch", "expected": $expected, "pending": $pending}'
-      exit 0  # Exit 0 so wrapper returns our JSON, not a 500
-    fi
-
-    # SHA matches - trigger confirmation
-    if output=$(comin confirmation accept 2>&1); then
-      # Check if confirmation was actually accepted (not just command success)
-      if echo "$output" | grep -q "accepted for deploying"; then
-        jq -n --arg sha "$pending_sha" --arg output "$output" \
-          '{"status": "deployed", "sha": $sha, "output": $output}'
-      else
-        # Command succeeded but nothing was accepted (generation still building?)
-        jq -n --arg sha "$pending_sha" --arg output "$output" \
-          '{"error": "building", "sha": $sha, "note": "generation not ready for confirmation yet", "output": $output}'
-      fi
-    else
-      jq -n --arg sha "$pending_sha" --arg output "$output" \
-        '{"status": "confirmed", "sha": $sha, "note": "no confirmation was pending (may have auto-deployed)", "output": $output}'
-    fi
   '';
 
   # Post-deployment script to push built system to cache
@@ -209,7 +160,7 @@ in
 
   # Expose deploy capability for on-demand deployments
   fort.host.capabilities.deploy = {
-    handler = deployHandler;
+    handler = "${deployProvider}/bin/deploy-provider";
     mode = "rpc";  # Synchronous deploy trigger
     description = "Trigger deployment after verifying expected SHA";
     allowed = [ "dev-sandbox" ];
