@@ -13,8 +13,13 @@ let
   domain = rootManifest.fortConfig.settings.domain;
   hostname = hostManifest.hostName;
   statusDir = "/var/lib/fort/status";
+  dropsDir = "/var/lib/fort/drops";
   cominStore = "/var/lib/comin/store.json";
   deployRsInfo = "/var/lib/fort/deploy-info.json";
+
+  # Import the upload handler
+  fortUpload = import ../../pkgs/fort-upload { inherit pkgs; };
+  uploadSocket = "/run/fort/upload.sock";
 
   # Services with health monitoring info for Gatus
   servicesJson = builtins.toJSON (map (svc: {
@@ -143,9 +148,10 @@ let
   '';
 in
 {
-  # Ensure status directory exists
+  # Ensure directories exist
   systemd.tmpfiles.rules = [
     "d ${statusDir} 0755 root root -"
+    "d ${dropsDir} 0755 root root -"
   ];
 
   # Timer to regenerate status every 30 seconds
@@ -162,6 +168,32 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = statusScript;
+    };
+  };
+
+  # Socket activation for file upload handler
+  systemd.sockets.fort-upload = {
+    description = "Fort File Upload Socket";
+    wantedBy = [ "sockets.target" ];
+    listenStreams = [ uploadSocket ];
+    socketConfig = {
+      SocketMode = "0660";
+      SocketUser = "root";
+      SocketGroup = "nginx";
+    };
+  };
+
+  systemd.services.fort-upload = {
+    description = "Fort File Upload Handler";
+    requires = [ "fort-upload.socket" ];
+    after = [ "fort-upload.socket" ];
+
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${fortUpload}/bin/fort-upload";
+      StandardInput = "socket";
+      StandardOutput = "socket";
+      StandardError = "journal";
     };
   };
 
@@ -197,6 +229,30 @@ in
             return 444;
           }
           add_header Cache-Control "no-cache";
+        '';
+      };
+
+      # File upload endpoint - VPN-only, no auth
+      locations."/upload" = {
+        extraConfig = ''
+          if ($is_vpn = 0) {
+            return 444;
+          }
+
+          # Only allow POST
+          if ($request_method != POST) {
+            return 405;
+          }
+
+          # Allow large uploads (500MB)
+          client_max_body_size 500M;
+
+          fastcgi_pass unix:${uploadSocket};
+          include ${pkgs.nginx}/conf/fastcgi_params;
+          fastcgi_param SCRIPT_NAME $uri;
+          fastcgi_param REQUEST_METHOD $request_method;
+          fastcgi_param CONTENT_TYPE $content_type;
+          fastcgi_param CONTENT_LENGTH $content_length;
         '';
       };
     };
