@@ -321,6 +321,7 @@ in
                   --cookie-secret-file=/var/lib/fort-auth/${svc.name}/cookie-secret \
                   --cookie-secure=true \
                   --cookie-samesite=lax \
+                  --cookie-domain=${subdomain}.${domain} \
                   --cookie-name=_oauth2_proxy_${svc.name} \
                   --skip-auth-regex='^/(favicon\.ico|service_worker\.js|\.client/.*|manifest\.json)$' \
                   --pass-user-headers \
