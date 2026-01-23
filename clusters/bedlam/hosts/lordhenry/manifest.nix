@@ -21,6 +21,7 @@ rec {
     { config, pkgs, ... }:
     {
       config.environment.systemPackages = [
+        pkgs.ffmpeg
         pkgs.neovim
         pkgs.tailscale
         pkgs.tmux
