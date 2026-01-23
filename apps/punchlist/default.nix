@@ -74,7 +74,7 @@ in
   fort.cluster.services = [
     {
       name = "punchlist";
-      subdomain = "punch";
+      subdomain = "punchlist";
       port = 8765;
       visibility = "public";
       sso = {
