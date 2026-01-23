@@ -111,7 +111,7 @@ func saveStore() error {
 		return err
 	}
 
-	if err := os.WriteFile(storePath, data, 0644); err != nil {
+	if err := os.WriteFile(storePath, data, 0660); err != nil {
 		return err
 	}
 
