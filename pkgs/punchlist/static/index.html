@@ -207,13 +207,13 @@
     let pendingQueue = [];
 
     function render() {
-      list.innerHTML = items.map(item => `
+      list.innerHTML = items.map((item, idx) => `
         <div class="item ${item.done ? 'done' : ''}" data-id="${item.id}">
           <div class="item-main">
             <div class="circle"></div>
             <div class="text">${escapeHtml(item.text)}</div>
           </div>
-          <div class="bump" title="Move to bottom"></div>
+          ${idx === 0 || item.done ? '' : '<div class="bump" title="Move to bottom"></div>'}
         </div>
       `).join('');
     }
