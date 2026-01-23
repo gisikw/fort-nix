@@ -348,6 +348,12 @@ in
       services.nginx = {
         enable = true;
         recommendedProxySettings = true;
+        proxyTimeout = "300s";
+        # Increase hash size to accommodate additional proxy headers per location
+        appendHttpConfig = ''
+          proxy_headers_hash_max_size 1024;
+          proxy_headers_hash_bucket_size 128;
+        '';
 
         virtualHosts = lib.listToAttrs (
           map (
