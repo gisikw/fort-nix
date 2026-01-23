@@ -366,12 +366,7 @@ in
                 sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
                 locations."/" = {
                   extraConfig = lib.concatStringsSep "\n" (lib.filter (s: s != "") [
-                    # Re-add all proxy headers since any proxy_set_header clears inherited ones
-                    "proxy_set_header Host $host;"
-                    "proxy_set_header X-Real-IP $remote_addr;"
-                    "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
-                    "proxy_set_header X-Forwarded-Proto $scheme;"
-                    "proxy_set_header X-Forwarded-Host $host;"
+                    # Ensure cookies are forwarded (not included in recommendedProxySettings)
                     "proxy_set_header Cookie $http_cookie;"
                     (lib.optionalString (svc.visibility == "vpn") ''
                       if ($is_vpn = 0) {
