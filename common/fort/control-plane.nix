@@ -269,6 +269,80 @@ let
       esac
     '';
 
+    # Read file contents with optional offset and limit
+    # Useful for remote diagnostics without SSH access
+    read-file = pkgs.writeShellScript "handler-read-file" ''
+      set -euo pipefail
+
+      input=$(${pkgs.coreutils}/bin/cat)
+      file_path=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.path // empty')
+      offset=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.offset // 0')
+      limit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.limit // 1000')
+
+      if [ -z "$file_path" ]; then
+        ${pkgs.jq}/bin/jq -n '{"error": "path parameter required"}'
+        exit 1
+      fi
+
+      # Security: block sensitive paths
+      case "$file_path" in
+        /etc/shadow*|/etc/gshadow*|*/.ssh/id_*|*/private*key*|*.age)
+          ${pkgs.jq}/bin/jq -n --arg path "$file_path" '{"error": "access denied", "path": $path}'
+          exit 1
+          ;;
+      esac
+
+      # Validate offset and limit are numbers
+      if ! echo "$offset" | ${pkgs.gnugrep}/bin/grep -qE '^[0-9]+$'; then
+        ${pkgs.jq}/bin/jq -n '{"error": "offset must be a non-negative integer"}'
+        exit 1
+      fi
+      if ! echo "$limit" | ${pkgs.gnugrep}/bin/grep -qE '^[0-9]+$'; then
+        ${pkgs.jq}/bin/jq -n '{"error": "limit must be a non-negative integer"}'
+        exit 1
+      fi
+
+      # Cap limit at 10000 lines
+      if [ "$limit" -gt 10000 ]; then
+        limit=10000
+      fi
+
+      if [ ! -e "$file_path" ]; then
+        ${pkgs.jq}/bin/jq -n --arg path "$file_path" '{"error": "file not found", "path": $path}'
+        exit 1
+      fi
+
+      if [ -d "$file_path" ]; then
+        # Directory listing
+        if listing=$(${pkgs.coreutils}/bin/ls -la "$file_path" 2>&1); then
+          ${pkgs.jq}/bin/jq -n --arg path "$file_path" --arg listing "$listing" \
+            '{"path": $path, "type": "directory", "listing": $listing}'
+        else
+          ${pkgs.jq}/bin/jq -n --arg path "$file_path" --arg error "$listing" \
+            '{"error": "ls failed", "path": $path, "details": $error}'
+          exit 1
+        fi
+      else
+        # File content with offset and limit
+        total_lines=$(${pkgs.coreutils}/bin/wc -l < "$file_path" 2>/dev/null || echo "0")
+        start_line=$((offset + 1))
+
+        if content=$(${pkgs.coreutils}/bin/tail -n "+$start_line" "$file_path" 2>&1 | ${pkgs.coreutils}/bin/head -n "$limit"); then
+          ${pkgs.jq}/bin/jq -n \
+            --arg path "$file_path" \
+            --arg content "$content" \
+            --argjson offset "$offset" \
+            --argjson limit "$limit" \
+            --argjson total_lines "$total_lines" \
+            '{"path": $path, "type": "file", "content": $content, "offset": $offset, "limit": $limit, "total_lines": $total_lines}'
+        else
+          ${pkgs.jq}/bin/jq -n --arg path "$file_path" --arg error "$content" \
+            '{"error": "read failed", "path": $path, "details": $error}'
+          exit 1
+        fi
+      fi
+    '';
+
     # Force immediate retry of needs by resetting fulfillment state
     # Optional pattern parameter filters which needs to reset (substring match)
     # If pattern is empty/missing, resets ALL needs
@@ -325,6 +399,7 @@ let
     journal = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     systemd = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     force-nag = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
+    read-file = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
   };
 
   # Helper to derive needsGC and ttl from mode
@@ -794,6 +869,7 @@ in
           install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
           install -Dm0755 ${mandatoryHandlers.systemd} /etc/fort/handlers/systemd
           install -Dm0755 ${mandatoryHandlers.force-nag} /etc/fort/handlers/force-nag
+          install -Dm0755 ${mandatoryHandlers.read-file} /etc/fort/handlers/read-file
 
           # Install RBAC and capabilities config (includes mandatory endpoints)
           install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
