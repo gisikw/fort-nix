@@ -32,49 +32,74 @@ func main() {
 		os.Exit(1)
 	}
 
-	response := processRequest(input)
-	writeResponse(response)
-
-	if response.Error != "" {
+	// Validate request and respond immediately
+	req, err := validateRequest(input)
+	if err != nil {
+		writeError(err.Error())
 		os.Exit(1)
 	}
+
+	// Respond with "accepted" before starting work
+	writeResponse(TranscribeResponse{Status: "accepted"})
+
+	// Close stdout so fort-provider knows we're done responding
+	os.Stdout.Close()
+
+	// Now do the actual work (process stays alive until complete)
+	transcribe(req)
 }
 
-func processRequest(input []byte) TranscribeResponse {
+// validatedRequest holds a validated request ready for processing
+type validatedRequest struct {
+	sourcePath string
+	sourceName string
+	output     OutputTarget
+}
+
+func validateRequest(input []byte) (*validatedRequest, error) {
 	var req TranscribeRequest
 	if err := json.Unmarshal(input, &req); err != nil {
-		return TranscribeResponse{Error: fmt.Sprintf("invalid JSON: %v", err)}
+		return nil, fmt.Errorf("invalid JSON: %v", err)
 	}
 
 	if req.Name == "" {
-		return TranscribeResponse{Error: "name field is required"}
+		return nil, fmt.Errorf("name field is required")
 	}
 	if req.Output.Host == "" {
-		return TranscribeResponse{Error: "output.host field is required"}
+		return nil, fmt.Errorf("output.host field is required")
 	}
 	if req.Output.Name == "" {
-		return TranscribeResponse{Error: "output.name field is required"}
+		return nil, fmt.Errorf("output.name field is required")
 	}
 
 	// Sanitize filename to prevent path traversal
 	safeName := filepath.Base(req.Name)
 	if safeName != req.Name || strings.Contains(safeName, "..") {
-		return TranscribeResponse{Error: "invalid filename"}
+		return nil, fmt.Errorf("invalid filename")
 	}
 
 	sourcePath := filepath.Join(dropsDir, safeName)
 	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
-		return TranscribeResponse{Error: fmt.Sprintf("file not found: %s", safeName)}
+		return nil, fmt.Errorf("file not found: %s", safeName)
 	}
 
-	return transcribe(sourcePath, safeName, req.Output)
+	return &validatedRequest{
+		sourcePath: sourcePath,
+		sourceName: safeName,
+		output:     req.Output,
+	}, nil
 }
 
-func transcribe(sourcePath, sourceName string, output OutputTarget) TranscribeResponse {
+func transcribe(req *validatedRequest) {
+	sourcePath := req.sourcePath
+	sourceName := req.sourceName
+	output := req.output
+
 	// Create temp directory for processing
 	tmpDir, err := os.MkdirTemp("", "transcribe-*")
 	if err != nil {
-		return TranscribeResponse{Error: fmt.Sprintf("failed to create temp dir: %v", err)}
+		fmt.Fprintf(os.Stderr, "[transcribe] ERROR: failed to create temp dir: %v\n", err)
+		return
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -85,7 +110,8 @@ func transcribe(sourcePath, sourceName string, output OutputTarget) TranscribeRe
 	ffCmd := exec.Command(ffmpegPath, "-i", sourcePath, "-y", "-vn", "-acodec", "libmp3lame", "-q:a", "2", mp3Path)
 	ffCmd.Stderr = os.Stderr
 	if err := ffCmd.Run(); err != nil {
-		return TranscribeResponse{Error: fmt.Sprintf("ffmpeg conversion failed: %v", err)}
+		fmt.Fprintf(os.Stderr, "[transcribe] ERROR: ffmpeg conversion failed: %v\n", err)
+		return
 	}
 
 	// Run whisper-transcribe
@@ -96,7 +122,8 @@ func transcribe(sourcePath, sourceName string, output OutputTarget) TranscribeRe
 	wsCmd.Dir = tmpDir
 	wsCmd.Stderr = os.Stderr
 	if err := wsCmd.Run(); err != nil {
-		return TranscribeResponse{Error: fmt.Sprintf("whisper-transcribe failed: %v", err)}
+		fmt.Fprintf(os.Stderr, "[transcribe] ERROR: whisper-transcribe failed: %v\n", err)
+		return
 	}
 
 	// Read the output
@@ -112,17 +139,15 @@ func transcribe(sourcePath, sourceName string, output OutputTarget) TranscribeRe
 
 	uploadURL := fmt.Sprintf("https://%s.fort.%s/upload", output.Host, domain)
 	if err := uploadFile(uploadURL, output.Name, txtContent); err != nil {
-		return TranscribeResponse{Error: fmt.Sprintf("upload failed: %v", err)}
+		fmt.Fprintf(os.Stderr, "[transcribe] ERROR: upload failed: %v\n", err)
+		return
 	}
 
 	// Clean up source file from drops
 	fmt.Fprintf(os.Stderr, "[transcribe] cleaning up %s\n", sourcePath)
 	os.Remove(sourcePath)
 
-	return TranscribeResponse{
-		Status:   "completed",
-		Filename: output.Name,
-	}
+	fmt.Fprintf(os.Stderr, "[transcribe] completed: %s\n", output.Name)
 }
 
 func uploadFile(url, filename string, content []byte) error {

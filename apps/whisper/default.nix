@@ -63,6 +63,7 @@ in
   fort.host.capabilities.transcribe = {
     handler = "${transcribeProvider}/bin/transcribe-provider";
     mode = "rpc";
+    allowed = [ "dev-sandbox" ];
     description = "Transcribe audio file and upload result to target host";
   };
 }
