@@ -52,6 +52,8 @@
       padding: 0 16px;
       max-width: 600px;
       margin: 0 auto;
+      display: flex;
+      flex-direction: column-reverse;
     }
 
     @media (display-mode: standalone) {
@@ -135,7 +137,7 @@
       height: 0;
       border-left: 8px solid transparent;
       border-right: 8px solid transparent;
-      border-bottom: 5px solid #ddd;
+      border-top: 5px solid #ddd;
     }
 
     .item.done .bump { display: none; }
@@ -211,7 +213,7 @@
             <div class="circle"></div>
             <div class="text">${escapeHtml(item.text)}</div>
           </div>
-          <div class="bump" title="Move to top"></div>
+          <div class="bump" title="Move to bottom"></div>
         </div>
       `).join('');
     }
@@ -270,7 +272,7 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         action();
       } else {
-        items.unshift({ id: Date.now().toString(), text, done: false, created: new Date().toISOString() });
+        items.push({ id: Date.now().toString(), text, done: false, created: new Date().toISOString() });
         render();
         pendingQueue.push(action);
       }
@@ -293,7 +295,7 @@
           item.done = !item.done;
           if (item.done) {
             items = items.filter(i => i.id !== id);
-            items.push(item);
+            items.unshift(item);
           }
           render();
         }
@@ -314,9 +316,9 @@
         action();
       } else {
         const idx = items.findIndex(i => i.id === id);
-        if (idx > 0) {
+        if (idx >= 0 && idx < items.length - 1) {
           const [item] = items.splice(idx, 1);
-          items.unshift(item);
+          items.push(item);
           render();
         }
         pendingQueue.push(action);

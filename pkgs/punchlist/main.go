@@ -229,7 +229,7 @@ func handleItems(w http.ResponseWriter, r *http.Request) {
 		}
 
 		storeMu.Lock()
-		store.Items = append([]Item{item}, store.Items...)
+		store.Items = append(store.Items, item)
 		storeMu.Unlock()
 
 		if err := saveStore(); err != nil {
@@ -274,10 +274,10 @@ func handleItem(w http.ResponseWriter, r *http.Request) {
 				toggledItem = store.Items[i] // Copy value before slice manipulation
 				found = true
 
-				// Move completed items to bottom, incomplete to top
+				// Move completed items to top (start of array, which displays at top)
 				if store.Items[i].Done {
 					store.Items = append(store.Items[:i], store.Items[i+1:]...)
-					store.Items = append(store.Items, toggledItem)
+					store.Items = append([]Item{toggledItem}, store.Items...)
 				}
 				break
 			}
@@ -350,8 +350,8 @@ func handleBump(w http.ResponseWriter, r *http.Request, id string) {
 			found = true
 			// Remove from current position
 			store.Items = append(store.Items[:i], store.Items[i+1:]...)
-			// Add to front
-			store.Items = append([]Item{bumpedItem}, store.Items...)
+			// Add to end (bottom of visual list, near input)
+			store.Items = append(store.Items, bumpedItem)
 			break
 		}
 	}
