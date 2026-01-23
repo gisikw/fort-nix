@@ -293,9 +293,11 @@
         const item = items.find(i => i.id === id);
         if (item) {
           item.done = !item.done;
+          items = items.filter(i => i.id !== id);
           if (item.done) {
-            items = items.filter(i => i.id !== id);
-            items.push(item);
+            items.push(item);      // completed: far from input
+          } else {
+            items.unshift(item);   // uncompleted: near input
           }
           render();
         }

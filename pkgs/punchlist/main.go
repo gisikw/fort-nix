@@ -274,10 +274,14 @@ func handleItem(w http.ResponseWriter, r *http.Request) {
 				toggledItem = store.Items[i] // Copy value before slice manipulation
 				found = true
 
-				// Move completed items to end of array (displays at top, far from input)
-				if store.Items[i].Done {
-					store.Items = append(store.Items[:i], store.Items[i+1:]...)
+				// Move item based on new state
+				store.Items = append(store.Items[:i], store.Items[i+1:]...)
+				if toggledItem.Done {
+					// Completed: push to end (far from input)
 					store.Items = append(store.Items, toggledItem)
+				} else {
+					// Uncompleted: unshift to start (near input, ready to work on)
+					store.Items = append([]Item{toggledItem}, store.Items...)
 				}
 				break
 			}
