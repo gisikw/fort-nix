@@ -12,15 +12,18 @@ let
   };
 
   # whisper-cpp with ROCm/hipBLAS support for AMD GPU
+  # HIP runtime detects gfx1102, HSA reports gfx1151 - compile for both
+  gpuTargets = "gfx1102;gfx1151";
+
   whisper-cpp-rocm = (pkgs.whisper-cpp.override {
     rocmSupport = true;
-    rocmGpuTargets = "gfx1151";
+    rocmGpuTargets = gpuTargets;
   }).overrideAttrs (old: {
     # Force HIP backend build - both old and new cmake flag names
     cmakeFlags = (old.cmakeFlags or [ ]) ++ [
       "-DGGML_HIP=ON"
       "-DGGML_HIPBLAS=ON"
-      "-DAMDGPU_TARGETS=gfx1151"
+      "-DAMDGPU_TARGETS=${gpuTargets}"
     ];
   });
 
