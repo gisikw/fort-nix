@@ -14,40 +14,50 @@
 
     html, body {
       height: 100%;
-      height: 100dvh; /* shrinks with keyboard on iOS */
+      overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #fafafa;
       color: #2d2a2e;
       overscroll-behavior: none;
     }
 
-    body {
-      display: flex;
-      flex-direction: column;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 16px;
-      padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
-      padding-bottom: 0;
-    }
-
     .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 0 4px 12px;
+      padding: calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px;
       font-size: 13px;
       color: #939293;
       letter-spacing: 0.5px;
+      background: #fafafa;
+      max-width: 600px;
+      margin: 0 auto;
+      z-index: 10;
     }
 
     .header span { font-weight: 500; }
 
     .list {
-      flex: 1;
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 48px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+      left: 0;
+      right: 0;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding-bottom: 80px;
+      padding: 0 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    @media (display-mode: standalone) {
+      .list {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 90px);
+      }
     }
 
     .item {
