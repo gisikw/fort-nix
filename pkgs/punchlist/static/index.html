@@ -272,7 +272,7 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         action();
       } else {
-        items.push({ id: Date.now().toString(), text, done: false, created: new Date().toISOString() });
+        items.unshift({ id: Date.now().toString(), text, done: false, created: new Date().toISOString() });
         render();
         pendingQueue.push(action);
       }
@@ -295,7 +295,7 @@
           item.done = !item.done;
           if (item.done) {
             items = items.filter(i => i.id !== id);
-            items.unshift(item);
+            items.push(item);
           }
           render();
         }
@@ -316,9 +316,9 @@
         action();
       } else {
         const idx = items.findIndex(i => i.id === id);
-        if (idx >= 0 && idx < items.length - 1) {
+        if (idx > 0) {
           const [item] = items.splice(idx, 1);
-          items.push(item);
+          items.unshift(item);
           render();
         }
         pendingQueue.push(action);
