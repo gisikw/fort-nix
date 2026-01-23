@@ -140,10 +140,10 @@
       margin: 0 auto;
     }
 
-    /* PWA standalone mode has rounded corners that safe-area doesn't cover */
+    /* PWA standalone mode: lift input bar above rounded corners */
     @media (display-mode: standalone) {
       .input-bar {
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+        bottom: 20px;
       }
     }
 
@@ -335,15 +335,6 @@
     if (isDesktop) {
       input.focus();
       input.addEventListener('blur', () => setTimeout(() => input.focus(), 10));
-    }
-
-    // Mobile: keep list scrolled to top when keyboard opens
-    if (!isDesktop && window.visualViewport) {
-      window.visualViewport.addEventListener('resize', () => {
-        if (document.activeElement === input) {
-          list.scrollTop = 0;
-        }
-      });
     }
 
     fetch('/api/items')
