@@ -12,10 +12,17 @@ let
   };
 
   # whisper-cpp with ROCm/hipBLAS support for AMD GPU
-  whisper-cpp-rocm = pkgs.whisper-cpp.override {
+  whisper-cpp-rocm = (pkgs.whisper-cpp.override {
     rocmSupport = true;
     rocmGpuTargets = "gfx1151";
-  };
+  }).overrideAttrs (old: {
+    # Force HIP backend build - both old and new cmake flag names
+    cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+      "-DGGML_HIP=ON"
+      "-DGGML_HIPBLAS=ON"
+      "-DAMDGPU_TARGETS=gfx1151"
+    ];
+  });
 
   # Simple wrapper that pre-configures the model
   whisper-transcribe = pkgs.writeShellScriptBin "whisper-transcribe" ''
