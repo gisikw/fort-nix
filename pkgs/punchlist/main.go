@@ -91,8 +91,16 @@ func loadStore() error {
 		return err
 	}
 
+	// Zero out before unmarshaling - otherwise fields missing from JSON
+	// (e.g., writing "{}") won't clear the in-memory state
+	store = Store{}
 	if err := json.Unmarshal(data, &store); err != nil {
 		return err
+	}
+
+	// Ensure Items is never nil (nil serializes as "null", not "[]")
+	if store.Items == nil {
+		store.Items = []Item{}
 	}
 
 	if info, err := os.Stat(storePath); err == nil {
