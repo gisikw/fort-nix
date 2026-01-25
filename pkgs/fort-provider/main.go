@@ -106,9 +106,11 @@ type AgentHandler struct {
 
 func main() {
 	// Check for --trigger mode (systemd trigger invocation)
+	// Optional --force flag omits cached responses from handler input
 	if len(os.Args) >= 3 && os.Args[1] == "--trigger" {
 		capability := os.Args[2]
-		if err := runTrigger(capability); err != nil {
+		force := len(os.Args) >= 4 && os.Args[3] == "--force"
+		if err := runTrigger(capability, force); err != nil {
 			fmt.Fprintf(os.Stderr, "trigger failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -1067,10 +1069,15 @@ func (h *AgentHandler) sendCallback(origin, path string, response json.RawMessag
 	fmt.Fprintf(os.Stderr, "[callback] sent to %s%s\n", origin, path)
 }
 
-// runTrigger runs a capability handler in response to a systemd trigger
-// This is invoked via: fort-provider --trigger <capability>
-func runTrigger(capability string) error {
-	fmt.Fprintf(os.Stderr, "[trigger] starting for capability: %s\n", capability)
+// runTrigger runs a capability handler in response to a systemd trigger or refresh request
+// This is invoked via: fort-provider --trigger <capability> [--force]
+// When force is true, cached responses are omitted from handler input, forcing recomputation
+func runTrigger(capability string, force bool) error {
+	if force {
+		fmt.Fprintf(os.Stderr, "[trigger] starting FORCE refresh for capability: %s\n", capability)
+	} else {
+		fmt.Fprintf(os.Stderr, "[trigger] starting for capability: %s\n", capability)
+	}
 
 	// Load capabilities config
 	capData, err := os.ReadFile(capabilitiesFile)
@@ -1107,15 +1114,19 @@ func runTrigger(capability string) error {
 	fmt.Fprintf(os.Stderr, "[trigger] %s: processing %d entries\n", capability, len(state))
 
 	// Build aggregate input from all state entries
+	// When force=true, omit cached responses to force handler to recompute
 	input := make(AsyncHandlerInput)
 	for key, entry := range state {
-		input[key] = struct {
+		inputEntry := struct {
 			Request  json.RawMessage `json:"request"`
 			Response json.RawMessage `json:"response,omitempty"`
 		}{
-			Request:  entry.Request,
-			Response: entry.Response,
+			Request: entry.Request,
 		}
+		if !force {
+			inputEntry.Response = entry.Response
+		}
+		input[key] = inputEntry
 	}
 
 	inputBytes, err := json.Marshal(input)
@@ -1129,12 +1140,17 @@ func runTrigger(capability string) error {
 		return fmt.Errorf("handler not found: %s", handlerPath)
 	}
 
+	triggerType := "systemd"
+	if force {
+		triggerType = "force-refresh"
+	}
+
 	cmd := exec.Command(handlerPath)
 	cmd.Stdin = bytes.NewReader(inputBytes)
 	cmd.Env = append(os.Environ(),
 		"FORT_CAPABILITY="+capability,
 		"FORT_MODE=async",
-		"FORT_TRIGGER=systemd",
+		"FORT_TRIGGER="+triggerType,
 	)
 
 	output, err := cmd.Output()

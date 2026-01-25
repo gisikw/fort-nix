@@ -343,6 +343,40 @@ let
       fi
     '';
 
+    # Refresh a capability: re-invoke handler and re-deliver to all subscribers
+    # Used to push updated state after source data changes (e.g., CI builds new artifact)
+    # Optional force parameter omits cached responses, requiring handler to recompute
+    refresh = pkgs.writeShellScript "handler-refresh" ''
+      set -euo pipefail
+
+      input=$(${pkgs.coreutils}/bin/cat)
+      capability=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.capability // empty')
+      force=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.force // false')
+
+      if [ -z "$capability" ]; then
+        ${pkgs.jq}/bin/jq -n '{"error": "capability parameter required"}'
+        exit 1
+      fi
+
+      # Check if we provide this capability (excluding mandatory ones that don't have state)
+      if ! ${pkgs.jq}/bin/jq -e --arg cap "$capability" '.[$cap]' /etc/fort/capabilities.json > /dev/null 2>&1; then
+        ${pkgs.jq}/bin/jq -n --arg cap "$capability" '{"error": "not a provider for this capability", "capability": $cap}'
+        exit 1
+      fi
+
+      # Build trigger command
+      if [ "$force" = "true" ]; then
+        ${fortProvider}/bin/fort-provider --trigger "$capability" --force
+        status="force-refreshed"
+      else
+        ${fortProvider}/bin/fort-provider --trigger "$capability"
+        status="refreshed"
+      fi
+
+      ${pkgs.jq}/bin/jq -n --arg status "$status" --arg cap "$capability" \
+        '{status: $status, capability: $cap}'
+    '';
+
     # Force immediate retry of needs by resetting fulfillment state
     # Optional pattern parameter filters which needs to reset (substring match)
     # If pattern is empty/missing, resets ALL needs
@@ -400,6 +434,9 @@ let
     systemd = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     force-nag = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     read-file = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
+    # Refresh capability - triggers re-delivery to subscribers
+    # Allowed for forge (CI-triggered) and dev-sandbox (manual testing)
+    refresh = { mode = "rpc"; allowed = [ "forge" "dev-sandbox" ]; };
   };
 
   # Helper to derive needsGC and ttl from mode
@@ -870,6 +907,7 @@ in
           install -Dm0755 ${mandatoryHandlers.systemd} /etc/fort/handlers/systemd
           install -Dm0755 ${mandatoryHandlers.force-nag} /etc/fort/handlers/force-nag
           install -Dm0755 ${mandatoryHandlers.read-file} /etc/fort/handlers/read-file
+          install -Dm0755 ${mandatoryHandlers.refresh} /etc/fort/handlers/refresh
 
           # Install RBAC and capabilities config (includes mandatory endpoints)
           install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
