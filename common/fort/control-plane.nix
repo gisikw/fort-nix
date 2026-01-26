@@ -435,8 +435,8 @@ let
     force-nag = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     read-file = { mode = "rpc"; allowed = [ "dev-sandbox" ]; };
     # Refresh capability - triggers re-delivery to subscribers
-    # Allowed for forge (CI-triggered) and dev-sandbox (manual testing)
-    refresh = { mode = "rpc"; allowed = [ "forge" "dev-sandbox" ]; };
+    # Allowed for ci (CI-triggered) and dev-sandbox (manual testing)
+    refresh = { mode = "rpc"; allowed = [ "ci" "dev-sandbox" ]; };
   };
 
   # Helper to derive needsGC and ttl from mode

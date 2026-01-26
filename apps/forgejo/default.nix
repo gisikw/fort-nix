@@ -30,6 +30,13 @@ let
   runtimePackageProvider = import ./provider/runtime {
     inherit pkgs;
   };
+
+  # Fort CLI for CI to trigger refresh
+  fortCli = import ../../pkgs/fort { inherit pkgs domain; };
+
+  # Attic CI token location (created by attic bootstrap)
+  atticCiToken = "/var/lib/atticd/bootstrap/ci-token";
+  atticCacheUrl = "https://cache.${domain}";
 in
 {
   # Age secrets for mirror tokens (per repo-mirror pair) and runner
@@ -44,6 +51,12 @@ in
   }) allMirrors) // {
     forgejo-runner-secret = {
       file = ./runner-secret.age;
+      owner = "forgejo";
+      group = "forgejo";
+      mode = "0400";
+    };
+    ci-agent-key = {
+      file = ./ci-agent-key.age;
       owner = "forgejo";
       group = "forgejo";
       mode = "0400";
@@ -333,14 +346,18 @@ in
       # Runner config with labels and PATH for workflow jobs.
       # PATH must be in config.yml envs (not systemd environment) - jobs don't inherit daemon env.
       # Required tools: bash/coreutils (shell), nix (flake ops), git (checkout),
-      # nodejs (JS-based actions like actions/checkout), gnutar/gzip (artifacts).
-      # TODO: Investigate nix develop-based runner for per-repo dependency control.
+      # nodejs (JS-based actions like actions/checkout), gnutar/gzip (artifacts),
+      # fort (control plane), attic-client (binary cache).
       cat > "${runnerDir}/config.yml" <<EOF
 runner:
   labels:
     - "nixos:host"
   envs:
-    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.age ]}"
+    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.age pkgs.attic-client fortCli ]}"
+    FORT_SSH_KEY: "${config.age.secrets.ci-agent-key.path}"
+    FORT_ORIGIN: "ci"
+    ATTIC_TOKEN_FILE: "${atticCiToken}"
+    ATTIC_CACHE_URL: "${atticCacheUrl}"
 EOF
 
       RUNNER_FILE="${runnerDir}/.runner"

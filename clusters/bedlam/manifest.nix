@@ -35,10 +35,11 @@ rec {
           roles = [ "secrets" ];
         };
         ci = {
-          description = "Forgejo CI - secret re-keying only";
+          description = "Forgejo CI - secret re-keying and control plane access";
           publicKey = "age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d";
-          # Private key stored in Forgejo secrets (CI_AGE_KEY)
-          # Also stored encrypted at clusters/bedlam/ci-age-key.age for easy provisioning
+          # Age key stored in Forgejo secrets (CI_AGE_KEY) for secret re-keying
+          # SSH key for control plane auth (refresh capability)
+          agentKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICBy4EkPwAF50uYBRNWj3pRUH9/gyWuOmVquZyqz6SD/ ci-agent";
           roles = [ "secrets" ];
         };
       };
