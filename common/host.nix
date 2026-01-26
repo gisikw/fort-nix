@@ -151,6 +151,11 @@ in
           cluster
           ;
       })
+      (import ./fort/runtime-packages.nix {
+        inherit
+          cluster
+          ;
+      })
     ]
     ++ map (mkModule "app") allApps
     ++ map (mkModule "aspect") allAspects;
