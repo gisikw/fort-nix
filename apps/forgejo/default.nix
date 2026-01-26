@@ -102,6 +102,9 @@ in
     };
   };
 
+  # Runner needs PTY access for tests that spawn subprocesses
+  users.users.forgejo.extraGroups = [ "tty" ];
+
   # Bootstrap/update OIDC auth source after credentials are delivered
   systemd.services.forgejo-oidc-setup = {
     description = "Configure Forgejo OIDC authentication source";
