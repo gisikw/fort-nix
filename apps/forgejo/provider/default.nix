@@ -6,6 +6,9 @@ pkgs.buildGoModule {
 
   src = ./.;
 
+  # Only build the root package, not subdirectories (runtime/ is a separate module)
+  subPackages = [ "." ];
+
   # No external dependencies, just stdlib
   vendorHash = null;
 
