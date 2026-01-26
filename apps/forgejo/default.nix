@@ -406,7 +406,7 @@ EOF
       name = "git";
       subdomain = subdomain;
       port = 3001;
-      visibility = "vpn";
+      visibility = "public";
       sso = {
         mode = "oidc";
         restart = "forgejo-oidc-setup.service";
