@@ -32,7 +32,12 @@ rec {
   module =
     { config, pkgs, ... }:
     {
-      config.fort.host = { inherit roles apps aspects; };
+      config.fort.host = {
+        inherit roles apps aspects;
+        runtimePackages = [
+          { repo = "infra/bz"; }
+        ];
+      };
 
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
