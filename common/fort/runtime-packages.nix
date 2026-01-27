@@ -58,10 +58,12 @@ let
     echo "Realizing $repo@$rev -> $store_path"
 
     # Realize the store path (pulls from attic if not local)
-    if ! ${pkgs.nix}/bin/nix store realize "$store_path" 2>&1; then
-      echo "Failed to realize store path: $store_path" >&2
+    # Capture output for better debugging
+    output=$(${pkgs.nix}/bin/nix store realize "$store_path" 2>&1) || {
+      echo "nix store realize failed:" >&2
+      echo "$output" >&2
       exit 1
-    fi
+    }
 
     # Ensure managed-bin directory exists
     ${pkgs.coreutils}/bin/mkdir -p /run/managed-bin
