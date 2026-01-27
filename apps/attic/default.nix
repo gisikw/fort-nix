@@ -110,6 +110,7 @@ in
       fi
 
       # Create CI token (push/pull only) if not exists
+      # Readable by forgejo for CI runner access
       if [ ! -s "$CI_TOKEN_FILE" ]; then
         echo "Creating CI token..."
         ${atticadm} -f ${atticadmConfig} make-token \
@@ -118,7 +119,8 @@ in
           --push "${cacheName}" \
           --pull "*" \
           > "$CI_TOKEN_FILE"
-        chmod 600 "$CI_TOKEN_FILE"
+        chown forgejo:forgejo "$CI_TOKEN_FILE"
+        chmod 640 "$CI_TOKEN_FILE"
         echo "CI token created"
       fi
 
