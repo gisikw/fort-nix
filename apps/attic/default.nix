@@ -110,7 +110,6 @@ in
       fi
 
       # Create CI token (push/pull only) if not exists
-      # Readable by forgejo for CI runner access
       if [ ! -s "$CI_TOKEN_FILE" ]; then
         echo "Creating CI token..."
         ${atticadm} -f ${atticadmConfig} make-token \
@@ -121,9 +120,12 @@ in
           > "$CI_TOKEN_FILE"
         echo "CI token created"
       fi
-      # Ensure CI token is readable by forgejo (fix existing permissions)
-      chown forgejo:forgejo "$CI_TOKEN_FILE"
-      chmod 640 "$CI_TOKEN_FILE"
+      # Copy CI token to forgejo-accessible location
+      # (can't chown in /var/lib/atticd due to filesystem issues)
+      mkdir -p /var/lib/forgejo-runner
+      cp "$CI_TOKEN_FILE" /var/lib/forgejo-runner/attic-ci-token
+      chown forgejo:forgejo /var/lib/forgejo-runner/attic-ci-token
+      chmod 640 /var/lib/forgejo-runner/attic-ci-token
 
       # Configure attic CLI for cache creation
       ADMIN_TOKEN=$(cat "$ADMIN_TOKEN_FILE")

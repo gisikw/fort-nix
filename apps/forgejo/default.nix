@@ -35,7 +35,7 @@ let
   fortCli = import ../../pkgs/fort { inherit pkgs domain; };
 
   # Attic CI token location (created by attic bootstrap)
-  atticCiToken = "/var/lib/atticd/bootstrap/ci-token";
+  atticCiToken = "/var/lib/forgejo-runner/attic-ci-token";
   atticCacheUrl = "https://cache.${domain}";
 in
 {
