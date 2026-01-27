@@ -119,10 +119,11 @@ in
           --push "${cacheName}" \
           --pull "*" \
           > "$CI_TOKEN_FILE"
-        chown forgejo:forgejo "$CI_TOKEN_FILE"
-        chmod 640 "$CI_TOKEN_FILE"
         echo "CI token created"
       fi
+      # Ensure CI token is readable by forgejo (fix existing permissions)
+      chown forgejo:forgejo "$CI_TOKEN_FILE"
+      chmod 640 "$CI_TOKEN_FILE"
 
       # Configure attic CLI for cache creation
       ADMIN_TOKEN=$(cat "$ADMIN_TOKEN_FILE")
