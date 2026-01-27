@@ -95,8 +95,11 @@ in
           fallback = true;
           connect-timeout = 5;
           stalled-download-timeout = 60;
+          # Trust the cluster's attic cache so extra-substituters from the include works
+          trusted-substituters = [ "https://cache.${settings.domain}/fort" ];
         };
         # Include attic cache config if it exists (delivered by attic-token capability)
+        # Adds extra-substituters and extra-trusted-public-keys dynamically
         nix.extraOptions = ''
           !include /var/lib/fort/nix/attic-cache.conf
         '';
