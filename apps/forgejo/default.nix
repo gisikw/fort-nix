@@ -31,6 +31,11 @@ let
     inherit pkgs;
   };
 
+  # Runtime package register handler (Go handler)
+  runtimePackageRegister = import ./provider/runtime-register {
+    inherit pkgs;
+  };
+
   # Fort CLI for CI to trigger refresh
   fortCli = import ../../pkgs/fort { inherit pkgs domain; };
 
@@ -431,5 +436,13 @@ EOF
     mode = "async";
     format = "symmetric";  # Go handler uses symmetric input/output format
     description = "Distribute runtime package store paths from CI builds";
+  };
+
+  # Expose runtime-package-register capability for CI to register built packages
+  fort.host.capabilities.runtime-package-register = {
+    handler = "${runtimePackageRegister}/bin/runtime-register";
+    mode = "rpc";  # Simple request-response, no state tracking
+    description = "Register runtime package store paths from CI builds";
+    allowed = [ "ci" ];  # Only CI can register packages
   };
 }
