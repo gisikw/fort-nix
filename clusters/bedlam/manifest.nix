@@ -86,7 +86,13 @@ rec {
           };
         };
         "unum" = {
-          # TODO: Add GitHub mirror once push mirror API issue is resolved
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/unum";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
         };
       };
     };
