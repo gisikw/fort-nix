@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -1026,9 +1027,12 @@ func (h *AgentHandler) getProviderState(capability string) map[string]ProviderSt
 	return h.providerState[capability]
 }
 
-// dispatchCallbacks sends responses to consumer callback endpoints (fire-and-forget)
+// dispatchCallbacks sends responses to consumer callback endpoints
 // changedKeys is a list of state keys (origin:needID format) that have new responses
+// Waits for all callbacks to complete before returning
 func (h *AgentHandler) dispatchCallbacks(capability string, changedKeys []string, responses AsyncHandlerOutput) {
+	var wg sync.WaitGroup
+
 	for _, key := range changedKeys {
 		origin, needID := parseStateKey(key)
 		if needID == "" {
@@ -1047,9 +1051,16 @@ func (h *AgentHandler) dispatchCallbacks(capability string, changedKeys []string
 		name := strings.TrimPrefix(needID, capability+"-")
 		callbackPath := fmt.Sprintf("/fort/needs/%s/%s", capability, name)
 
-		// Fire-and-forget callback in goroutine
-		go h.sendCallback(origin, callbackPath, response)
+		// Send callback in goroutine, tracked by WaitGroup
+		wg.Add(1)
+		go func(origin, path string, resp json.RawMessage) {
+			defer wg.Done()
+			h.sendCallback(origin, path, resp)
+		}(origin, callbackPath, response)
 	}
+
+	// Wait for all callbacks to complete
+	wg.Wait()
 }
 
 // sendCallback POSTs a response to a consumer's callback endpoint
