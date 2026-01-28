@@ -85,6 +85,15 @@ rec {
             };
           };
         };
+        "unum" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/unum";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
