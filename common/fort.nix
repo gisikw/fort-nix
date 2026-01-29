@@ -34,6 +34,7 @@ let
 
   # OIDC credential consumer handler generator - stores client_id and client_secret
   # Takes service name and restart target as parameters
+  # Only restarts service if credentials actually changed (avoids session invalidation on redeploy)
   mkOidcHandler = serviceName: restartTarget: pkgs.writeShellScript "oidc-handler-${serviceName}" ''
     set -euo pipefail
 
@@ -45,9 +46,24 @@ let
     # Create target directory
     ${pkgs.coreutils}/bin/mkdir -p "$AUTH_DIR"
 
-    # Extract and store credentials (no trailing newline - oauth2-proxy is sensitive to this)
-    ${pkgs.coreutils}/bin/printf '%s' "$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_id')" > "$AUTH_DIR/client-id"
-    ${pkgs.coreutils}/bin/printf '%s' "$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_secret')" > "$AUTH_DIR/client-secret"
+    # Extract new credentials
+    new_client_id=$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_id')
+    new_client_secret=$(echo "$payload" | ${pkgs.jq}/bin/jq -r '.client_secret')
+
+    # Read existing credentials (empty string if file doesn't exist)
+    old_client_id=""
+    old_client_secret=""
+    [ -f "$AUTH_DIR/client-id" ] && old_client_id=$(${pkgs.coreutils}/bin/cat "$AUTH_DIR/client-id")
+    [ -f "$AUTH_DIR/client-secret" ] && old_client_secret=$(${pkgs.coreutils}/bin/cat "$AUTH_DIR/client-secret")
+
+    # Check if credentials changed
+    if [ "$new_client_id" = "$old_client_id" ] && [ "$new_client_secret" = "$old_client_secret" ]; then
+      exit 0  # No change, skip write and restart
+    fi
+
+    # Store credentials (no trailing newline - oauth2-proxy is sensitive to this)
+    ${pkgs.coreutils}/bin/printf '%s' "$new_client_id" > "$AUTH_DIR/client-id"
+    ${pkgs.coreutils}/bin/printf '%s' "$new_client_secret" > "$AUTH_DIR/client-secret"
 
     # Set permissions (readable by service)
     ${pkgs.coreutils}/bin/chmod 644 "$AUTH_DIR/client-id"
