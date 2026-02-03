@@ -21,9 +21,7 @@ import (
 )
 
 const (
-	dropsDir     = "/var/lib/fort/drops"
-	maxUploadMB  = 500 // 500MB max file size
-	maxUploadLen = maxUploadMB * 1024 * 1024
+	dropsDir = "/var/lib/fort/drops"
 )
 
 type UploadHandler struct{}
@@ -66,11 +64,8 @@ func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Limit upload size
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadLen)
-
-	// Parse multipart form
-	if err := r.ParseMultipartForm(maxUploadLen); err != nil {
+	// Parse multipart form (32MB memory buffer, rest spills to disk)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		h.errorResponse(w, http.StatusBadRequest, fmt.Sprintf("parse form failed: %v", err))
 		return
 	}

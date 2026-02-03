@@ -244,8 +244,8 @@ in
             return 405;
           }
 
-          # Allow large uploads (500MB)
-          client_max_body_size 500M;
+          # No size limit - VPN is the trust boundary, disk space is the natural limit
+          client_max_body_size 0;
 
           fastcgi_pass unix:${uploadSocket};
           include ${pkgs.nginx}/conf/fastcgi_params;

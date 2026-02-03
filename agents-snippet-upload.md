@@ -12,4 +12,4 @@ curl -X POST -F "file=@myfile.txt" https://<host>.fort.<domain>/upload
 
 Files land in `/var/lib/fort/drops/` on the target host with timestamped filenames.
 
-**Limits:** 500MB max file size.
+**Limits:** None (VPN is the trust boundary, disk space is the natural limit).

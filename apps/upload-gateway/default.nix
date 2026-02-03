@@ -56,7 +56,7 @@ in
       subdomain = "upload";
       inherit port;
       visibility = "public";
-      maxBodySize = "500M";
+      maxBodySize = "0";  # No limit - VPN/auth is the trust boundary
       sso = {
         mode = "gatekeeper";
         groups = [ "admin" ];

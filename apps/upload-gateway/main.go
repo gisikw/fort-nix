@@ -80,8 +80,8 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse the multipart form (max 500MB)
-	if err := r.ParseMultipartForm(500 << 20); err != nil {
+	// Parse the multipart form (32MB memory buffer, rest spills to disk)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		jsonError(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
