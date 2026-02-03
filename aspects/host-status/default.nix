@@ -251,6 +251,10 @@ in
           # Buffer uploads to persistent storage, not tmpfs
           client_body_temp_path /var/lib/fort/nginx-upload-temp;
 
+          # Allow plenty of time for large file writes
+          fastcgi_read_timeout 3600s;
+          fastcgi_send_timeout 3600s;
+
           fastcgi_pass unix:${uploadSocket};
           include ${pkgs.nginx}/conf/fastcgi_params;
           fastcgi_param SCRIPT_NAME $uri;
