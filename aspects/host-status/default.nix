@@ -263,4 +263,7 @@ in
   };
 
   networking.firewall.allowedTCPPorts = [ 80 443 ];
+
+  # Allow nginx to write to upload temp directory (ProtectSystem=strict blocks it otherwise)
+  systemd.services.nginx.serviceConfig.ReadWritePaths = [ "/var/lib/fort/nginx-upload-temp" ];
 }
