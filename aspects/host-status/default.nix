@@ -152,6 +152,7 @@ in
   systemd.tmpfiles.rules = [
     "d ${statusDir} 0755 root root -"
     "d ${dropsDir} 0755 root root -"
+    "d /var/lib/fort/nginx-upload-temp 0700 nginx nginx -"
   ];
 
   # Timer to regenerate status every 30 seconds
@@ -246,6 +247,9 @@ in
 
           # No size limit - VPN is the trust boundary, disk space is the natural limit
           client_max_body_size 0;
+
+          # Buffer uploads to persistent storage, not tmpfs
+          client_body_temp_path /var/lib/fort/nginx-upload-temp;
 
           fastcgi_pass unix:${uploadSocket};
           include ${pkgs.nginx}/conf/fastcgi_params;
