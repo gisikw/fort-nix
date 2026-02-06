@@ -28,9 +28,11 @@ in
   # Allow dev user to read the token file
   users.users.dev.extraGroups = [ group ];
 
-  # Mode 0770: group write needed for token refresh (vdirsyncer writes temp files)
+  # Setgid + default ACL: both vdirsyncer service and dev user write tokens here.
+  # Setgid ensures files inherit the group, ACL ensures group always has rw.
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 0770 ${user} ${group}"
+    "d ${dataDir} 2770 ${user} ${group}"
+    "a+ ${dataDir} - - - - default:group::rw-"
   ];
 
   age.secrets.oauth-client-id = {
@@ -62,6 +64,9 @@ in
 
       RuntimeDirectory = "vdirsyncer-auth";
       RuntimeDirectoryMode = "0700";
+
+      # Ensure files are group-writable (belt + suspenders with ACL)
+      UMask = "0007";
 
       # Hardening
       NoNewPrivileges = true;
