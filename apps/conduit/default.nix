@@ -7,7 +7,7 @@ let
   dataDir = "/var/lib/conduit";
   user = "conduit";
   group = "conduit";
-  port = 6167;
+  port = 6168;
 
   # Conduit configuration
   conduitConfig = pkgs.writeText "conduit.toml" ''
