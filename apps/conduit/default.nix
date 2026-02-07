@@ -22,9 +22,8 @@ let
     # No federation - this is a private instance
     allow_federation = false
 
-    # Registration with token required
-    allow_registration = true
-    registration_token = "exo-bootstrap-2026"
+    # Registration disabled - users created
+    allow_registration = false
 
     # Allow encryption (required for most Matrix clients)
     allow_encryption = true
