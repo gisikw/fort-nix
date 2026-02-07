@@ -7,7 +7,6 @@ let
   jellyfinUrl = "https://jellyfin.${domain}";
 
   # Chromium wrapped with kiosk flags
-  # Scale factor 2 = UI renders at 1080p scale on 4K display, video still plays at native res
   kioskBrowser = pkgs.writeShellScriptBin "kiosk-browser" ''
     exec ${pkgs.chromium}/bin/chromium \
       --kiosk \
@@ -20,8 +19,13 @@ let
       --noerrdialogs \
       --disable-features=TranslateUI \
       --autoplay-policy=no-user-gesture-required \
-      --force-device-scale-factor=2 \
       "${jellyfinUrl}"
+  '';
+
+  # Wrapper that sets Wayland output scale before launching Cage
+  kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
+    export WLR_OUTPUT_SCALE=2
+    exec ${pkgs.cage}/bin/cage -s -- ${kioskBrowser}/bin/kiosk-browser
   '';
 in
 {
@@ -44,7 +48,7 @@ in
     enable = true;
     settings = {
       default_session = {
-        command = "${pkgs.cage}/bin/cage -s -- ${kioskBrowser}/bin/kiosk-browser";
+        command = "${kioskSession}/bin/kiosk-session";
         user = user;
       };
     };
