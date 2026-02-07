@@ -49,6 +49,8 @@ let
       if [ -n "$HDMI_SINK" ]; then
         echo "Found HDMI sink $HDMI_SINK on profile $profile"
         ${pkgs.wireplumber}/bin/wpctl set-default "$HDMI_SINK"
+        # Set volume to 100%
+        ${pkgs.wireplumber}/bin/wpctl set-volume "$HDMI_SINK" 1.0
         exit 0
       fi
     done
