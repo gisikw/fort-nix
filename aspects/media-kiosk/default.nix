@@ -7,6 +7,7 @@ let
   jellyfinUrl = "https://jellyfin.${domain}";
 
   # Chromium wrapped with kiosk flags
+  # Scale factor 2 = UI renders at 1080p scale on 4K display, video still plays at native res
   kioskBrowser = pkgs.writeShellScriptBin "kiosk-browser" ''
     exec ${pkgs.chromium}/bin/chromium \
       --kiosk \
@@ -19,6 +20,7 @@ let
       --noerrdialogs \
       --disable-features=TranslateUI \
       --autoplay-policy=no-user-gesture-required \
+      --force-device-scale-factor=2 \
       "${jellyfinUrl}"
   '';
 in
@@ -58,6 +60,20 @@ in
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
+  };
+
+  # Force HDMI audio output via WirePlumber
+  # Prioritize HDMI sinks over built-in audio
+  services.pipewire.wireplumber.extraConfig."99-hdmi-priority" = {
+    "monitor.alsa.rules" = [
+      {
+        matches = [{ "node.name" = "~alsa_output.*hdmi.*"; }];
+        actions.update-props = {
+          "priority.session" = 2000;
+          "priority.driver" = 2000;
+        };
+      }
+    ];
   };
 
   # Fonts for browser rendering
