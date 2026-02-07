@@ -80,6 +80,7 @@ _scaffold-device-flake profile uuid keydir:
 
 
 _bootstrap-device target uuid keydir:
+  #!/usr/bin/env bash
   echo "[Fort] Bootstrapping device"
   devices_root="./devices"
   if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; fi
@@ -94,6 +95,7 @@ _bootstrap-device target uuid keydir:
 
 
 _cleanup-device-provisioning uuid target keydir:
+  #!/usr/bin/env bash
   echo "[Fort] Running cleanup"
   rm -rf "{{keydir}}"
   ssh-keygen -R {{target}} >/dev/null 2>&1
