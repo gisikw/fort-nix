@@ -22,8 +22,45 @@ let
       "${jellyfinUrl}"
   '';
 
-  # Wrapper that sets Wayland output scale before launching Cage
+  # Script to find and enable HDMI audio
+  setupHdmiAudio = pkgs.writeShellScriptBin "setup-hdmi-audio" ''
+    # Wait for PipeWire to be ready
+    for i in $(seq 1 10); do
+      ${pkgs.wireplumber}/bin/wpctl status &>/dev/null && break
+      sleep 0.5
+    done
+
+    # Get the card device ID (usually 49, but let's find it dynamically)
+    CARD_ID=$(${pkgs.wireplumber}/bin/wpctl status | grep -E "^\s+[0-9]+\. .*\[alsa\]" | head -1 | awk '{print $1}' | tr -d '.')
+
+    if [ -z "$CARD_ID" ]; then
+      echo "No ALSA card found"
+      exit 0
+    fi
+
+    # Try profiles 3-5 which typically have HDMI, find one with a connected HDMI sink
+    for profile in 3 4 5; do
+      ${pkgs.wireplumber}/bin/wpctl set-profile "$CARD_ID" "$profile" 2>/dev/null
+      sleep 0.3
+
+      # Look for an HDMI sink
+      HDMI_SINK=$(${pkgs.wireplumber}/bin/wpctl status | grep -E "^\s+[0-9]+\. .*HDMI" | head -1 | awk '{print $1}' | tr -d '.')
+
+      if [ -n "$HDMI_SINK" ]; then
+        echo "Found HDMI sink $HDMI_SINK on profile $profile"
+        ${pkgs.wireplumber}/bin/wpctl set-default "$HDMI_SINK"
+        exit 0
+      fi
+    done
+
+    echo "No HDMI sink found"
+  '';
+
+  # Wrapper that sets up audio and display before launching Cage
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
+    # Set up HDMI audio in background (Cage needs to start for PipeWire to init)
+    (sleep 2 && ${setupHdmiAudio}/bin/setup-hdmi-audio) &
+
     export WLR_OUTPUT_SCALE=2
     exec ${pkgs.cage}/bin/cage -s -- ${kioskBrowser}/bin/kiosk-browser
   '';
@@ -64,20 +101,6 @@ in
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
-  };
-
-  # Force HDMI audio output via WirePlumber
-  # Prioritize HDMI sinks over built-in audio
-  services.pipewire.wireplumber.extraConfig."99-hdmi-priority" = {
-    "monitor.alsa.rules" = [
-      {
-        matches = [{ "node.name" = "~alsa_output.*hdmi.*"; }];
-        actions.update-props = {
-          "priority.session" = 2000;
-          "priority.driver" = 2000;
-        };
-      }
-    ];
   };
 
   # Fonts for browser rendering
