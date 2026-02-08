@@ -418,6 +418,29 @@ in
     '';
   };
 
+  # Matrix-Claude bridge
+  systemd.services.exo-bridge = {
+    description = "Matrix-Claude bridge";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "simple";
+      User = user;
+      Group = "users";
+      WorkingDirectory = "${homeDir}/Projects/exocortex";
+      Restart = "on-failure";
+      RestartSec = "10s";
+    };
+    environment = {
+      HOME = homeDir;
+    };
+    path = devTools ++ [ pkgs.bash ];
+    script = ''
+      exec ${homeDir}/Projects/exocortex/cmd/exo-bridge/exo-bridge
+    '';
+  };
+
   # Git credential helper for Forgejo access
   # Prefers RW dev-token, falls back to RO deploy-token
   environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
