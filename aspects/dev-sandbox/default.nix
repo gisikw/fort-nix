@@ -429,8 +429,8 @@ in
       User = user;
       Group = "users";
       WorkingDirectory = "${homeDir}/Projects/exocortex";
-      Restart = "on-failure";
-      RestartSec = "10s";
+      Restart = "always";
+      RestartSec = "5s";
     };
     environment = {
       HOME = homeDir;
