@@ -109,7 +109,7 @@ in
       name = "conduit";
       subdomain = subdomain;
       port = port;
-      visibility = "vpn";  # VPN-only access, no public federation
+      visibility = "public";  # No federation; auth handled by Matrix
       sso = {
         mode = "none";  # Matrix has its own auth
       };
