@@ -8,7 +8,7 @@ pkgs.stdenv.mkDerivation rec {
     owner = "wedow";
     repo = "ticket";
     rev = "v${version}";
-    hash = "sha256-XUyC7RxctKKutjtHw8iTFzjDKH5VX0O/gx09MjaH2w8=";
+    hash = "sha256-orxqAwJBL+LHe+I9M+djYGa/yfvH67HdR/VVy8fdg90=";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
