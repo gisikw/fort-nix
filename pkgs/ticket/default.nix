@@ -20,6 +20,8 @@ pkgs.stdenv.mkDerivation rec {
     wrapProgram $out/bin/tk \
       --prefix PATH : ${pkgs.lib.makeBinPath [
         pkgs.coreutils
+        pkgs.findutils
+        pkgs.gawk
         pkgs.gnugrep
         pkgs.gnused
         pkgs.jq
