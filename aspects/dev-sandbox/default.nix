@@ -15,6 +15,7 @@ let
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
   opencode = import ../../pkgs/opencode { inherit pkgs; };
   beads = import ../../pkgs/beads { inherit pkgs; };
+  ticket = import ../../pkgs/ticket { inherit pkgs; };
   fort = import ../../pkgs/fort { inherit pkgs domain; };
 
   # Handler for git-token: extracts token from JSON response and stores it
@@ -91,6 +92,7 @@ let
     claude-code
     opencode
     beads
+    ticket
 
     # Fort control plane
     fort
