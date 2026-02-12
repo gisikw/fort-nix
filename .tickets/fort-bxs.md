@@ -1,6 +1,6 @@
 ---
 id: fort-bxs
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-06T04:23:44.540426368Z

@@ -1,6 +1,6 @@
 ---
 id: fn-60ne
-status: in_progress
+status: closed
 deps: [fn-xuvs]
 links: []
 created: 2026-02-12T18:29:30Z

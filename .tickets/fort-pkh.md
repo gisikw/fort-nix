@@ -1,6 +1,6 @@
 ---
 id: fort-pkh
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-01T17:51:38.868113768Z

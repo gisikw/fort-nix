@@ -1,6 +1,6 @@
 ---
 id: fort-59e
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-01T17:57:26.673327052Z

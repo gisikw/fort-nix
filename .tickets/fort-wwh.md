@@ -1,6 +1,6 @@
 ---
 id: fort-wwh
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-02T06:11:10.233395583Z

@@ -1,6 +1,6 @@
 ---
 id: fort-btm
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-01T19:59:38.010668187Z

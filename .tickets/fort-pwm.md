@@ -1,6 +1,6 @@
 ---
 id: fort-pwm
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-01T19:49:00.061975909Z

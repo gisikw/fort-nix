@@ -1,6 +1,6 @@
 ---
 id: fort-6yr
-status: open
+status: closed
 deps: []
 links: []
 created: 2025-12-31T04:25:11.81763913Z

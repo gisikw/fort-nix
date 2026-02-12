@@ -1,6 +1,6 @@
 ---
 id: fort-c8y.23
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-11T03:38:56.8480935Z

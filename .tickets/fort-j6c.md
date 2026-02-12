@@ -1,6 +1,6 @@
 ---
 id: fort-j6c
-status: open
+status: closed
 deps: []
 links: []
 created: 2025-12-31T04:25:11.970543926Z

@@ -1,6 +1,6 @@
 ---
 id: fort-zye.1
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-01-09T15:03:15.971899007Z
