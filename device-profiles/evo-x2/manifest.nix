@@ -1,4 +1,5 @@
 {
+  platform = "nixos";
   system = "x86_64-linux";
   impermanent = true;
   module =

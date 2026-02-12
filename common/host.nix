@@ -1,12 +1,15 @@
 args@{
   self,
   nixpkgs,
-  disko,
-  impermanence,
-  deploy-rs,
   hostDir,
   agenix,
-  comin,
+  # NixOS-specific inputs (optional on darwin)
+  disko ? null,
+  impermanence ? null,
+  deploy-rs ? null,
+  comin ? null,
+  # Darwin-specific inputs (optional on nixos)
+  nix-darwin ? null,
   # Cluster-specific inputs (optional)
   home-config ? null,
   ...
@@ -19,6 +22,8 @@ let
   hostManifest = import (hostDir + "/manifest.nix");
   deviceManifest = import (cluster.devicesDir + "/${hostManifest.device}/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
+
+  platform = deviceProfileManifest.platform or "nixos";
 
   flatMap = f: xs: builtins.concatLists (map f xs);
 
@@ -83,98 +88,39 @@ let
 
     else
       throw "Invalid ${type} spec: expected string, function, or { name = ... } attrset, got ${builtins.typeOf mod}";
+
+  # Pre-resolve app and aspect modules for the platform builder
+  appModules = map (mkModule "app") allApps;
+  aspectModules = map (mkModule "aspect") allAspects;
+
+  # Shared context passed to platform builders
+  sharedContext = {
+    inherit
+      self
+      nixpkgs
+      agenix
+      hostManifest
+      deviceManifest
+      deviceProfileManifest
+      rootManifest
+      cluster
+      rootAuthorizedKeys
+      appModules
+      aspectModules
+      extraInputs
+      ;
+  };
+
+  platformBuilder =
+    if platform == "nixos" then
+      import ./platforms/nixos.nix (sharedContext // {
+        inherit disko impermanence deploy-rs comin;
+      })
+    else if platform == "darwin" then
+      import ./platforms/darwin.nix (sharedContext // {
+        inherit nix-darwin;
+      })
+    else
+      throw "Unknown platform '${platform}' in device profile for ${hostManifest.hostName}. Expected 'nixos' or 'darwin'.";
 in
-{
-  nixosConfigurations.${hostManifest.hostName} = nixpkgs.lib.nixosSystem {
-    system = deviceProfileManifest.system;
-    modules = [
-      {
-        nix.settings = {
-          experimental-features = [ "nix-command" "flakes" ];
-          # Make cache failures non-blocking: fall back to building from source
-          fallback = true;
-          connect-timeout = 5;
-          stalled-download-timeout = 60;
-          # Trust the cluster's attic cache so extra-substituters from the include works
-          trusted-substituters = [ "https://cache.${settings.domain}/fort" ];
-        };
-        # Include attic cache config if it exists (delivered by attic-token capability)
-        # Adds extra-substituters and extra-trusted-public-keys dynamically
-        nix.extraOptions = ''
-          !include /var/lib/fort/nix/attic-cache.conf
-        '';
-        nixpkgs.config.allowUnfree = true;
-        system.stateVersion = deviceManifest.stateVersion;
-        networking.hostName = hostManifest.hostName;
-        environment.persistence."/persist/system" = {
-          enable = deviceProfileManifest.impermanent;
-          directories = [
-            "/var/lib"
-          ];
-          files = [
-            "/etc/machine-id"
-            "/etc/ssh/ssh_host_ed25519_key"
-            "/etc/ssh/ssh_host_ed25519_key.pub"
-            "/etc/ssh/ssh_host_rsa_key"
-            "/etc/ssh/ssh_host_rsa_key.pub"
-          ];
-        };
-        age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
-
-        users.users.root.openssh.authorizedKeys.keys = rootAuthorizedKeys;
-      }
-      impermanence.nixosModules.impermanence
-      rootManifest.module
-      hostManifest.module
-      deviceProfileManifest.module
-      disko.nixosModules.disko
-      agenix.nixosModules.age
-      comin.nixosModules.comin
-      (cluster.devicesDir + "/${hostManifest.device}/hardware-configuration.nix")
-      {
-        config.fort = {
-          clusterName = cluster.clusterName;
-          clusterDir = cluster.clusterDir;
-          clusterHostsDir = cluster.hostsDir;
-          clusterDevicesDir = cluster.devicesDir;
-        };
-      }
-      (import ./fort.nix ({
-        inherit
-          rootManifest
-          hostManifest
-          deviceManifest
-          deviceProfileManifest
-          cluster
-          ;
-      }))
-      (import ./fort/control-plane.nix {
-        inherit
-          rootManifest
-          cluster
-          ;
-      })
-      (import ./fort/runtime-packages.nix {
-        inherit
-          cluster
-          ;
-      })
-    ]
-    ++ map (mkModule "app") allApps
-    ++ map (mkModule "aspect") allAspects;
-  };
-
-  deploy.nodes.${hostManifest.hostName} = {
-    hostname = "<dynamic>";
-    profiles.system = {
-      sshUser = "root";
-      sshOpts = [
-        "-i"
-        settings.principals.admin.privateKeyPath
-      ];
-      path =
-        deploy-rs.lib.${deviceProfileManifest.system}.activate.nixos
-          self.nixosConfigurations.${hostManifest.hostName};
-    };
-  };
-}
+platformBuilder

@@ -552,6 +552,10 @@
           "cluster",
           "impermanence"
         ],
+        "nix-darwin": [
+          "cluster",
+          "nix-darwin"
+        ],
         "nixpkgs": [
           "cluster",
           "nixpkgs"

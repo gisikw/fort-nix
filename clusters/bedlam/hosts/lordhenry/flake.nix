@@ -7,6 +7,7 @@
     deploy-rs.follows = "cluster/deploy-rs";
     agenix.follows = "cluster/agenix";
     comin.follows = "cluster/comin";
+    nix-darwin.follows = "cluster/nix-darwin";
   };
 
   outputs =
@@ -18,6 +19,7 @@
       deploy-rs,
       agenix,
       comin,
+      nix-darwin,
       ...
     }:
     import ../../../../common/host.nix {
@@ -29,6 +31,7 @@
         deploy-rs
         agenix
         comin
+        nix-darwin
         ;
       hostDir = ./.;
     };

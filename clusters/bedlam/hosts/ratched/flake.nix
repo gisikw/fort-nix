@@ -7,6 +7,7 @@
     deploy-rs.follows = "cluster/deploy-rs";
     agenix.follows = "cluster/agenix";
     comin.follows = "cluster/comin";
+    nix-darwin.follows = "cluster/nix-darwin";
     home-config.follows = "cluster/home-config";
   };
 
@@ -19,6 +20,7 @@
       deploy-rs,
       agenix,
       comin,
+      nix-darwin,
       home-config,
       ...
     }:
@@ -31,6 +33,7 @@
         deploy-rs
         agenix
         comin
+        nix-darwin
         home-config
         ;
       hostDir = ./.;
