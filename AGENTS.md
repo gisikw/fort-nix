@@ -8,13 +8,17 @@ This is a NixOS homelab infrastructure. Read `README.md` for architecture overvi
 
 ## Issue Tracking
 
-This project uses **bd** (beads) for issue tracking. Prefer bd over TodoWrite - use TodoWrite only for complex single-session work where micro-step tracking adds clarity.
+This project uses **tk** (ticket) for issue tracking. Prefer tk over TodoWrite - use TodoWrite only for complex single-session work where micro-step tracking adds clarity.
 
 ```bash
-bd ready -n 100                       # Find available work (default shows 10)
-bd show <id>                          # View issue details
-bd update <id> --status in_progress   # Claim work
-bd close <id>                         # Complete work
+tk ready              # Unblocked tasks sorted by priority
+tk create "title"     # Create a ticket (prints ID)
+tk show <id>          # View details
+tk start <id>         # Mark in progress
+tk close <id>         # Mark complete
+tk dep <id> <dep-id>  # Add dependency
+tk ls                 # List all open tickets
+tk query              # JSON output for programmatic use
 ```
 
 ## Codebase Navigation
@@ -506,7 +510,7 @@ Before closing a ticket:
 
 3. **Wait for deploy**: Run `just deploy <host>` even for auto-deploy hosts. This ensures the deploy completes before closing the ticket.
 
-4. **Close the ticket**: `bd close <id>`
+4. **Close the ticket**: `tk close <id>`
 
 5. **Reflect** and triage with the user:
    - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
@@ -520,7 +524,7 @@ Before closing a ticket:
 6. **Commit doc updates** if reflection produced any:
    ```bash
    git add <files>
-   git commit -m "<beads-id>: <summary>"
+   git commit -m "<ticket-id>: <summary>"
    git push
    ```
 
