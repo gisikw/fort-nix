@@ -1,6 +1,9 @@
 { pkgs, domain }:
 
 let
+  hostnameCmd = if pkgs.stdenv.isDarwin
+    then "/usr/bin/hostname"
+    else "${pkgs.nettools}/bin/hostname";
   script = pkgs.writeShellScript "fort" ''
     set -euo pipefail
 
@@ -34,7 +37,7 @@ let
 
     # Configuration (can override via env for testing)
     SSH_KEY="''${FORT_SSH_KEY:-/etc/ssh/ssh_host_ed25519_key}"
-    ORIGIN="''${FORT_ORIGIN:-$(${pkgs.nettools}/bin/hostname -s)}"
+    ORIGIN="''${FORT_ORIGIN:-$(${hostnameCmd} -s)}"
 
     # Validate SSH key exists
     if [ ! -f "$SSH_KEY" ]; then
@@ -150,26 +153,24 @@ pkgs.stdenv.mkDerivation {
     pkgs.gnugrep
     pkgs.gnused
     pkgs.jq
-    pkgs.nettools
-  ];
+  ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.nettools ];
 
   installPhase = ''
     install -Dm755 ${script} $out/bin/fort
     wrapProgram $out/bin/fort \
-      --prefix PATH : ${pkgs.lib.makeBinPath [
+      --prefix PATH : ${pkgs.lib.makeBinPath ([
         pkgs.curl
         pkgs.coreutils
         pkgs.openssh
         pkgs.gnugrep
         pkgs.gnused
         pkgs.jq
-        pkgs.nettools
-      ]}
+      ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.nettools ])}
   '';
 
   meta = with pkgs.lib; {
     description = "Fort control plane CLI";
     license = licenses.mit;
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

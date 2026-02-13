@@ -20,6 +20,6 @@ pkgs.buildGoModule {
   meta = with pkgs.lib; {
     description = "Fort control plane provider (FastCGI)";
     license = licenses.mit;
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }
