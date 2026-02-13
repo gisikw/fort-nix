@@ -436,6 +436,8 @@ in
     };
     environment = {
       HOME = homeDir;
+      FORT_SSH_KEY = agentKeyPath;
+      FORT_ORIGIN = "dev-sandbox";
     };
     path = devTools ++ [ pkgs.bash ];
     script = ''
