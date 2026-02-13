@@ -441,6 +441,7 @@ in
     };
     path = devTools ++ [ pkgs.bash ];
     script = ''
+      . /etc/set-environment
       exec ${homeDir}/Projects/exocortex/cmd/exo-bridge/exo-bridge
     '';
   };
