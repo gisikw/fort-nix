@@ -35,8 +35,8 @@ let
     (builtins.attrValues settings.principals);
   rootAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithRoot);
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
-  # Default aspects that every host gets
-  defaultAspects = [ "host-status" ];
+  # Default aspects that every host gets (host-status is NixOS-only: systemd, nginx, /proc)
+  defaultAspects = if platform == "nixos" then [ "host-status" ] else [ ];
   allAspects = defaultAspects ++ hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
   allApps = hostManifest.apps ++ flatMap (r: r.apps or [ ]) roles;
 

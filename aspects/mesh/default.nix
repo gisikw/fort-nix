@@ -52,12 +52,48 @@ lib.mkMerge ([
   }
 ]
 
-# Darwin: tailscale service + setup script for manual auth
+# Darwin: tailscale service + automatic mesh enrollment via launchd
 ++ lib.optionals (platform == "darwin") [
   {
     services.tailscale.enable = true;
+  }
 
-    # Provide a setup script for initial mesh enrollment
+  # Auto-enroll in mesh on activation (no-op if already connected)
+  (lib.mkIf hasAuthKey (let
+    enrollScript = pkgs.writeShellScript "fort-mesh-enroll" ''
+      set -euo pipefail
+
+      # Wait for tailscaled to be ready
+      for i in $(seq 1 30); do
+        ${pkgs.tailscale}/bin/tailscale status >/dev/null 2>&1 && break
+        sleep 2
+      done
+
+      # Already connected to our mesh? Nothing to do.
+      if ${pkgs.tailscale}/bin/tailscale status 2>/dev/null | grep -q "mesh.${domain}"; then
+        exit 0
+      fi
+
+      AUTH_KEY=$(cat ${config.age.secrets.auth-key.path})
+      ${pkgs.tailscale}/bin/tailscale up \
+        --login-server="https://mesh.${domain}" \
+        --hostname="${hostManifest.hostName}" \
+        --accept-dns=true \
+        --accept-routes=true \
+        --authkey="$AUTH_KEY"
+    '';
+  in {
+    launchd.daemons.fort-mesh-enroll = {
+      serviceConfig = {
+        Label = "network.gisi.fort.mesh-enroll";
+        ProgramArguments = [ "${enrollScript}" ];
+        RunAtLoad = true;
+        StandardOutPath = "/var/log/fort-mesh-enroll.log";
+        StandardErrorPath = "/var/log/fort-mesh-enroll.log";
+      };
+    };
+
+    # Keep the manual script available for troubleshooting
     environment.systemPackages = [
       (pkgs.writeShellScriptBin "fort-mesh-join" ''
         echo "Joining fort mesh as ${hostManifest.hostName}..."
@@ -69,5 +105,5 @@ lib.mkMerge ([
           "$@"
       '')
     ];
-  }
+  }))
 ])

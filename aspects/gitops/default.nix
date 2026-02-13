@@ -1,6 +1,7 @@
 {
   rootManifest,
   hostManifest,
+  deviceProfileManifest,
   cluster,
   # If true, deployments require manual confirmation via agent API
   manualDeploy ? false,
@@ -8,6 +9,7 @@
 }:
 { config, lib, pkgs, ... }:
 let
+  platform = deviceProfileManifest.platform or "nixos";
   domain = rootManifest.fortConfig.settings.domain;
   forgeConfig = rootManifest.fortConfig.forge;
   credDir = "/var/lib/fort-git";
@@ -108,7 +110,69 @@ EOF
       log "Cache push failed (non-fatal)"
     fi
   '';
+  # Darwin gitops-lite: launchd-based git pull + darwin-rebuild
+  repoDir = "/var/lib/fort-nix";
+  hostFlakePath = "clusters/${cluster.clusterName}/hosts/${hostManifest.hostName}";
+
+  darwinRebuildScript = pkgs.writeShellScript "fort-gitops-rebuild" ''
+    set -euo pipefail
+    export PATH="${lib.makeBinPath [ pkgs.git pkgs.nix pkgs.coreutils ]}:$PATH"
+    LOG_TAG="fort-gitops"
+
+    log() { /usr/bin/logger -t "$LOG_TAG" "$@"; echo "$@"; }
+
+    # Clone if missing
+    if [ ! -d "${repoDir}/.git" ]; then
+      log "Cloning ${repoUrl} into ${repoDir}"
+      git clone --branch release "${repoUrl}" "${repoDir}"
+    fi
+
+    cd "${repoDir}"
+
+    # Auth token for private repo (if available)
+    if [ -f "${tokenFile}" ]; then
+      git config credential.helper "!f() { echo password=$(cat ${tokenFile}); }; f"
+    fi
+
+    # Fetch and check for changes
+    git fetch origin release 2>/dev/null
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/release)
+
+    if [ "$LOCAL" = "$REMOTE" ]; then
+      log "Up to date at $LOCAL"
+      exit 0
+    fi
+
+    log "Updating $LOCAL -> $REMOTE"
+    git reset --hard origin/release
+
+    # Rebuild
+    log "Running darwin-rebuild switch"
+    if darwin-rebuild switch --flake "./${hostFlakePath}" 2>&1; then
+      log "Rebuild succeeded at $REMOTE"
+    else
+      log "Rebuild failed at $REMOTE"
+      exit 1
+    fi
+  '';
 in
+if platform == "darwin" then
+{
+  # Periodic git pull + darwin-rebuild
+  launchd.daemons.fort-gitops = {
+    serviceConfig = {
+      Label = "network.gisi.fort.gitops";
+      ProgramArguments = [ "${darwinRebuildScript}" ];
+      StartInterval = 300;  # Every 5 minutes
+      StandardOutPath = "/var/log/fort-gitops.log";
+      StandardErrorPath = "/var/log/fort-gitops.log";
+    };
+  };
+
+  environment.systemPackages = [ pkgs.git ];
+}
+else
 {
   # Ensure credential directories exist
   # Note: credDir is 0755 so dev-sandbox credential helper can read token files

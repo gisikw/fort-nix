@@ -77,6 +77,9 @@ in
           clusterDevicesDir = cluster.devicesDir;
         };
       }
+      (import ../fort-options.nix ({
+        inherit rootManifest cluster;
+      }))
       (import ../fort.nix ({
         inherit
           rootManifest

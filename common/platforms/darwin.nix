@@ -47,6 +47,9 @@ in
       hostManifest.module
       deviceProfileManifest.module
       agenix.darwinModules.default
+      (import ../fort-options.nix ({
+        inherit rootManifest cluster;
+      }))
       {
         config.fort = {
           clusterName = cluster.clusterName;

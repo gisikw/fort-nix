@@ -1,6 +1,6 @@
 ---
 id: fn-7vz9
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-12T18:29:57Z
