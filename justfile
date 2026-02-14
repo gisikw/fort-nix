@@ -130,10 +130,10 @@ _bootstrap-darwin target user uuid:
   ssh -t -o StrictHostKeyChecking=no "$remote" \
     'if command -v nix >/dev/null 2>&1; then echo "Nix already installed"; else curl --proto "=https" --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --determinate --no-confirm; fi'
 
-  # Bootstrap nix-darwin (idempotent)
+  # Bootstrap nix-darwin (idempotent, activation requires root)
   echo "[Fort] Bootstrapping nix-darwin"
   ssh -t -o StrictHostKeyChecking=no "$remote" \
-    'if command -v darwin-rebuild >/dev/null 2>&1; then echo "nix-darwin already installed"; else nix run nix-darwin -- switch --flake github:LnL7/nix-darwin#simple; fi'
+    'if command -v darwin-rebuild >/dev/null 2>&1; then echo "nix-darwin already installed"; else sudo nix run nix-darwin -- switch --flake github:LnL7/nix-darwin#simple; fi'
 
   # Set up fort directory and clone repo
   echo "[Fort] Setting up /var/lib/fort-nix"
