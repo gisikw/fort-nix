@@ -439,9 +439,10 @@ in
       FORT_SSH_KEY = agentKeyPath;
       FORT_ORIGIN = "dev-sandbox";
     };
-    path = devTools ++ [ pkgs.bash "${homeDir}/.local/bin" ];
+    path = devTools ++ [ pkgs.bash ];
     script = ''
       . /etc/set-environment
+      export PATH="${homeDir}/.local/bin:$PATH"
       exec ${homeDir}/Projects/exocortex/cmd/exo-bridge/exo-bridge
     '';
   };
