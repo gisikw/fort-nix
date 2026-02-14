@@ -47,10 +47,7 @@ in
 
         # Admin user: deploy key access + passwordless sudo (matches NixOS root SSH pattern)
         users.users.admin.openssh.authorizedKeys.keys = rootAuthorizedKeys;
-        environment.etc."sudoers.d/admin-nopasswd" = {
-          text = "admin ALL=(ALL) NOPASSWD: ALL\n";
-          mode = "0440";
-        };
+        environment.etc."sudoers.d/admin-nopasswd".text = "admin ALL=(ALL) NOPASSWD: ALL\n";
       }
       rootManifest.module
       hostManifest.module
