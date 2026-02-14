@@ -1,12 +1,14 @@
 # Mac Mini Provisioning
 
-Darwin provisioning uses `just provision mac-mini <ip> <user>`, but requires a
+Darwin provisioning uses `just provision mac-mini <ip>`, but requires a
 one-time keyboard-and-monitor setup first to enable SSH access.
 
 ## Prerequisites (keyboard + monitor required)
 
 1. Power on and go through macOS initial setup
-2. Create an admin user (this is the user nix-darwin will manage)
+2. **Create a user named `admin`** — the provisioning tooling and nix-darwin
+   config expect this username. It gets passwordless sudo and the fort deploy
+   key via the darwin platform builder.
 3. Open **System Settings**:
    - **General → Software Update**: disable automatic updates
    - **Energy → Options**: "Start up automatically after a power failure" → **On**
@@ -19,30 +21,27 @@ one-time keyboard-and-monitor setup first to enable SSH access.
 Once SSH is available, from the dev sandbox:
 
 ```bash
-# Provision (installs Nix, nix-darwin, clones repo, captures device UUID + SSH key)
-just provision mac-mini <ip> <admin-user>
+# Provision (installs CLT, Nix, nix-darwin, clones repo, captures device UUID + SSH key)
+just provision mac-mini <ip>
 
 # Assign hostname
 just assign <device-uuid> <hostname>
 
 # Copy age key for secret decryption
-scp age-key.txt <admin-user>@<ip>:/var/lib/fort/age-key.txt
+scp age-key.txt admin@<ip>:/var/lib/fort/age-key.txt
 
 # Re-key secrets, commit, push to release branch
 # Then SSH in for the initial build:
-ssh <admin-user>@<ip>
-cd /var/lib/fort-nix && darwin-rebuild switch --flake ./clusters/bedlam/hosts/<hostname>
+ssh admin@<ip>
+cd /var/lib/fort-nix && sudo darwin-rebuild switch --flake ./clusters/bedlam/hosts/<hostname>
 ```
+
+After the first `darwin-rebuild switch`, the deploy key is authorized and
+passwordless sudo is enabled — subsequent deploys use `just deploy <hostname>`.
 
 ## Post-Provision
 
 - Mesh enrollment happens automatically (launchd oneshot)
 - GitOps polling starts automatically (launchd daemon, every 5 min)
-- Subsequent changes deploy via git push to release branch
-
-## Gotchas
-
-- **Age key**: must be at `/var/lib/fort/age-key.txt` before the first rebuild
-  that uses agenix secrets.
-- **Xcode CLI tools**: if this host will be a Forgejo runner for iOS builds,
-  install separately: `xcode-select --install`
+- Subsequent changes deploy via `just deploy <hostname>` or git push to release
+- SSH access: `just ssh <hostname>` (uses admin user automatically)

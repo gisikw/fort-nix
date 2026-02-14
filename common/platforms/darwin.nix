@@ -37,6 +37,13 @@ in
         nixpkgs.config.allowUnfree = true;
         networking.hostName = hostManifest.hostName;
         age.identityPaths = [ "/var/lib/fort/age-key.txt" ];
+
+        # Admin user: deploy key access + passwordless sudo (matches NixOS root SSH pattern)
+        users.users.admin.openssh.authorizedKeys.keys = rootAuthorizedKeys;
+        environment.etc."sudoers.d/admin-nopasswd" = {
+          text = "admin ALL=(ALL) NOPASSWD: ALL\n";
+          mode = "0440";
+        };
       }
       rootManifest.module
       hostManifest.module

@@ -32,7 +32,7 @@ _fingerprint-hardware target:
 
 _fingerprint-darwin target user="admin":
   echo "[Fort] Fingerprinting macOS hardware"
-  ssh -o StrictHostKeyChecking=no {{user}}@{{target}} 'ioreg -d2 -c IOPlatformExpertDevice | awk -F\" "/IOPlatformUUID/{print \$4}"'
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no {{user}}@{{target}} 'ioreg -d2 -c IOPlatformExpertDevice | awk -F\" "/IOPlatformUUID/{print \$4}"'
 
 _fingerprint-linode target:
   echo "[Fort] Fingerprinting Linode VM"
@@ -417,8 +417,8 @@ _deploy-direct-darwin host addr:
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
 
   echo "[Fort] Deploying {{host}} via SSH (git pull + darwin-rebuild)"
-  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
-    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin release && git checkout release && git reset --hard origin/release && darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no admin@{{addr}} \
+    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin release && git checkout release && git reset --hard origin/release && sudo darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && sudo mkdir -p /var/lib/fort && echo '${deploy_info}' | sudo tee /var/lib/fort/deploy-info.json > /dev/null && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
 
 # GitOps deploy via fort CLI (no master key needed)
 _deploy-gitops host addr:
@@ -523,7 +523,21 @@ fmt:
   nix run .#nixfmt -- .
 
 ssh host:
-  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{host}}
+  #!/usr/bin/env bash
+  hosts_root="./hosts"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; devices_root="./clusters/{{cluster}}/devices"; fi
+
+  host_manifest_rel="${hosts_root#./}/{{host}}/manifest.nix"
+  device_uuid=$(nix eval --raw --impure --expr "(import ./${host_manifest_rel}).device" 2>/dev/null || echo "")
+  ssh_user="root"
+  if [[ -n "$device_uuid" ]]; then
+    device_manifest_rel="${devices_root#./}/${device_uuid}/manifest.nix"
+    device_profile=$(nix eval --raw --impure --expr "(import ./${device_manifest_rel}).profile" 2>/dev/null || echo "")
+    device_platform=$(nix eval --raw --impure --expr "(import ./device-profiles/${device_profile}/manifest.nix).platform or \"nixos\"" 2>/dev/null || echo "nixos")
+    if [[ "$device_platform" == "darwin" ]]; then ssh_user="admin"; fi
+  fi
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no "${ssh_user}@{{host}}"
 
 age path:
   nix run .#agenix -- -i {{deploy_key}} -e {{path}}
