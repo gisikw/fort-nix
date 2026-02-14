@@ -2,13 +2,13 @@
 
 pkgs.stdenv.mkDerivation rec {
   pname = "ticket";
-  version = "0.3.2";
+  version = "0.3.2-unstable-2026-02-03";
 
   src = pkgs.fetchFromGitHub {
     owner = "wedow";
     repo = "ticket";
-    rev = "v${version}";
-    hash = "sha256-orxqAwJBL+LHe+I9M+djYGa/yfvH67HdR/VVy8fdg90=";
+    rev = "f4403d9fb1610493b4a003b62bb6063716c2d96d";
+    hash = "sha256-3lDrrUqhliClq0Xp5nDW15nAgiddbGLm8zY5w/++IaM=";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
