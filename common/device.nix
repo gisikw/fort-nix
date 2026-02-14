@@ -10,8 +10,12 @@ let
   rootManifest = cluster.manifest;
   deviceManifest = import (deviceDir + "/manifest.nix");
   deviceProfileManifest = import ../device-profiles/${deviceManifest.profile}/manifest.nix;
+  platform = deviceProfileManifest.platform or "nixos";
 in
-{
+# Device flakes only produce nixosConfigurations — darwin devices are
+# managed entirely through host flakes, so return an empty attrset.
+if platform != "nixos" then { }
+else {
   nixosConfigurations.${deviceManifest.uuid} = nixpkgs.lib.nixosSystem {
     system = deviceProfileManifest.system;
     modules = [

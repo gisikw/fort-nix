@@ -121,8 +121,10 @@ jobs:
             echo "Device: $device_uuid"
             echo "Key: ${device_key:0:20}..."
 
-            # Get secrets this host uses
-            secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${host}.config.age.secrets" --json 2>/dev/null || echo "{}")
+            # Get secrets this host uses (try nixos first, then darwin)
+            secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${host}.config.age.secrets" --json 2>/dev/null \
+              || nix eval "${host_dir}#darwinConfigurations.${host}.config.age.secrets" --json 2>/dev/null \
+              || echo "{}")
 
             # Extract .file paths and add device key to recipients map
             echo "$secrets_json" | jq -r 'to_entries[] | .value.file // empty' | while read -r secret_file; do
