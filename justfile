@@ -135,7 +135,7 @@ _bootstrap-darwin target user uuid:
   echo "[Fort] Bootstrapping nix-darwin"
   ssh -t -o StrictHostKeyChecking=no "$remote" \
     'if command -v darwin-rebuild >/dev/null 2>&1; then echo "nix-darwin already installed"; else sudo rm -rf /etc/nix-darwin && sudo mkdir -p /etc/nix-darwin && sudo chown $(whoami) /etc/nix-darwin && cd /etc/nix-darwin && nix flake init -t nix-darwin/master && sed -i "" "s/simple/$(scutil --get LocalHostName)/" flake.nix && sed -i "" "/nixpkgs.hostPlatform/a\\
-      nix.enable = false;" flake.nix && sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake /etc/nix-darwin; fi'
+      nix.enable = false;" flake.nix && for f in /etc/zshenv /etc/bashrc /etc/zshrc; do [ -f "$f" ] && ! [ -L "$f" ] && sudo mv "$f" "$f.before-nix-darwin"; done && sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake /etc/nix-darwin; fi'
 
   # Set up fort directory and clone repo
   echo "[Fort] Setting up /var/lib/fort-nix"
