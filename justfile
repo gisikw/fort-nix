@@ -128,7 +128,7 @@ _bootstrap-darwin target user uuid:
   # Install Xcode Command Line Tools (idempotent, needed for git/build tools)
   echo "[Fort] Installing Xcode Command Line Tools"
   ssh -t -o StrictHostKeyChecking=no "$remote" \
-    'if xcode-select -p >/dev/null 2>&1; then echo "CLT already installed"; else echo "Installing CLT (this may take a few minutes)..." && sudo touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress && sudo softwareupdate -i "$(softwareupdate -l 2>/dev/null | grep -o ".*Command Line Tools.*" | head -1 | sed "s/^[* ]*//")" && sudo rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress; fi'
+    'if xcode-select -p >/dev/null 2>&1; then echo "CLT already installed"; else echo "Installing CLT (this may take a few minutes)..." && sudo touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress && CLT_LABEL=$(softwareupdate -l 2>&1 | grep "Label: Command Line" | awk -F"Label: " "{print \$2}" | head -1) && echo "Found: $CLT_LABEL" && sudo softwareupdate -i "$CLT_LABEL" --agree-to-license && sudo rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress; fi'
 
   # Install Nix via Determinate package for macOS (idempotent, needs sudo → -t for TTY)
   echo "[Fort] Installing Nix"
