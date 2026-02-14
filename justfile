@@ -2,22 +2,37 @@ deploy_key := `nix eval --raw --impure --expr '(import ./common/cluster-context.
 domain := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.settings.domain'`
 cluster := `nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).clusterName'`
 
-provision profile target:
+provision profile target user="admin":
   #!/usr/bin/env bash
   echo "[Fort] Provisioning target at {{target}}"
   if [ "{{profile}}" = "linode" ]; then
     uuid=$(just _fingerprint-linode {{target}} | tail -n1 | tr -d '\r\n')
+  elif [ "{{profile}}" = "mac-mini" ]; then
+    uuid=$(just _fingerprint-darwin {{target}} {{user}} | tail -n1 | tr -d '\r\n')
   else
     uuid=$(just _fingerprint-hardware {{target}} | tail -n1 | tr -d '\r\n')
   fi
-  keydir=$(just _generate-device-keys $uuid | tail -n1)
-  just _scaffold-device-flake {{profile}} $uuid $keydir
-  just _bootstrap-device {{target}} $uuid $keydir
-  just _cleanup-device-provisioning $uuid {{target}} $keydir
+
+  profile_manifest="./device-profiles/{{profile}}/manifest.nix"
+  platform=$(nix eval --raw --impure --expr "(import ./${profile_manifest}).platform or \"nixos\"")
+
+  if [ "$platform" = "darwin" ]; then
+    just _scaffold-device-flake {{profile}} $uuid
+    just _bootstrap-darwin {{target}} {{user}} $uuid
+  else
+    keydir=$(just _generate-device-keys $uuid | tail -n1)
+    just _scaffold-device-flake {{profile}} $uuid $keydir
+    just _bootstrap-device {{target}} $uuid $keydir
+    just _cleanup-device-provisioning $uuid {{target}} $keydir
+  fi
 
 _fingerprint-hardware target:
   echo "[Fort] Fingerprinting physical hardware"
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{target}} 'cat /sys/class/dmi/id/product_uuid'
+
+_fingerprint-darwin target user="admin":
+  echo "[Fort] Fingerprinting macOS hardware"
+  ssh -o StrictHostKeyChecking=no {{user}}@{{target}} 'ioreg -d2 -c IOPlatformExpertDevice | awk -F\" "/IOPlatformUUID/{print \$4}"'
 
 _fingerprint-linode target:
   echo "[Fort] Fingerprinting Linode VM"
@@ -36,7 +51,7 @@ _generate-device-keys uuid:
   echo $temp
 
 
-_scaffold-device-flake profile uuid keydir:
+_scaffold-device-flake profile uuid keydir="":
   #!/usr/bin/env bash
   echo "[Fort] Scaffolding device flake"
   devices_root="./devices"
@@ -44,11 +59,17 @@ _scaffold-device-flake profile uuid keydir:
 
   mkdir -p "${devices_root}/{{uuid}}"
 
+  if [[ -n "{{keydir}}" ]]; then
+    pubkey=$(cat {{keydir}}/persist/system/etc/ssh/ssh_host_ed25519_key.pub)
+  else
+    pubkey="PLACEHOLDER_SET_AFTER_BOOTSTRAP"
+  fi
+
   cat > "${devices_root}/{{uuid}}/manifest.nix" <<-EOF
   {
     uuid = "{{uuid}}";
     profile = "{{profile}}";
-    pubkey = ''$(cat {{keydir}}/persist/system/etc/ssh/ssh_host_ed25519_key.pub)'';
+    pubkey = ''${pubkey}'';
     stateVersion = ''$(nix eval --raw nixpkgs#lib.version | cut -d. -f1,2)'';
   }
   EOF
@@ -94,6 +115,48 @@ _bootstrap-device target uuid keydir:
     --target-host root@{{target}}
 
 
+_bootstrap-darwin target user uuid:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  echo "[Fort] Bootstrapping darwin host at {{target}}"
+
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; fi
+
+  remote="{{user}}@{{target}}"
+
+  # Install Nix via Determinate Systems installer (idempotent)
+  echo "[Fort] Installing Nix"
+  ssh -o StrictHostKeyChecking=no "$remote" \
+    'if command -v nix >/dev/null 2>&1; then echo "Nix already installed"; else curl --proto "=https" --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm; fi'
+
+  # Bootstrap nix-darwin (idempotent)
+  echo "[Fort] Bootstrapping nix-darwin"
+  ssh -o StrictHostKeyChecking=no "$remote" \
+    'if command -v darwin-rebuild >/dev/null 2>&1; then echo "nix-darwin already installed"; else nix run nix-darwin -- switch --flake github:LnL7/nix-darwin#simple; fi'
+
+  # Set up fort directory and clone repo
+  echo "[Fort] Setting up /var/lib/fort-nix"
+  ssh -o StrictHostKeyChecking=no "$remote" \
+    'sudo mkdir -p /var/lib/fort /var/lib/fort-nix && sudo chown $(whoami) /var/lib/fort-nix'
+  ssh -o StrictHostKeyChecking=no "$remote" \
+    "if [ -d /var/lib/fort-nix/.git ]; then echo 'Repo already cloned'; else git clone --branch release https://git.gisi.network/infra/fort-nix.git /var/lib/fort-nix; fi"
+
+  # Grab the host's SSH public key and update the device manifest
+  echo "[Fort] Capturing host SSH public key"
+  pubkey=$(ssh -o StrictHostKeyChecking=no "$remote" 'cat /etc/ssh/ssh_host_ed25519_key.pub' | tr -d '\r\n')
+
+  device_manifest="${devices_root}/{{uuid}}/manifest.nix"
+  sed -i "s|PLACEHOLDER_SET_AFTER_BOOTSTRAP|${pubkey}|" "$device_manifest"
+  git add "$device_manifest"
+
+  echo "[Fort] Darwin bootstrap complete"
+  echo "  Next steps:"
+  echo "  1. just assign {{uuid}} <hostname>"
+  echo "  2. Add age key: scp age-key.txt {{user}}@{{target}}:/var/lib/fort/age-key.txt"
+  echo "  3. Re-key secrets, commit, push to release"
+  echo "  4. SSH in and run: cd /var/lib/fort-nix && darwin-rebuild switch --flake ./clusters/{{cluster}}/hosts/<hostname>"
+
 _cleanup-device-provisioning uuid target keydir:
   #!/usr/bin/env bash
   echo "[Fort] Running cleanup"
@@ -105,13 +168,60 @@ _cleanup-device-provisioning uuid target keydir:
 
 assign device host:
   #!/usr/bin/env bash
+  set -euo pipefail
   echo "[Fort] Creating host {{host}} config assigned to {{device}}"
   hosts_root="./hosts"
-  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; mkdir -p "${hosts_root}"; fi
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then
+    hosts_root="./clusters/{{cluster}}/hosts"
+    devices_root="./clusters/{{cluster}}/devices"
+    mkdir -p "${hosts_root}"
+  fi
+
+  # Detect platform from device manifest
+  device_manifest="${devices_root}/{{device}}/manifest.nix"
+  if [[ ! -f "$device_manifest" ]]; then
+    echo "[Fort] ERROR: Device manifest not found: $device_manifest" >&2
+    echo "  Run 'just provision <profile> <target>' first." >&2
+    exit 1
+  fi
+  profile=$(nix eval --raw --impure --expr "(import ./${device_manifest}).profile")
+  profile_manifest="./device-profiles/${profile}/manifest.nix"
+  platform=$(nix eval --raw --impure --expr "(import ./${profile_manifest}).platform or \"nixos\"")
 
   mkdir -p "${hosts_root}/{{host}}"
 
-  cat > "${hosts_root}/{{host}}/flake.nix" <<-EOF
+  if [[ "$platform" == "darwin" ]]; then
+    cat > "${hosts_root}/{{host}}/flake.nix" <<-'EOF'
+  {
+    inputs = {
+      cluster.url = "path:../..";
+      nixpkgs.follows = "cluster/nixpkgs";
+      agenix.follows = "cluster/agenix";
+      nix-darwin.follows = "cluster/nix-darwin";
+    };
+
+    outputs =
+      {
+        self,
+        nixpkgs,
+        agenix,
+        nix-darwin,
+        ...
+      }:
+      import ../../../../common/host.nix {
+        inherit
+          self
+          nixpkgs
+          agenix
+          nix-darwin
+          ;
+        hostDir = ./.;
+      };
+  }
+  EOF
+  else
+    cat > "${hosts_root}/{{host}}/flake.nix" <<-'EOF'
   {
     inputs = {
       cluster.url = "path:../..";
@@ -148,6 +258,7 @@ assign device host:
       };
   }
   EOF
+  fi
 
   cat > "${hosts_root}/{{host}}/manifest.nix" <<-EOF
   rec {
@@ -158,7 +269,7 @@ assign device host:
 
     apps = [ ];
 
-    aspects = [ "mesh" "observable" ];
+    aspects = [ "observable" ];
 
     module =
       { config, ... }:
@@ -176,24 +287,36 @@ deploy host addr=(host + ".fort." + domain):
   #!/usr/bin/env bash
   set -euo pipefail
 
+  hosts_root="./hosts"
+  devices_root="./devices"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; devices_root="./clusters/{{cluster}}/devices"; fi
+
+  # Detect platform
+  host_manifest_rel="${hosts_root#./}/{{host}}/manifest.nix"
+  device_uuid=$(nix eval --raw --impure --expr "(import ./${host_manifest_rel}).device")
+  device_manifest_rel="${devices_root#./}/${device_uuid}/manifest.nix"
+  device_profile=$(nix eval --raw --impure --expr "(import ./${device_manifest_rel}).profile" 2>/dev/null || echo "")
+  device_platform=$(nix eval --raw --impure --expr "(import ./device-profiles/${device_profile}/manifest.nix).platform or \"nixos\"" 2>/dev/null || echo "nixos")
+
   # Expand ~ in deploy key path
   deploy_key_expanded="{{deploy_key}}"
   deploy_key_expanded="${deploy_key_expanded/#\~/$HOME}"
 
   # Check if master key exists - determines deploy mode
   if [[ -f "$deploy_key_expanded" ]]; then
-    just _deploy-direct {{host}} {{addr}}
+    if [[ "$device_platform" == "darwin" ]]; then
+      just _deploy-direct-darwin {{host}} {{addr}}
+    else
+      just _deploy-direct {{host}} {{addr}}
+    fi
   else
     just _deploy-gitops {{host}} {{addr}}
   fi
 
-# Direct deploy via deploy-rs (requires master key)
-_deploy-direct host addr:
+# Verify deployment target matches expected device UUID
+_verify-deploy-target host addr:
   #!/usr/bin/env bash
-  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
-    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
-    exit 1
-  fi
+  set -euo pipefail
 
   hosts_root="./hosts"
   devices_root="./devices"
@@ -208,8 +331,12 @@ _deploy-direct host addr:
 
   echo "[Fort] Verifying {{host}} deployment target ({{addr}}) matches device ${expected_uuid}"
 
+  device_platform=$(nix eval --raw --impure --expr "(import ./device-profiles/${device_profile}/manifest.nix).platform or \"nixos\"" 2>/dev/null || echo "nixos")
+
   if [[ "$device_profile" == "linode" ]]; then
     actual_uuid=$(just _fingerprint-linode {{addr}} | tail -n1 | tr -d '\r\n')
+  elif [[ "$device_platform" == "darwin" ]]; then
+    actual_uuid=$(just _fingerprint-darwin {{addr}} | tail -n1 | tr -d '\r\n')
   else
     actual_uuid=$(just _fingerprint-hardware {{addr}} | tail -n1 | tr -d '\r\n')
   fi
@@ -223,6 +350,20 @@ _deploy-direct host addr:
     echo "[Fort] ERROR: Target {{addr}} reports device UUID ${actual_uuid}, expected ${expected_uuid}" >&2
     exit 1
   fi
+
+# Direct deploy via deploy-rs (requires master key)
+_deploy-direct host addr:
+  #!/usr/bin/env bash
+  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
+    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
+    exit 1
+  fi
+
+  just _verify-deploy-target {{host}} {{addr}}
+
+  hosts_root="./hosts"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
+  host_dir="${hosts_root}/{{host}}"
 
   trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
   KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
@@ -239,6 +380,47 @@ _deploy-direct host addr:
   echo "[Fort] Writing deploy info to {{addr}}"
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
     "mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json"
+
+# Direct deploy for darwin hosts (SSH + git pull + darwin-rebuild)
+_deploy-direct-darwin host addr:
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
+    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
+    exit 1
+  fi
+
+  just _verify-deploy-target {{host}} {{addr}}
+
+  trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
+  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
+
+  # Push to release branch so the remote has latest
+  current_branch=$(git rev-parse --abbrev-ref HEAD)
+  echo "[Fort] Pushing ${current_branch} to release"
+  git push origin "${current_branch}:release"
+
+  deploy_commit=$(git rev-parse --short HEAD)
+  deploy_timestamp=$(date -Iseconds)
+  deploy_branch="${current_branch}"
+  deploy_info="{\"commit\":\"${deploy_commit}\",\"timestamp\":\"${deploy_timestamp}\",\"branch\":\"${deploy_branch}\"}"
+
+  hosts_root="./hosts"
+  if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
+
+  echo "[Fort] Deploying {{host}} via SSH (git pull + darwin-rebuild)"
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} bash <<REMOTE
+    set -euo pipefail
+    cd /var/lib/fort-nix
+    git fetch origin release
+    git checkout release
+    git reset --hard origin/release
+    darwin-rebuild switch --flake ./${hosts_root#./}/{{host}}
+    mkdir -p /var/lib/fort
+    echo '${deploy_info}' > /var/lib/fort/deploy-info.json
+    echo "[Fort] {{host}} deployed ${deploy_commit} successfully"
+REMOTE
 
 # GitOps deploy via fort CLI (no master key needed)
 _deploy-gitops host addr:

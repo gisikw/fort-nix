@@ -35,9 +35,18 @@ let
     (builtins.attrValues settings.principals);
   rootAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithRoot);
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
-  # Default aspects that every host gets (host-status is NixOS-only: systemd, nginx, /proc)
-  defaultAspects = if platform == "nixos" then [ "host-status" ] else [ ];
-  allAspects = defaultAspects ++ hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles;
+  # Default aspects that every host gets
+  # mesh + gitops are platform-universal; host-status is NixOS-only (systemd, nginx, /proc)
+  defaultAspects = [ "mesh" "gitops" ] ++ (if platform == "nixos" then [ "host-status" ] else [ ]);
+  # Deduplicate aspects: host manifest overrides defaults (attrset form wins over string)
+  aspectName = a: if builtins.isString a then a else a.name;
+  dedup = defaults: extras:
+    let
+      extraNames = map aspectName extras;
+      filtered = builtins.filter (a: ! builtins.elem (aspectName a) extraNames) defaults;
+    in
+    filtered ++ extras;
+  allAspects = dedup defaultAspects (hostManifest.aspects ++ flatMap (r: r.aspects or [ ]) roles);
   allApps = hostManifest.apps ++ flatMap (r: r.apps or [ ]) roles;
 
   # Extra inputs to pass through to apps/aspects
