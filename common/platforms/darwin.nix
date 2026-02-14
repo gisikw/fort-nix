@@ -45,9 +45,21 @@ in
           "/var/lib/fort/age-key.txt"
         ];
 
-        # Admin user: deploy key access + passwordless sudo (matches NixOS root SSH pattern)
-        users.users.admin.openssh.authorizedKeys.keys = rootAuthorizedKeys;
+        # Admin user: passwordless sudo (matches NixOS root SSH pattern)
         environment.etc."sudoers.d/admin-nopasswd".text = "admin ALL=(ALL) NOPASSWD: ALL\n";
+
+        # Deploy key access: nix-darwin's users.users.*.openssh.authorizedKeys doesn't
+        # write to ~/.ssh/authorized_keys on macOS, so we manage it via activation script
+        system.activationScripts.postActivation.text = let
+          authorizedKeysFile = builtins.toFile "admin-authorized-keys"
+            (builtins.concatStringsSep "\n" rootAuthorizedKeys + "\n");
+        in ''
+          mkdir -p /Users/admin/.ssh
+          cp ${authorizedKeysFile} /Users/admin/.ssh/authorized_keys
+          chmod 700 /Users/admin/.ssh
+          chmod 600 /Users/admin/.ssh/authorized_keys
+          chown -R admin:staff /Users/admin/.ssh
+        '';
       }
       rootManifest.module
       hostManifest.module
