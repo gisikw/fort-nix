@@ -32,13 +32,8 @@ in
     system = deviceProfileManifest.system;
     modules = [
       {
-        nix.settings = {
-          experimental-features = [ "nix-command" "flakes" ];
-          fallback = true;
-          connect-timeout = 5;
-          stalled-download-timeout = 60;
-          trusted-substituters = [ "https://cache.${settings.domain}/fort" ];
-        };
+        # Determinate manages the Nix daemon; disable nix-darwin's Nix management
+        nix.enable = false;
         nixpkgs.config.allowUnfree = true;
         networking.hostName = hostManifest.hostName;
         age.identityPaths = [ "/var/lib/fort/age-key.txt" ];
