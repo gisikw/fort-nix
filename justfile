@@ -125,19 +125,19 @@ _bootstrap-darwin target user uuid:
 
   remote="{{user}}@{{target}}"
 
-  # Install Nix via Determinate Systems installer (idempotent)
+  # Install Nix via Determinate Systems installer (idempotent, needs sudo → -t for TTY)
   echo "[Fort] Installing Nix"
-  ssh -o StrictHostKeyChecking=no "$remote" \
+  ssh -t -o StrictHostKeyChecking=no "$remote" \
     'if command -v nix >/dev/null 2>&1; then echo "Nix already installed"; else curl --proto "=https" --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm; fi'
 
   # Bootstrap nix-darwin (idempotent)
   echo "[Fort] Bootstrapping nix-darwin"
-  ssh -o StrictHostKeyChecking=no "$remote" \
+  ssh -t -o StrictHostKeyChecking=no "$remote" \
     'if command -v darwin-rebuild >/dev/null 2>&1; then echo "nix-darwin already installed"; else nix run nix-darwin -- switch --flake github:LnL7/nix-darwin#simple; fi'
 
   # Set up fort directory and clone repo
   echo "[Fort] Setting up /var/lib/fort-nix"
-  ssh -o StrictHostKeyChecking=no "$remote" \
+  ssh -t -o StrictHostKeyChecking=no "$remote" \
     'sudo mkdir -p /var/lib/fort /var/lib/fort-nix && sudo chown $(whoami) /var/lib/fort-nix'
   ssh -o StrictHostKeyChecking=no "$remote" \
     "if [ -d /var/lib/fort-nix/.git ]; then echo 'Repo already cloned'; else git clone --branch release https://git.gisi.network/infra/fort-nix.git /var/lib/fort-nix; fi"
