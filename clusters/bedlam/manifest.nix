@@ -94,6 +94,15 @@ rec {
             };
           };
         };
+        "tk-build" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/tk-build";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
