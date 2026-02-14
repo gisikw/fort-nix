@@ -35,6 +35,8 @@ in
         # Determinate manages the Nix daemon; disable nix-darwin's Nix management
         nix.enable = false;
         nixpkgs.config.allowUnfree = true;
+        system.stateVersion = 6;
+        system.primaryUser = "admin";
         networking.hostName = hostManifest.hostName;
         # Use SSH host key as age identity (agenix derives age key from ed25519)
         # Falls back to explicit age key if present
