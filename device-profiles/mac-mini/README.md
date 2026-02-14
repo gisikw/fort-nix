@@ -27,14 +27,14 @@ just provision mac-mini <ip>
 # Assign hostname
 just assign <device-uuid> <hostname>
 
-# Copy age key for secret decryption
-scp age-key.txt admin@<ip>:/var/lib/fort/age-key.txt
-
-# Re-key secrets, commit, push to release branch
+# Re-key secrets (KEYED_FOR_DEVICES=1), commit, push to release branch
 # Then SSH in for the initial build:
 ssh admin@<ip>
 cd /var/lib/fort-nix && sudo darwin-rebuild switch --flake ./clusters/bedlam/hosts/<hostname>
 ```
+
+Agenix uses the host's SSH key (`/etc/ssh/ssh_host_ed25519_key`) as the age
+identity — no separate age key file needed.
 
 After the first `darwin-rebuild switch`, the deploy key is authorized and
 passwordless sudo is enabled — subsequent deploys use `just deploy <hostname>`.

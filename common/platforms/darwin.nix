@@ -36,7 +36,12 @@ in
         nix.enable = false;
         nixpkgs.config.allowUnfree = true;
         networking.hostName = hostManifest.hostName;
-        age.identityPaths = [ "/var/lib/fort/age-key.txt" ];
+        # Use SSH host key as age identity (agenix derives age key from ed25519)
+        # Falls back to explicit age key if present
+        age.identityPaths = [
+          "/etc/ssh/ssh_host_ed25519_key"
+          "/var/lib/fort/age-key.txt"
+        ];
 
         # Admin user: deploy key access + passwordless sudo (matches NixOS root SSH pattern)
         users.users.admin.openssh.authorizedKeys.keys = rootAuthorizedKeys;

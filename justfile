@@ -173,9 +173,8 @@ _bootstrap-darwin target user uuid:
   echo "[Fort] Darwin bootstrap complete"
   echo "  Next steps:"
   echo "  1. just assign {{uuid}} <hostname>"
-  echo "  2. Add age key: scp age-key.txt {{user}}@{{target}}:/var/lib/fort/age-key.txt"
-  echo "  3. Re-key secrets, commit, push to release"
-  echo "  4. SSH in and run: cd /var/lib/fort-nix && darwin-rebuild switch --flake ./clusters/{{cluster}}/hosts/<hostname>"
+  echo "  2. Re-key secrets, commit, push to release"
+  echo "  3. SSH in and run: cd /var/lib/fort-nix && sudo darwin-rebuild switch --flake ./clusters/{{cluster}}/hosts/<hostname>"
 
 _cleanup-device-provisioning uuid target keydir:
   #!/usr/bin/env bash
