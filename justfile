@@ -410,17 +410,8 @@ _deploy-direct-darwin host addr:
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
 
   echo "[Fort] Deploying {{host}} via SSH (git pull + darwin-rebuild)"
-  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} bash <<REMOTE
-    set -euo pipefail
-    cd /var/lib/fort-nix
-    git fetch origin release
-    git checkout release
-    git reset --hard origin/release
-    darwin-rebuild switch --flake ./${hosts_root#./}/{{host}}
-    mkdir -p /var/lib/fort
-    echo '${deploy_info}' > /var/lib/fort/deploy-info.json
-    echo "[Fort] {{host}} deployed ${deploy_commit} successfully"
-REMOTE
+  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
+    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin release && git checkout release && git reset --hard origin/release && darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
 
 # GitOps deploy via fort CLI (no master key needed)
 _deploy-gitops host addr:
