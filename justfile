@@ -125,10 +125,10 @@ _bootstrap-darwin target user uuid:
 
   remote="{{user}}@{{target}}"
 
-  # Install Nix via Determinate Systems installer (idempotent, needs sudo → -t for TTY)
+  # Install Nix via Determinate package for macOS (idempotent, needs sudo → -t for TTY)
   echo "[Fort] Installing Nix"
   ssh -t -o StrictHostKeyChecking=no "$remote" \
-    'if command -v nix >/dev/null 2>&1; then echo "Nix already installed"; else curl --proto "=https" --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm; fi'
+    'if command -v nix >/dev/null 2>&1; then echo "Nix already installed"; else curl --proto "=https" --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --determinate --no-confirm; fi'
 
   # Bootstrap nix-darwin (idempotent)
   echo "[Fort] Bootstrapping nix-darwin"
