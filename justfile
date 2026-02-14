@@ -125,6 +125,11 @@ _bootstrap-darwin target user uuid:
 
   remote="{{user}}@{{target}}"
 
+  # Install Xcode Command Line Tools (idempotent, needed for git/build tools)
+  echo "[Fort] Installing Xcode Command Line Tools"
+  ssh -t -o StrictHostKeyChecking=no "$remote" \
+    'if xcode-select -p >/dev/null 2>&1; then echo "CLT already installed"; else echo "Installing CLT (this may take a few minutes)..." && sudo touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress && sudo softwareupdate -i "$(softwareupdate -l 2>/dev/null | grep -o ".*Command Line Tools.*" | head -1 | sed "s/^[* ]*//")" && sudo rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress; fi'
+
   # Install Nix via Determinate package for macOS (idempotent, needs sudo → -t for TTY)
   echo "[Fort] Installing Nix"
   ssh -t -o StrictHostKeyChecking=no "$remote" \
