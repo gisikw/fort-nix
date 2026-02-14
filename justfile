@@ -146,8 +146,21 @@ _bootstrap-darwin target user uuid:
   echo "[Fort] Setting up /var/lib/fort-nix"
   ssh -t -o StrictHostKeyChecking=no "$remote" \
     'sudo mkdir -p /var/lib/fort /var/lib/fort-nix && sudo chown $(whoami) /var/lib/fort-nix'
+
+  # Clone needs auth — use local deploy token to construct authenticated URL
+  deploy_token=""
+  for tf in /var/lib/fort-git/dev-token /var/lib/fort-git/deploy-token; do
+    if [ -f "$tf" ]; then deploy_token=$(cat "$tf"); break; fi
+  done
+  if [ -z "$deploy_token" ]; then
+    echo "[Fort] WARNING: No forge token found — clone may fail if repo requires auth"
+    clone_url="https://git.{{domain}}/$(nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.forge.org')/$(nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.forge.repo').git"
+  else
+    clone_url="https://fort-deploy:${deploy_token}@git.{{domain}}/$(nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.forge.org')/$(nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).manifest.fortConfig.forge.repo').git"
+  fi
+
   ssh -o StrictHostKeyChecking=no "$remote" \
-    "if [ -d /var/lib/fort-nix/.git ]; then echo 'Repo already cloned'; else git clone --branch release https://git.gisi.network/infra/fort-nix.git /var/lib/fort-nix; fi"
+    "if [ -d /var/lib/fort-nix/.git ]; then echo 'Repo already cloned'; else git clone --branch release '${clone_url}' /var/lib/fort-nix; fi"
 
   # Grab the host's SSH public key and update the device manifest
   echo "[Fort] Capturing host SSH public key"
