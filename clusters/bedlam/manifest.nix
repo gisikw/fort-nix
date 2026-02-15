@@ -112,6 +112,15 @@ rec {
             };
           };
         };
+        "gee" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/gee";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
