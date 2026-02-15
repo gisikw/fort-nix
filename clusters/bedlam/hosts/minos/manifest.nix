@@ -46,8 +46,12 @@ rec {
   ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
+      config.environment.systemPackages = [
+        pkgs.ffmpeg
+      ];
+
       config.fort.host = { inherit roles apps aspects; };
     };
 }

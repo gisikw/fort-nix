@@ -57,6 +57,10 @@ in
       "sun"
       "zeroconf"
       "esphome"
+      "onvif"
+      "stream"
+      "ffmpeg"
+      "tplink"
     ];
 
     config = {
