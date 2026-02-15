@@ -89,9 +89,10 @@ in
     config.age.secrets.${envSecretName}.path;
 
   # Register with fort for DNS and SSL cert.
-  # Frigate's NixOS module creates its own nginx vhost with detailed location
-  # blocks. Fort adds a catch-all location "/" proxy_pass which NixOS will merge.
-  # Frigate's more specific locations (/api/, /live/, /ws, etc.) take precedence.
+  # Fort creates a catch-all location "/" with proxy_pass, but Frigate's NixOS
+  # module needs its own location "/" (static frontend served from package).
+  # We override fort's location to remove the proxy_pass and let Frigate's
+  # nginx config handle all routing.
   fort.cluster.services = [
     {
       name = "frigate";
@@ -100,4 +101,13 @@ in
       visibility = "local";
     }
   ];
+
+  services.nginx.virtualHosts.${hostname}.locations."/" = lib.mkForce {
+    root = "${config.services.frigate.package.web}";
+    tryFiles = "$uri $uri.html $uri/ /index.html";
+    extraConfig = ''
+      add_header Cache-Control "no-store";
+      expires off;
+    '';
+  };
 }
