@@ -16,6 +16,13 @@ rec {
       declarative.helpers = ./helpers.nix;
       declarative.dashboards = ./dashboards.nix;
     }
+    {
+      name = "frigate";
+      mqttPasswordFile = ./mosquitto-frigate-password.age;
+      mqttPasswordSecretName = "mosquitto-frigate-password";
+      envFile = ./frigate-env.age;
+      envSecretName = "frigate-env";
+    }
   ];
 
   aspects = [
@@ -39,6 +46,7 @@ rec {
         { name = "zigbee2mqtt"; secret = "mosquitto-zigbee2mqtt-password"; }
         { name = "zwave"; secret = "mosquitto-zwave-js-ui-password"; }
         { name = "hass"; secret = "mosquitto-homeassistant-password"; }
+        { name = "frigate"; secret = "mosquitto-frigate-password"; }
       ];
     }
     "observable"

@@ -61,6 +61,7 @@ in
       "stream"
       "ffmpeg"
       "tplink"
+      "frigate"
     ];
 
     config = {
