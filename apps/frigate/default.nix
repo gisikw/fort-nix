@@ -34,24 +34,15 @@ in
         password = "{FRIGATE_MQTT_PASSWORD}";
       };
 
-      go2rtc.streams = {
-        upstairs_bedroom = [
-          "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_CAMERA_UPSTAIRS_BEDROOM_HOST}:554/stream1"
-        ];
-        upstairs_bedroom_low = [
-          "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_CAMERA_UPSTAIRS_BEDROOM_HOST}:554/stream2"
-        ];
-      };
-
       cameras.upstairs_bedroom = {
         enabled = true;
         ffmpeg.inputs = [
           {
-            path = "rtsp://127.0.0.1:8554/upstairs_bedroom";
+            path = "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_CAMERA_UPSTAIRS_BEDROOM_HOST}:554/stream1";
             roles = [ "record" ];
           }
           {
-            path = "rtsp://127.0.0.1:8554/upstairs_bedroom_low";
+            path = "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_CAMERA_UPSTAIRS_BEDROOM_HOST}:554/stream2";
             roles = [ "detect" ];
           }
         ];
