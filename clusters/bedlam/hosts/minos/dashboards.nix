@@ -265,9 +265,9 @@ in
           cards = [
             {
               type = "picture-entity";
-              entity = "camera.upstairs_bedroom_minorstream";
+              entity = "camera.upstairs_bedroom_mainstream";
               name = "Upstairs Bedroom";
-              camera_image = "camera.upstairs_bedroom_minorstream";
+              camera_image = "camera.upstairs_bedroom_mainstream";
               camera_view = "live";
               tap_action = {
                 action = "more-info";
