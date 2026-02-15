@@ -88,10 +88,16 @@ in
   systemd.services.frigate.serviceConfig.EnvironmentFile =
     config.age.secrets.${envSecretName}.path;
 
-  # SSL for frigate's nginx vhost (managed by frigate module, not fort.cluster.services)
-  services.nginx.virtualHosts.${hostname} = {
-    forceSSL = true;
-    sslCertificate = "/var/lib/fort/ssl/${domain}/fullchain.pem";
-    sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
-  };
+  # Register with fort for DNS and SSL cert.
+  # Frigate's NixOS module creates its own nginx vhost with detailed location
+  # blocks. Fort adds a catch-all location "/" proxy_pass which NixOS will merge.
+  # Frigate's more specific locations (/api/, /live/, /ws, etc.) take precedence.
+  fort.cluster.services = [
+    {
+      name = "frigate";
+      subdomain = subdomain;
+      port = 5001;
+      visibility = "local";
+    }
+  ];
 }
