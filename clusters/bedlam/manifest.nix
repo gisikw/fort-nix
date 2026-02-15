@@ -103,6 +103,15 @@ rec {
             };
           };
         };
+        "knockout" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/knockout";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
