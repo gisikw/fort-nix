@@ -84,6 +84,7 @@ let
       temperature = "sensor.${name}_temperature";
     };
   };
+
 in
   # bedroom_2
   mkHueLight "bedroom_2__light__ne" //

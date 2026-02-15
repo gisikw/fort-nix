@@ -252,6 +252,33 @@ in
     };
   };
 
+  cameras = {
+    title = "Cameras";
+    icon = "mdi:cctv";
+    config = {
+      title = "Cameras";
+      views = [
+        {
+          title = "Cameras";
+          path = "cameras";
+          icon = "mdi:cctv";
+          cards = [
+            {
+              type = "picture-entity";
+              entity = "camera.upstairs_bedroom_minorstream";
+              name = "Upstairs Bedroom";
+              camera_image = "camera.upstairs_bedroom_minorstream";
+              camera_view = "live";
+              tap_action = {
+                action = "more-info";
+              };
+            }
+          ];
+        }
+      ];
+    };
+  };
+
   lights = {
     title = "Lights";
     icon = "mdi:lightbulb-group";
