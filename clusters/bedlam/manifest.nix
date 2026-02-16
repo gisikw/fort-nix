@@ -121,6 +121,15 @@ rec {
             };
           };
         };
+        "nerve" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/nerve";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
