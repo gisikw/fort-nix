@@ -6,7 +6,7 @@ let
 in
 {
   virtualisation.oci-containers.containers.comfyui = {
-    image = "containers.${domain}/yanwk/comfyui-boot:rocm";
+    image = "containers.${domain}/yanwk/comfyui-boot:rocm6";
     ports = [ "127.0.0.1:8188:8188" ];
     environment = {
       # Radeon 8060S: HIP reports gfx1102, HSA reports gfx1151
