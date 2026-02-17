@@ -12,6 +12,7 @@ in
       # Radeon 8060S: HIP reports gfx1102, HSA reports gfx1151
       HSA_OVERRIDE_GFX_VERSION = "11.0.2";
       HCC_AMDGPU_TARGET = "gfx1151";
+      PYTORCH_HIP_ALLOC_CONF = "expandable_segments:True";
     };
     extraOptions = [
       "--device=/dev/kfd"
