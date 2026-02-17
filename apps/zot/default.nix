@@ -57,6 +57,7 @@ in
       name = "containers";
       subdomain = subdomain;
       port = 5000;
+      maxBodySize = "10g";
       health.endpoint = "/v2/";
     }
   ];
