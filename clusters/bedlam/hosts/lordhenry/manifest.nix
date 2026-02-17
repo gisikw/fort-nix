@@ -5,6 +5,7 @@ rec {
   roles = [ ];
 
   apps = [
+    "comfyui"
     "ollama"
     "open-webui"
     "sillytavern"
