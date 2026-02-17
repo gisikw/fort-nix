@@ -34,6 +34,16 @@ in
             onDemand = true;
           }
           {
+            urls = [ "https://registry-1.docker.io" ];
+            content = [
+              {
+                prefix = "**";
+                destination = "/docker.io";
+              }
+            ];
+            onDemand = true;
+          }
+          {
             urls = [ "https://ghcr.io/v2" ];
             content = [
               {
