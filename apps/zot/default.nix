@@ -34,11 +34,12 @@ in
             onDemand = true;
           }
           {
-            urls = [ "https://registry-1.docker.io" ];
+            urls = [ "https://docker.io" ];
             content = [
               {
                 prefix = "**";
                 destination = "/docker.io";
+                stripPrefix = true;
               }
             ];
             onDemand = true;
