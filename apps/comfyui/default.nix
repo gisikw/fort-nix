@@ -10,7 +10,7 @@ in
     ports = [ "127.0.0.1:8188:8188" ];
     environment = {
       # Radeon 8060S: HIP reports gfx1102, HSA reports gfx1151
-      HSA_OVERRIDE_GFX_VERSION = "11.0.2";
+      HSA_OVERRIDE_GFX_VERSION = "11.0.0";
       HCC_AMDGPU_TARGET = "gfx1151";
       PYTORCH_HIP_ALLOC_CONF = "expandable_segments:True";
     };
