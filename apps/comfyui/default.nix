@@ -3,6 +3,32 @@
 let
   fort = rootManifest.fortConfig;
   domain = fort.settings.domain;
+
+  # Pre-start script: installs custom nodes on first container boot.
+  # Runs before ComfyUI launches (sourced by entrypoint.sh).
+  preStartScript = pkgs.writeText "comfyui-pre-start.sh" ''
+    #!/bin/bash
+    set -eu
+
+    CUSTOM_NODES_DIR="/root/ComfyUI/custom_nodes"
+
+    # ComfyUI-RMBG: background removal (RMBG-2.0, BiRefNet, BEN2, etc.)
+    # PyTorch-based models run GPU-accelerated via ROCm; skip onnxruntime-gpu
+    # which is CUDA-only and not needed for the models we use.
+    if [ ! -d "''${CUSTOM_NODES_DIR}/ComfyUI-RMBG" ]; then
+        echo "[pre-start] Installing ComfyUI-RMBG..."
+        cd "''${CUSTOM_NODES_DIR}"
+        git clone https://github.com/1038lab/ComfyUI-RMBG.git
+        cd ComfyUI-RMBG
+        # Install deps but replace onnxruntime-gpu (CUDA-only) with CPU fallback
+        sed 's/onnxruntime-gpu/onnxruntime/' requirements.txt | pip install -r /dev/stdin
+        echo "[pre-start] ComfyUI-RMBG installed."
+    else
+        echo "[pre-start] ComfyUI-RMBG already installed."
+    fi
+  '';
+
+  logoWorkflow = ./logo-workflow.json;
 in
 {
   virtualisation.oci-containers.containers.comfyui = {
@@ -28,6 +54,28 @@ in
       "/var/lib/comfyui/output:/root/ComfyUI/output"
       "/var/lib/comfyui/workflows:/root/ComfyUI/user/default/workflows"
     ];
+  };
+
+  # Deploy pre-start script and workflow into the container's persistent storage.
+  # The container's entrypoint sources user-scripts/pre-start.sh before launching.
+  systemd.services.comfyui-setup = {
+    description = "Deploy ComfyUI workflows and pre-start script";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "podman-comfyui.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      # Pre-start script for custom node installation
+      mkdir -p /var/lib/comfyui/root/user-scripts
+      cp ${preStartScript} /var/lib/comfyui/root/user-scripts/pre-start.sh
+      chmod +x /var/lib/comfyui/root/user-scripts/pre-start.sh
+
+      # Logo generation workflow
+      mkdir -p /var/lib/comfyui/workflows
+      cp ${logoWorkflow} /var/lib/comfyui/workflows/logo-generation.json
+    '';
   };
 
   systemd.tmpfiles.rules = [
