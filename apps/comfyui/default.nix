@@ -11,6 +11,7 @@ in
     environment = {
       # Radeon 8060S: HIP reports gfx1102, HSA reports gfx1151
       HSA_OVERRIDE_GFX_VERSION = "11.0.2";
+      HCC_AMDGPU_TARGET = "gfx1151";
     };
     extraOptions = [
       "--device=/dev/kfd"
@@ -46,6 +47,7 @@ in
       port = 8188;
       visibility = "vpn";
       sso.mode = "none";
+      maxBodySize = "100m";
     }
   ];
 }
