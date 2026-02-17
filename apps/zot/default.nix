@@ -35,13 +35,6 @@ in
           }
           {
             urls = [ "https://docker.io" ];
-            content = [
-              {
-                prefix = "**";
-                destination = "/docker.io";
-                stripPrefix = true;
-              }
-            ];
             onDemand = true;
           }
           {
