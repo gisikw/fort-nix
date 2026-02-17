@@ -1,6 +1,6 @@
 {
-  "last_node_id": 10,
-  "last_link_id": 14,
+  "last_node_id": 12,
+  "last_link_id": 17,
   "nodes": [
     {
       "id": 1,
@@ -32,39 +32,77 @@
       ],
       "outputs": [
         {"name": "MODEL", "type": "MODEL", "links": [3], "slot_index": 0},
-        {"name": "CLIP", "type": "CLIP", "links": [4, 5], "slot_index": 1}
+        {"name": "CLIP", "type": "CLIP", "links": [14, 15, 5], "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "LoraLoader"},
-      "widgets_values": ["LogoRedmond_LogoRedAF.safetensors", 0.8, 0.8],
+      "widgets_values": ["LogoRedmondV2-Logo-LogoRedmAF.safetensors", 0.8, 0.8],
       "title": "Logo LoRA"
     },
     {
-      "id": 3,
+      "id": 11,
       "type": "CLIPTextEncode",
-      "pos": [200, 50],
+      "pos": [200, -100],
       "size": {"0": 420, "1": 164},
       "flags": {},
       "order": 2,
       "mode": 0,
       "inputs": [
-        {"name": "clip", "type": "CLIP", "link": 4}
+        {"name": "clip", "type": "CLIP", "link": 14}
       ],
       "outputs": [
-        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [16], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": ["a brain with circuit traces forming neural pathways, electric blue and warm amber"],
+      "title": "Brief (edit this one)",
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 3,
+      "type": "CLIPTextEncode",
+      "pos": [200, 120],
+      "size": {"0": 420, "1": 130},
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 15}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [17], "slot_index": 0}
       ],
       "properties": {"Node name for S&R": "CLIPTextEncode"},
       "widgets_values": ["LogoRedAF, minimalist logo, flat vector style, clean lines, simple geometric shapes, professional design, centered composition, white background"],
-      "title": "Positive Prompt",
+      "title": "Style (leave alone)",
       "color": "#232",
       "bgcolor": "#353"
     },
     {
+      "id": 12,
+      "type": "ConditioningCombine",
+      "pos": [700, 50],
+      "size": {"0": 220, "1": 46},
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {"name": "conditioning_1", "type": "CONDITIONING", "link": 16},
+        {"name": "conditioning_2", "type": "CONDITIONING", "link": 17}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "ConditioningCombine"},
+      "title": "Combine Brief + Style"
+    },
+    {
       "id": 4,
       "type": "CLIPTextEncode",
-      "pos": [200, 300],
+      "pos": [200, 330],
       "size": {"0": 420, "1": 164},
       "flags": {},
-      "order": 3,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {"name": "clip", "type": "CLIP", "link": 5}
@@ -81,10 +119,10 @@
     {
       "id": 5,
       "type": "EmptyLatentImage",
-      "pos": [200, 550],
+      "pos": [200, 580],
       "size": {"0": 315, "1": 106},
       "flags": {},
-      "order": 4,
+      "order": 6,
       "mode": 0,
       "outputs": [
         {"name": "LATENT", "type": "LATENT", "links": [8], "slot_index": 0}
@@ -95,10 +133,10 @@
     {
       "id": 6,
       "type": "KSampler",
-      "pos": [700, 200],
+      "pos": [1000, 200],
       "size": {"0": 315, "1": 262},
       "flags": {},
-      "order": 5,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {"name": "model", "type": "MODEL", "link": 3},
@@ -123,10 +161,10 @@
     {
       "id": 7,
       "type": "VAEDecode",
-      "pos": [1100, 200],
+      "pos": [1400, 200],
       "size": {"0": 210, "1": 46},
       "flags": {},
-      "order": 6,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {"name": "samples", "type": "LATENT", "link": 9},
@@ -140,10 +178,10 @@
     {
       "id": 8,
       "type": "RMBG",
-      "pos": [1400, 200],
+      "pos": [1700, 200],
       "size": {"0": 315, "1": 100},
       "flags": {},
-      "order": 7,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {"name": "image", "type": "IMAGE", "link": 11}
@@ -159,10 +197,10 @@
     {
       "id": 9,
       "type": "SaveImage",
-      "pos": [1100, 400],
+      "pos": [1400, 400],
       "size": {"0": 400, "1": 500},
       "flags": {},
-      "order": 8,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {"name": "images", "type": "IMAGE", "link": 13}
@@ -174,10 +212,10 @@
     {
       "id": 10,
       "type": "SaveImage",
-      "pos": [1800, 200],
+      "pos": [2100, 200],
       "size": {"0": 400, "1": 500},
       "flags": {},
-      "order": 9,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {"name": "images", "type": "IMAGE", "link": 12}
@@ -191,16 +229,19 @@
     [1, 1, 0, 2, 0, "MODEL"],
     [2, 1, 1, 2, 1, "CLIP"],
     [3, 2, 0, 6, 0, "MODEL"],
-    [4, 2, 1, 3, 0, "CLIP"],
     [5, 2, 1, 4, 0, "CLIP"],
-    [6, 3, 0, 6, 1, "CONDITIONING"],
+    [6, 12, 0, 6, 1, "CONDITIONING"],
     [7, 4, 0, 6, 2, "CONDITIONING"],
     [8, 5, 0, 6, 3, "LATENT"],
     [9, 6, 0, 7, 0, "LATENT"],
     [10, 1, 2, 7, 1, "VAE"],
     [11, 7, 0, 8, 0, "IMAGE"],
     [12, 8, 0, 10, 0, "IMAGE"],
-    [13, 7, 0, 9, 0, "IMAGE"]
+    [13, 7, 0, 9, 0, "IMAGE"],
+    [14, 2, 1, 11, 0, "CLIP"],
+    [15, 2, 1, 3, 0, "CLIP"],
+    [16, 11, 0, 12, 0, "CONDITIONING"],
+    [17, 3, 0, 12, 1, "CONDITIONING"]
   ],
   "groups": [
     {
@@ -211,19 +252,19 @@
     },
     {
       "title": "Prompts",
-      "bounding": [150, -20, 500, 570],
+      "bounding": [150, -170, 900, 520],
       "color": "#8A8",
       "font_size": 24
     },
     {
       "title": "Generation",
-      "bounding": [650, 120, 800, 420],
+      "bounding": [950, 120, 800, 420],
       "color": "#A88",
       "font_size": 24
     },
     {
       "title": "Output",
-      "bounding": [1350, 120, 900, 630],
+      "bounding": [1650, 120, 900, 630],
       "color": "#AA8",
       "font_size": 24
     }
