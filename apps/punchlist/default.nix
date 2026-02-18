@@ -6,6 +6,9 @@ let
   dataFile = "${dataDir}/items.json";
 
   fixpermsScript = pkgs.writeShellScript "punchlist-fixperms" ''
+    # Ensure punchlist user can traverse to the binary
+    ${pkgs.acl}/bin/setfacl -m g::x -m m::x /home/dev
+
     # Ensure directory has correct ownership and setgid
     chown punchlist:users ${dataDir}
     chmod 2775 ${dataDir}
