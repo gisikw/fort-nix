@@ -14,7 +14,7 @@ let
 in
 {
   virtualisation.oci-containers.containers.kokoro-tts = {
-    image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.1.4";
+    image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4";
     ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
   };
 

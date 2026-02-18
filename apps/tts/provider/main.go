@@ -15,7 +15,7 @@ import (
 var domain = "gisi.network"
 
 const kokoroURL = "http://127.0.0.1:8880/v1/audio/speech"
-const defaultVoice = "af_heart"
+const defaultVoice = "af_sky"
 const defaultFormat = "mp3"
 
 var httpClient = &http.Client{
