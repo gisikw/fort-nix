@@ -262,6 +262,26 @@ in
             -d "{\"name\": \"$repo_name\", \"private\": true}"
         fi
 
+        # For repos with GitHub mirrors, ensure the GitHub repo exists (created as private)
+        for mirror_name in $(echo "$REPOS" | jq -r --arg r "$repo_name" '.[$r].mirrors | keys[]'); do
+          remote=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].remote')
+          token_path=$(echo "$REPOS" | jq -r --arg r "$repo_name" --arg m "$mirror_name" '.[$r].mirrors[$m].tokenPath')
+          token=$(cat "$token_path")
+
+          if [ "$mirror_name" = "github" ]; then
+            gh_owner=$(echo "$remote" | cut -d/ -f1)
+            gh_repo=$(echo "$remote" | cut -d/ -f2)
+            if ! curl -sf -H "Authorization: token $token" \
+                 "https://api.github.com/repos/$gh_owner/$gh_repo" > /dev/null 2>&1; then
+              echo "Creating GitHub repo: $gh_owner/$gh_repo (private)"
+              curl -sf -X POST -H "Authorization: token $token" \
+                -H "Content-Type: application/json" \
+                "https://api.github.com/user/repos" \
+                -d "{\"name\": \"$gh_repo\", \"private\": true}" > /dev/null
+            fi
+          fi
+        done
+
         # Configure push mirrors (skip fort-nix - uses CI-gated mirroring)
         if [ "$repo_name" != "fort-nix" ]; then
           for mirror_name in $(echo "$REPOS" | jq -r --arg r "$repo_name" '.[$r].mirrors | keys[]'); do
