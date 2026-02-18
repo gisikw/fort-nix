@@ -269,8 +269,8 @@ in
           token=$(cat "$token_path")
 
           if [ "$mirror_name" = "github" ]; then
-            gh_owner=$(echo "$remote" | cut -d/ -f1)
-            gh_repo=$(echo "$remote" | cut -d/ -f2)
+            gh_owner=$(echo "$remote" | cut -d/ -f2)
+            gh_repo=$(echo "$remote" | cut -d/ -f3)
             if ! curl -sf -H "Authorization: token $token" \
                  "https://api.github.com/repos/$gh_owner/$gh_repo" > /dev/null 2>&1; then
               echo "Creating GitHub repo: $gh_owner/$gh_repo (private)"
