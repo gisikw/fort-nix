@@ -9,6 +9,7 @@ rec {
     "ollama"
     "open-webui"
     "sillytavern"
+    "tts"
     "whisper"
   ];
 
