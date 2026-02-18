@@ -1,7 +1,7 @@
 { ... }:
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 let
-  punchlist = import ../../pkgs/punchlist { inherit pkgs; };
+  serverDir = "/home/dev/Projects/punchlist-server";
   dataDir = "/var/lib/punchlist";
   dataFile = "${dataDir}/items.json";
 
@@ -44,7 +44,7 @@ in
       Group = "users";
       UMask = "0007";  # Files created are 0660 (user+group rw)
       WorkingDirectory = dataDir;
-      ExecStart = "${lib.getExe punchlist} -addr 127.0.0.1:8765 -data ${dataDir}/items.json";
+      ExecStart = "${serverDir}/punchlist -addr 127.0.0.1:8765 -data ${dataDir}/items.json";
       Restart = "on-failure";
       RestartSec = 5;
 
