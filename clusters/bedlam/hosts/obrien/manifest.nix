@@ -9,8 +9,12 @@ rec {
   aspects = [ "observable" ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
+      config.environment.systemPackages = [
+        pkgs.xcodes
+      ];
+
       config.fort.host = { inherit roles apps aspects; };
     };
 }
