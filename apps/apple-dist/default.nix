@@ -94,8 +94,8 @@ let
 in
 {
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 0755 root root -"
-    "d ${dataDir}/ipas 0755 root root -"
+    "d ${dataDir} 0755 dev users -"
+    "d ${dataDir}/ipas 0755 dev users -"
   ];
 
   # Internal nginx server block as the backend for the gatekeeper proxy.
