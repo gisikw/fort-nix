@@ -16,15 +16,7 @@ in
   virtualisation.oci-containers.containers.kokoro-tts = {
     image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.1.4";
     ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
-    volumes = [
-      "/var/lib/kokoro-tts/cache:/app/api/src/voices"
-    ];
   };
-
-  systemd.tmpfiles.rules = [
-    "d /var/lib/kokoro-tts 0755 root root -"
-    "d /var/lib/kokoro-tts/cache 0755 root root -"
-  ];
 
   # Expose tts capability for cluster-wide text-to-speech
   fort.host.capabilities.tts = {
