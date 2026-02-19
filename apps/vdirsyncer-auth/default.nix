@@ -28,11 +28,16 @@ in
   # Allow dev user to read the token file
   users.users.dev.extraGroups = [ group ];
 
-  # Setgid + default ACL: both vdirsyncer service and dev user write tokens here.
-  # Setgid ensures files inherit the group, ACL ensures group always has rw.
+  # Setgid + default ACLs: both vdirsyncer service and dev user write tokens here.
+  # vdirsyncer (sync service, running as dev) does atomic writes that create new inodes,
+  # so we need default ACLs ensuring both users always get rw on newly created files.
   systemd.tmpfiles.rules = [
     "d ${dataDir} 2770 ${user} ${group}"
+    "a+ ${dataDir} - - - - default:user::rwx"
+    "a+ ${dataDir} - - - - default:user:dev:rw-"
     "a+ ${dataDir} - - - - default:group::rw-"
+    "a+ ${dataDir} - - - - default:mask::rwx"
+    "a+ ${dataDir} - - - - default:other::---"
   ];
 
   age.secrets.oauth-client-id = {
