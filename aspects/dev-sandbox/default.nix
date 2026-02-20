@@ -17,6 +17,7 @@ let
   beads = import ../../pkgs/beads { inherit pkgs; };
   ticket = import ../../pkgs/ticket { inherit pkgs; };
   fort = import ../../pkgs/fort { inherit pkgs domain; };
+  cursor-agent = import ../../pkgs/cursor-agent { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
   # Note: chmod 644 so dev user can read it for git credential helper
@@ -90,6 +91,7 @@ let
 
     # Claude/AI tools
     claude-code
+    cursor-agent
     opencode
     beads
     ticket
