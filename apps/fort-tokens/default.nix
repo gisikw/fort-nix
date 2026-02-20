@@ -36,7 +36,7 @@ in
     name = "fort-tokens";
     subdomain = "tokens";
     port = 9471;
-    visibility = "local";
+    visibility = "public";
     sso = {
       mode = "headers";
       groups = [ "admin" ];
