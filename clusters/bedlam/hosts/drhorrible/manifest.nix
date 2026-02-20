@@ -5,6 +5,7 @@ rec {
   roles = [ "forge" ];
 
   apps = [
+    "fort-tokens"
     "homepage"
     "pocket-id"
   ];

@@ -73,8 +73,14 @@ let
     ${pkgs.systemd}/bin/systemctl restart "${restartTarget}" 2>/dev/null || true
   '';
 
-  # Get services that need OIDC registration (sso.mode != "none")
-  ssoServices = builtins.filter (svc: svc.sso.mode != "none") config.fort.cluster.services;
+  # Get services that need OIDC registration (sso.mode not in none/token)
+  ssoServices = builtins.filter (svc: svc.sso.mode != "none" && svc.sso.mode != "token") config.fort.cluster.services;
+
+  # Get services using bearer token auth
+  tokenServices = builtins.filter (svc: svc.sso.mode == "token") config.fort.cluster.services;
+
+  # njs token validator script path (for nginx js_import)
+  tokenValidatorScript = ./fort/token-validator.js;
 
   # Check if this host is the OIDC provider (has pocket-id)
   isOidcProvider = builtins.any (svc: svc.name == "pocket-id") config.fort.cluster.services;
@@ -112,7 +118,7 @@ in
     # VPN geo block - always defined so aspects (like host-status) can use it
     # Also configure realip to trust X-Real-IP from VPN (beacon proxy)
     {
-      services.nginx.commonHttpConfig = lib.mkBefore ''
+      services.nginx.commonHttpConfig = lib.mkBefore (''
         # Trust X-Real-IP header from VPN peers (beacon proxy)
         set_real_ip_from ${vpnIpv4Prefix};
         real_ip_header X-Real-IP;
@@ -122,7 +128,11 @@ in
           default 0;
           ${vpnIpv4Prefix} 1;
         }
-      '';
+      '' + lib.optionalString (tokenServices != []) ''
+
+        # njs token validator for sso.mode = "token"
+        js_import token_validator from ${tokenValidatorScript};
+      '');
     }
 
     (lib.mkIf (lib.length config.fort.cluster.services >= 1) {
@@ -133,7 +143,7 @@ in
           envFile = "/var/lib/fort-auth/${svc.name}/oauth2-proxy.env";
           subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
           publicUrl = "https://${subdomain}.${domain}";
-        in lib.optionalAttrs (svc.sso.mode != "none" && svc.sso.mode != "oidc") {
+        in lib.optionalAttrs (svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token") {
           "oauth2-proxy-${svc.name}" = {
             wantedBy = [ "multi-user.target" ];
 
@@ -200,13 +210,15 @@ in
       services.nginx = {
         enable = true;
         recommendedProxySettings = true;
+        additionalModules = lib.optionals (tokenServices != []) [ pkgs.nginxModules.njs ];
 
         virtualHosts = lib.listToAttrs (
           map (
             svc:
             let
               subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
-              needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc";
+              needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token";
+              isTokenMode = svc.sso.mode == "token";
               directBackend = "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
               authProxySocket = "http://unix:/run/fort-auth/${svc.name}.sock";
             in
@@ -227,6 +239,10 @@ in
                     '')
                     (lib.optionalString (svc.maxBodySize != null) ''
                       client_max_body_size ${svc.maxBodySize};
+                    '')
+                    # Token mode: nginx auth_request to njs validator
+                    (lib.optionalString isTokenMode ''
+                      auth_request /_fort_validate_token;
                     '')
                     # Conditional routing: VPN bypasses auth, non-VPN goes through oauth2-proxy
                     # When proxyPass is null, NixOS doesn't add recommended headers, so we must add them
@@ -253,6 +269,14 @@ in
                     directBackend;
                   proxyWebsockets = true;
                 };
+                # Internal location for njs token validation (auth_request target)
+                locations."/_fort_validate_token" = lib.mkIf isTokenMode {
+                  extraConfig = ''
+                    internal;
+                    set $token_vpn_bypass ${if svc.sso.vpnBypass then "1" else "0"};
+                    js_content token_validator.validate;
+                  '';
+                };
               };
             }
           ) config.fort.cluster.services
@@ -263,6 +287,15 @@ in
         80
         443
       ];
+    })
+
+    # Token auth secret - distributed to hosts with token-mode services
+    (lib.mkIf (tokenServices != []) {
+      age.secrets.fort-token-secret = {
+        file = ./fort/token-secret.age;
+        path = "/var/lib/fort-auth/token-secret";
+        mode = "0400";
+      };
     })
 
     # Write unified host manifest for service discovery

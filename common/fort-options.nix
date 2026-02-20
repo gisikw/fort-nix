@@ -50,7 +50,7 @@
                   type = submodule {
                     options = {
                       mode = lib.mkOption {
-                        type = enum [ "none" "oidc" "headers" "basicauth" "gatekeeper" ];
+                        type = enum [ "none" "oidc" "headers" "basicauth" "gatekeeper" "token" ];
                         default = "none";
                         description = "SSO handling mode for this service.";
                       };
