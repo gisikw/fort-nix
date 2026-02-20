@@ -148,6 +148,15 @@ rec {
             };
           };
         };
+        "crane" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/crane";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
