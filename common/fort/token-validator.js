@@ -41,6 +41,10 @@ function validate(r) {
   var payloadB64 = parts[0];
   var signatureB64 = parts[1];
 
+  // Lazy-load secret if not yet available (agenix may decrypt after nginx starts)
+  if (!secret) {
+    loadSecret();
+  }
   if (!secret) {
     r.return(500, 'token secret not configured');
     return;
