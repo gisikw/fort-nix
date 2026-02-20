@@ -26,6 +26,7 @@ in
   systemd.services.ollama.serviceConfig = {
     Environment = [
       "OLLAMA_HOST=127.0.0.1:11434"
+      "OLLAMA_ORIGINS=*"
       "OLLAMA_CONTEXT_LENGTH=32768"
     ];
   };
