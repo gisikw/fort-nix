@@ -294,7 +294,8 @@ in
       age.secrets.fort-token-secret = {
         file = ./fort/token-secret.age;
         path = "/var/lib/fort-auth/token-secret";
-        mode = "0400";
+        mode = "0440";
+        group = "nginx";
       };
     })
 
