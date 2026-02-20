@@ -31,7 +31,8 @@ let
           align-items: center;
           gap: 1rem;
         }
-        .app-name { font-size: 1.1rem; font-weight: 600; flex: 1; }
+        .app-info { flex: 1; }
+        .app-name { font-size: 1.1rem; font-weight: 600; }
         .app-meta { font-size: 0.8rem; color: #888; }
         .install-btn {
           background: #ff6188;
@@ -44,6 +45,7 @@ let
           text-decoration: none;
           cursor: pointer;
           white-space: nowrap;
+          margin-left: auto;
         }
         .install-btn:hover { background: #ff7e9a; }
         .empty { color: #888; font-style: italic; }
@@ -72,7 +74,7 @@ let
               const date = new Date(f.mtime);
               const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
               return '<div class="app">' +
-                '<div><div class="app-name">' + name + '</div>' +
+                '<div class="app-info"><div class="app-name">' + name + '</div>' +
                 '<div class="app-meta">' + dateStr + '</div></div>' +
                 '<a class="install-btn" href="' + itmsUrl + '">Install</a>' +
                 '</div>';
@@ -82,6 +84,20 @@ let
             document.getElementById('apps').innerHTML =
               '<div class="empty">Failed to load apps.</div>';
           });
+
+        let lastMtime = '';
+        setInterval(() => {
+          fetch('./ipas/')
+            .then(r => r.json())
+            .then(files => {
+              const sig = files.map(f => f.name + f.mtime).join('');
+              if (sig !== lastMtime) {
+                lastMtime = sig;
+                location.reload();
+              }
+            })
+            .catch(() => {});
+        }, 10000);
       </script>
     </body>
     </html>
