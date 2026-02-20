@@ -78,19 +78,19 @@ let
                 '<div class="app-meta">' + dateStr + '</div></div>' +
                 '<a class="install-btn" href="' + itmsUrl + '">Install</a>' +
                 '</div>';
-            }).join("");
+            }).join(''''');
           })
           .catch(() => {
             document.getElementById('apps').innerHTML =
               '<div class="empty">Failed to load apps.</div>';
           });
 
-        let lastMtime = '';
+        let lastMtime = ''''';
         setInterval(() => {
           fetch('./ipas/')
             .then(r => r.json())
             .then(files => {
-              const sig = files.map(f => f.name + f.mtime).join('');
+              const sig = files.map(f => f.name + f.mtime).join(''''');
               if (sig !== lastMtime) {
                 lastMtime = sig;
                 location.reload();
