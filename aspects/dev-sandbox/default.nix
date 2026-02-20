@@ -166,6 +166,13 @@ in
       # Fort agent configuration for dev-sandbox identity
       export FORT_SSH_KEY="${agentKeyPath}"
       export FORT_ORIGIN="dev-sandbox"
+
+      # Source API keys and credentials
+      if [[ -r /var/lib/fort/dev-sandbox/env ]]; then
+        set -a
+        source /var/lib/fort/dev-sandbox/env
+        set +a
+      fi
     '';
   };
 
@@ -203,6 +210,15 @@ in
     from = "drhorrible";
     request = { access = "rw"; };
     handler = gitTokenHandler;
+  };
+
+  # Shared env file for API keys and credentials (readable by dev user)
+  age.secrets.dev-sandbox-env = {
+    file = ./env.age;
+    path = "/var/lib/fort/dev-sandbox/env";
+    owner = user;
+    group = "users";
+    mode = "0600";
   };
 
   # Agent key for fort signing (readable by dev user)
@@ -435,6 +451,7 @@ in
       WorkingDirectory = "${homeDir}/Projects/exocortex";
       Restart = "always";
       RestartSec = "5s";
+      EnvironmentFile = "/var/lib/fort/dev-sandbox/env";
     };
     environment = {
       HOME = homeDir;

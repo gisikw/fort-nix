@@ -43,6 +43,7 @@ in
   "./clusters/bedlam/hosts/ratched/ssh-key.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/oauth-client-id.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/oauth-client-secret.age".publicKeys = activeKeys;
+  "./aspects/dev-sandbox/env.age".publicKeys = activeKeys;
   "./apps/radicale/htpasswd.age".publicKeys = activeKeys;
   "./apps/radicale/password.age".publicKeys = activeKeys;
   "./clusters/bedlam/pii-denylist.age".publicKeys = activeKeys;
