@@ -56,7 +56,7 @@ fort.cluster.services = [{
   port = 8080;
   visibility = "local";      # vpn | local | public
   sso = {
-    mode = "none";           # none | oidc | headers | basicauth | gatekeeper
+    mode = "none";           # none | oidc | headers | basicauth | gatekeeper | token
     groups = [ "users" ];    # LDAP groups (if SSO enabled)
   };
 }];
@@ -82,6 +82,7 @@ Services can use SSO via `fort.cluster.services`:
 | `headers` | Service can consume `X-Auth-*` headers |
 | `basicauth` | Service only supports HTTP Basic Auth |
 | `gatekeeper` | Login required but no identity passed to backend |
+| `token` | Service is an API (no browser), needs bearer token auth |
 
 **VPN Bypass**: Any SSO mode can be combined with `sso.vpnBypass = true` to skip auth for VPN requests while requiring it from the public internet.
 
@@ -92,6 +93,26 @@ Services can use SSO via `fort.cluster.services`:
 This provides defense-in-depth: pocket-id blocks unauthorized users before they even get tokens.
 
 For detailed implementation guidance, mode-specific patterns, and troubleshooting, see the `sso-guide` skill (`.claude/skills/sso-guide/`). Working examples: `apps/outline/` (oidc), `apps/fort-observability/` (headers).
+
+### Token Mode (`sso.mode = "token"`)
+
+For API services that can't use browser-based OIDC. Bearer tokens are HMAC-SHA256 signed and validated inline by nginx's njs module — no subrequest, no extra process.
+
+**Token format**: `base64url(payload).base64url(hmac_sha256(payload, secret))`
+
+**Components**:
+- `common/fort/token-validator.js` — njs script loaded by nginx, validates HMAC signature + expiry
+- `common/fort/token-secret.age` — shared HMAC secret (agenix), distributed to consuming hosts
+- `apps/fort-tokens/` — web UI on drhorrible for creating/managing tokens (`tokens.gisi.network`)
+
+**How it works**: `auth_request` delegates to an internal location running `js_content token_validator.validate`. VPN bypass is handled by the njs script checking `$is_vpn` and `$token_vpn_bypass` variables.
+
+**Usage from API clients**:
+```bash
+curl -H "Authorization: Bearer <token>" https://ollama.gisi.network/api/tags
+```
+
+Working example: `apps/ollama/` (token + vpnBypass).
 
 ### Custom Derivations
 
