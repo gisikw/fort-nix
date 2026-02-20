@@ -20,17 +20,17 @@ function loadSecret() {
 loadSecret();
 
 function validate(r) {
-  r.warn('token-validator: vpn_bypass=' + r.variables.token_vpn_bypass + ' is_vpn=' + r.variables.is_vpn + ' remote_addr=' + r.variables.remote_addr);
+  r.error('token-validator: vpn_bypass=' + r.variables.token_vpn_bypass + ' is_vpn=' + r.variables.is_vpn + ' remote_addr=' + r.variables.remote_addr);
 
   // VPN bypass: skip token check for VPN requests when vpnBypass is enabled
   if (r.variables.token_vpn_bypass === '1' && r.variables.is_vpn === '1') {
-    r.warn('token-validator: VPN bypass - allowing request');
+    r.error('token-validator: VPN bypass - allowing request');
     return r.return(200);
   }
 
   var auth = r.headersIn['Authorization'] || '';
   if (!auth.startsWith('Bearer ')) {
-    r.warn('token-validator: no bearer token, returning 401');
+    r.error('token-validator: no bearer token, returning 401');
     r.return(401, 'missing bearer token');
     return;
   }
