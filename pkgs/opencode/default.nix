@@ -2,21 +2,20 @@
 
 pkgs.stdenv.mkDerivation rec {
   pname = "opencode";
-  version = "1.1.14";
+  version = "1.2.10";
 
   src = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/opencode-linux-x64/-/opencode-linux-x64-${version}.tgz";
-    hash = "sha256-hwU0UJYCoBH3NdMhRWrUbtWz6gEBXndCLIYNzZo0Hl0=";
+    url = "https://github.com/anomalyco/opencode/releases/download/v${version}/opencode-linux-x64.tar.gz";
+    hash = "sha256-n4u6zCN7Wrh0TAgNEBN+k/HUu+uCJHEQkvT6dAxYR/Y=";
   };
 
   nativeBuildInputs = [ pkgs.autoPatchelfHook ];
 
-  # No build needed - just install the binary
   dontBuild = true;
 
   installPhase = ''
     runHook preInstall
-    install -Dm755 bin/opencode $out/bin/opencode
+    install -Dm755 opencode $out/bin/opencode
     runHook postInstall
   '';
 
