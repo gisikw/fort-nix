@@ -6,7 +6,7 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "mesh" "observable" "gitops" "media-kiosk" ];
+  aspects = [ "mesh" "observable" { name = "gitops"; manualDeploy = true; } "media-kiosk" ];
 
   module =
     { config, ... }:
