@@ -281,6 +281,9 @@ in
     noto-fonts-color-emoji
   ];
 
+  # Repurpose power button as select signal for game console
+  services.logind.settings.Login.HandlePowerKey = "ignore";
+
   # Allow empty password login (for auto-login user)
   security.pam.services.greetd.allowNullPassword = true;
 }

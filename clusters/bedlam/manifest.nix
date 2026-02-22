@@ -166,6 +166,15 @@ rec {
             };
           };
         };
+        "barely-game-console" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/barely-game-console";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
