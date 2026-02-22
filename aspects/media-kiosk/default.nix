@@ -43,7 +43,7 @@ let
   # RetroArch config
   retroarchCfg = pkgs.writeText "retroarch.cfg" ''
     video_fullscreen = "true"
-    video_driver = "vulkan"
+    video_driver = "gl"
     video_vsync = "true"
     video_threaded = "true"
     video_hard_sync = "true"
