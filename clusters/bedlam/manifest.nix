@@ -157,6 +157,15 @@ rec {
             };
           };
         };
+        "litmus" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/litmus";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
