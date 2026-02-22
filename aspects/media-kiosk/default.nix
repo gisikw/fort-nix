@@ -8,6 +8,7 @@ let
 
   # Custom packages
   barely-game-console = import ../../pkgs/barely-game-console { inherit pkgs; };
+  joypadAutoconfig = pkgs.retroarch-joypad-autoconfig;
 
   # Persistent data paths
   dataDir = "/var/lib/game-console";
@@ -60,6 +61,8 @@ let
     menu_enable_widgets = "false"
     settings_show_onscreen_display = "false"
     input_overlay_enable = "false"
+
+    joypad_autoconfig_dir = "${joypadAutoconfig}/share/libretro/autoconfig"
   '';
 
   # Card mappings — RFID card ID to game config
