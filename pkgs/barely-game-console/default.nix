@@ -2,13 +2,13 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "barely-game-console";
-  version = "0.1.0-unstable-2026-02-15";
+  version = "0.1.0-unstable-2026-02-22";
 
   src = pkgs.fetchFromGitHub {
     owner = "gisikw";
     repo = "barely-game-console";
-    rev = "a83be0fb44c8c4265688225e569104d2a1161e82";
-    hash = "sha256-rKBeG2FQtkSLkX9yFYHcloprxj5aG5G1rFC2pHtWN9g=";
+    rev = "b8a8d5770f4c6508a5fff82da1a45101f0f8bda6";
+    hash = "sha256-XpBjTCiCWOu7GaRWBiqhJ0ATXdgkGHYTDsD06gOofpQ=";
   };
 
   cargoHash = "sha256-9q3Jm3T9nyLuBSPuhmffaiGRqeRIbU6M62NuxYSvFus=";
