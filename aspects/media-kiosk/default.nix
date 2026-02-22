@@ -68,89 +68,89 @@ let
     "0005593265" = {
       rom_path = "${romsDir}/snes/Super Mario World (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "assets/SMWCase.jpg";
+      artwork = "${artworkDir}/SMWCase.jpg";
     };
     "0006405066" = {
       rom_path = "${romsDir}/snes/Harvest Moon (U).zip";
       emulator = cores.snes9x;
-      artwork = "assets/harvest-moon.jpg";
+      artwork = "${artworkDir}/harvest-moon.jpg";
     };
     "0006970516" = {
       rom_path = "${romsDir}/snes/Legend of Zelda, The - A Link to the Past (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "assets/zelda-link-to-the-past.jpg";
+      artwork = "${artworkDir}/zelda-link-to-the-past.jpg";
     };
     "0008241197" = {
       rom_path = "${romsDir}/snes/Sim City (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "assets/sim-city.jpg";
+      artwork = "${artworkDir}/sim-city.jpg";
     };
     "0007917398" = {
       rom_path = "${romsDir}/snes/Star Fox (U) (V1.2) [!].zip";
       emulator = cores.snes9x;
-      artwork = "assets/star-fox.jpg";
+      artwork = "${artworkDir}/star-fox.jpg";
     };
     "0007507355" = {
       rom_path = "${romsDir}/snes/Super Mario RPG - Legend of the Seven Stars (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "assets/super-mario-rpg.png";
+      artwork = "${artworkDir}/super-mario-rpg.png";
     };
     "0007763882" = {
       rom_path = "${romsDir}/snes/Wario's Woods (E).smc";
       emulator = cores.snes9x;
-      artwork = "assets/warios-woods.png";
+      artwork = "${artworkDir}/warios-woods.png";
     };
     "0007486482" = {
       rom_path = "${romsDir}/snes/Super Metroid (E) [!].zip";
       emulator = cores.snes9x;
-      artwork = "assets/super-metroid.jpg";
+      artwork = "${artworkDir}/super-metroid.jpg";
     };
     "0007505411" = {
       rom_path = "${romsDir}/snes/Final Fantasy II (USA) (Rev 1).zip";
       emulator = cores.snes9x;
-      artwork = "assets/final-fantasy-ii.jpg";
+      artwork = "${artworkDir}/final-fantasy-ii.jpg";
     };
     "0007550190" = {
       rom_path = "${romsDir}/snes/Donkey Kong Country.zip";
       emulator = cores.snes9x;
-      artwork = "assets/donkey-kong-country.jpg";
+      artwork = "${artworkDir}/donkey-kong-country.jpg";
     };
 
     # NES
     "0007315288" = {
       rom_path = "${romsDir}/nes/Zelda - The Legend of Zelda.zip";
       emulator = cores.nestopia;
-      artwork = "assets/zelda.png";
+      artwork = "${artworkDir}/zelda.png";
     };
     "0007772848" = {
       rom_path = "${romsDir}/nes/Zelda 2 - The Adventure of Link (U).zip";
       emulator = cores.nestopia;
-      artwork = "assets/zelda-adventure-of-link.png";
+      artwork = "${artworkDir}/zelda-adventure-of-link.png";
     };
     "0007542250" = {
       rom_path = "${romsDir}/nes/Final Fantasy (U).zip";
       emulator = cores.nestopia;
-      artwork = "assets/final-fantasy.png";
+      artwork = "${artworkDir}/final-fantasy.png";
     };
 
     # Genesis
     "0007569065" = {
       rom_path = "${romsDir}/genesis/Sonic The Hedgehog (USA, Europe).zip";
       emulator = cores.genesis-plus-gx;
-      artwork = "assets/sonic.jpg";
+      artwork = "${artworkDir}/sonic.jpg";
     };
 
     # N64
     "0007741136" = {
       rom_path = "${romsDir}/n64/Super Smash Bros. (U) [!].zip";
       emulator = cores.mupen64plus;
-      artwork = "assets/super-smash-bros.jpg";
+      artwork = "${artworkDir}/super-smash-bros.jpg";
     };
 
     # Jellyfin (command card)
     "0007300935" = {
       command = [ "${kioskBrowser}/bin/kiosk-browser" ];
-      artwork = "assets/jellyfin.png";
+      artwork = "${artworkDir}/jellyfin.png";
     };
   };
 
