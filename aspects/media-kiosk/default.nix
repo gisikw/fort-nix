@@ -71,27 +71,27 @@ let
     "0005593265" = {
       rom_path = "${romsDir}/snes/Super Mario World (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/SMWCase.jpg";
+      artwork = "${artworkDir}/super-mario-world.png";
     };
     "0006405066" = {
       rom_path = "${romsDir}/snes/Harvest Moon (U).zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/harvest-moon.jpg";
+      artwork = "${artworkDir}/harvest-moon.png";
     };
     "0006970516" = {
       rom_path = "${romsDir}/snes/Legend of Zelda, The - A Link to the Past (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/zelda-link-to-the-past.jpg";
+      artwork = "${artworkDir}/zelda-link-to-the-past.png";
     };
     "0008241197" = {
       rom_path = "${romsDir}/snes/Sim City (U) [!].zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/sim-city.jpg";
+      artwork = "${artworkDir}/sim-city.png";
     };
     "0007917398" = {
       rom_path = "${romsDir}/snes/Star Fox (U) (V1.2) [!].zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/star-fox.jpg";
+      artwork = "${artworkDir}/star-fox.png";
     };
     "0007507355" = {
       rom_path = "${romsDir}/snes/Super Mario RPG - Legend of the Seven Stars (U) [!].zip";
@@ -106,17 +106,17 @@ let
     "0007486482" = {
       rom_path = "${romsDir}/snes/Super Metroid (E) [!].zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/super-metroid.jpg";
+      artwork = "${artworkDir}/super-metroid.png";
     };
     "0007505411" = {
       rom_path = "${romsDir}/snes/Final Fantasy II (USA) (Rev 1).zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/final-fantasy-ii.jpg";
+      artwork = "${artworkDir}/final-fantasy-ii.png";
     };
     "0007550190" = {
       rom_path = "${romsDir}/snes/Donkey Kong Country.zip";
       emulator = cores.snes9x;
-      artwork = "${artworkDir}/donkey-kong-country.jpg";
+      artwork = "${artworkDir}/donkey-kong-country.png";
     };
 
     # NES
@@ -140,14 +140,14 @@ let
     "0007569065" = {
       rom_path = "${romsDir}/genesis/Sonic The Hedgehog (USA, Europe).zip";
       emulator = cores.genesis-plus-gx;
-      artwork = "${artworkDir}/sonic.jpg";
+      artwork = "${artworkDir}/sonic.png";
     };
 
     # N64
     "0007741136" = {
       rom_path = "${romsDir}/n64/Super Smash Bros. (U) [!].zip";
       emulator = cores.mupen64plus;
-      artwork = "${artworkDir}/super-smash-bros.jpg";
+      artwork = "${artworkDir}/super-smash-bros.png";
     };
 
     # Jellyfin (command card)
