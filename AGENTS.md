@@ -8,17 +8,17 @@ This is a NixOS homelab infrastructure. Read `README.md` for architecture overvi
 
 ## Issue Tracking
 
-This project uses **tk** (ticket) for issue tracking. Prefer tk over TodoWrite - use TodoWrite only for complex single-session work where micro-step tracking adds clarity.
+This project uses **ko** (knockout) for issue tracking. Prefer ko over TodoWrite - use TodoWrite only for complex single-session work where micro-step tracking adds clarity.
 
 ```bash
-tk ready              # Unblocked tasks sorted by priority
-tk create "title"     # Create a ticket (prints ID)
-tk show <id>          # View details
-tk start <id>         # Mark in progress
-tk close <id>         # Mark complete
-tk dep <id> <dep-id>  # Add dependency
-tk ls                 # List all open tickets
-tk query              # JSON output for programmatic use
+ko ready              # Unblocked tasks sorted by priority
+ko create "title"     # Create a ticket (prints ID)
+ko show <id>          # View details
+ko start <id>         # Mark in progress
+ko close <id>         # Mark complete
+ko dep <id> <dep-id>  # Add dependency
+ko ls                 # List all open tickets
+ko query              # JSON output for programmatic use
 ```
 
 ## Codebase Navigation
@@ -531,7 +531,7 @@ Before closing a ticket:
 
 3. **Wait for deploy**: Run `just deploy <host>` even for auto-deploy hosts. This ensures the deploy completes before closing the ticket.
 
-4. **Close the ticket**: `tk close <id>`
+4. **Close the ticket**: `ko close <id>`
 
 5. **Reflect** and triage with the user:
    - **Documentation**: Did this work reveal anything that should be in AGENTS.md or README.md? New patterns, gotchas, or corrections to existing guidance?
