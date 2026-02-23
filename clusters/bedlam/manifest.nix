@@ -175,6 +175,15 @@ rec {
             };
           };
         };
+        "calendly-ai-rules-skills" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/calendly-ai-rules-skills";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
