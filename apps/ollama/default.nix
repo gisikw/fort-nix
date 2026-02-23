@@ -8,6 +8,7 @@ in
   services.ollama = {
     enable = true;
     acceleration = false;
+    package = pkgs.ollama-vulkan;
     openFirewall = false;
   };
 
@@ -18,8 +19,6 @@ in
         "OLLAMA_CONTEXT_LENGTH=32768"
         "OLLAMA_USE_MMAP=true"
         "OLLAMA_KEEP_ALIVE=-1"
-        "OLLAMA_VULKAN=1"
-        "HIP_VISIBLE_DEVICES=-1"
       ];
     };
   };
