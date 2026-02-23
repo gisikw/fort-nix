@@ -184,6 +184,15 @@ rec {
             };
           };
         };
+        "cranium" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/cranium";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
