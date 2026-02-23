@@ -1,28 +1,13 @@
 { ... }:
 { config, pkgs, lib, ... }:
 let
-  # Override ollama-rocm to a more recent version
-  ollama-rocm-latest = pkgs.ollama-rocm.overrideAttrs (old: rec {
-    version = "0.15.6";
-    src = old.src.override {
-      tag = "v${version}";
-      hash = "sha256-II9ffgkMj2yx7Sek5PuAgRnUIS1Kf1UeK71+DwAgBRE=";
-    };
-    vendorHash = "sha256-r7bSHOYAB5f3fRz7lKLejx6thPx0dR4UXoXu0XD7kVM=";
-  });
-
   dashboard = ./dashboard.py;
   dashboardPort = 11435;
 in
 {
   services.ollama = {
     enable = true;
-    acceleration = "rocm";
-    package = ollama-rocm-latest;
-    environmentVariables = {
-      HCC_AMDGPU_TARGET = "gfx1151";
-    };
-    rocmOverrideGfx = "11.0.0";
+    acceleration = false;
     openFirewall = false;
   };
 
@@ -33,6 +18,8 @@ in
         "OLLAMA_CONTEXT_LENGTH=32768"
         "OLLAMA_USE_MMAP=true"
         "OLLAMA_KEEP_ALIVE=-1"
+        "OLLAMA_VULKAN=1"
+        "HIP_VISIBLE_DEVICES=-1"
       ];
     };
   };
