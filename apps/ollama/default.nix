@@ -14,6 +14,8 @@ let
   dashboardPort = 11435;
 in
 {
+  hardware.graphics.enable = true;
+
   services.ollama = {
     enable = true;
     acceleration = false;
