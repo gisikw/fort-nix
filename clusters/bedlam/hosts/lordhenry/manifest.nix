@@ -22,6 +22,8 @@ rec {
   module =
     { config, pkgs, ... }:
     {
+      config.boot.kernelPackages = pkgs.linuxPackages_latest;
+
       config.environment.systemPackages = [
         pkgs.ffmpeg
         pkgs.neovim

@@ -31,7 +31,7 @@ let
   # Simple wrapper that pre-configures the model
   whisper-transcribe = pkgs.writeShellScriptBin "whisper-transcribe" ''
     # ROCm environment for gfx1151 (Radeon 8060S)
-    export HSA_OVERRIDE_GFX_VERSION=11.0.2
+    export HSA_OVERRIDE_GFX_VERSION=11.0.0
     export HCC_AMDGPU_TARGET=gfx1151
 
     # Default to outputting just the text, but allow overrides

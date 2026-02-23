@@ -22,7 +22,7 @@ in
     environmentVariables = {
       HCC_AMDGPU_TARGET = "gfx1151";
     };
-    rocmOverrideGfx = "11.0.2";
+    rocmOverrideGfx = "11.0.0";
     openFirewall = false;
   };
 
