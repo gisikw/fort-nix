@@ -19,21 +19,6 @@ Fort manages a cluster of NixOS hosts (and one macOS host) through layered, comp
 
 Fort supports multiple clusters simultaneously. Set the active cluster via `CLUSTER=<name>` or place the name in `.cluster`.
 
-### Cluster Topology (Bedlam)
-
-| Host | Profile | Role | Purpose |
-|------|---------|------|---------|
-| **drhorrible** | beelink | forge | Git hosting, CI/CD, observability, DNS, certs, binary cache, OIDC provider |
-| **raishan** | linode | beacon | Public VPS — Headscale mesh controller, public ingress, blog |
-| **joker** | beelink | — | General-purpose (currently baseline) |
-| **lordhenry** | evo-x2 | — | GPU compute — LLM inference, image gen, TTS, transcription (AMD Radeon 8060S) |
-| **minos** | beelink | — | IoT hub — Home Assistant, Frigate NVR, Zigbee, Z-Wave, MQTT |
-| **q** | beelink | — | Media & productivity — *arr stack, torrents (egress VPN), wiki, tasks |
-| **ratched** | evo-x2 | — | Dev sandbox — AI agents, notes, calendar sync, Matrix homeserver |
-| **ursula** | evo-x2 | — | Media library — Jellyfin, Audiobookshelf, Calibre-Web (ZFS storage) |
-| **doofenshmirtz** | evo-x2 | — | Media kiosk display |
-| **obrien** | mac-mini | — | macOS host (Xcode tooling) |
-
 ## Service Exposure
 
 Services are exposed through `fort.cluster.services`, which provides centralized management of TLS, DNS, and nginx routing. Each service declaration supports:
@@ -52,14 +37,14 @@ Fort implements a distributed control plane for inter-host coordination. Hosts e
 
 | Capability | Provider | Purpose |
 |------------|----------|---------|
-| ssl-cert | certificate-broker | Wildcard cert distribution to all nginx hosts |
-| oidc-register | pocket-id | Automatic OIDC client registration for SSO services |
-| dns-headscale | beacon | Mesh DNS records for all services |
-| dns-coredns | forge | LAN DNS records for all services |
-| proxy | beacon | Public ingress routing for internet-facing services |
-| git-token | forge | Deploy tokens for GitOps and dev sandbox access |
-| deploy | gitops hosts | Trigger deployment on manual-confirmation hosts |
-| journal, systemd, read-file | all hosts | Remote debugging (dev-sandbox principal only) |
+| ssl-cert | certificate-broker aspect | Wildcard cert distribution to all nginx hosts |
+| oidc-register | identity provider app | Automatic OIDC client registration for SSO services |
+| dns-headscale | beacon role | Mesh DNS records for all services |
+| dns-coredns | forge role | LAN DNS records for all services |
+| proxy | beacon role | Public ingress routing for internet-facing services |
+| git-token | forge role | Deploy tokens for GitOps and dev sandbox access |
+| deploy | gitops aspect | Trigger deployment on manual-confirmation hosts |
+| journal, systemd, read-file | host-status aspect | Remote debugging (restricted by principal) |
 
 ### How It Works
 
@@ -218,9 +203,7 @@ This creates the host flake at `./clusters/<cluster>/hosts/<hostname>`. Edit `ma
 
 Push to `main` and wait. CI validates, re-keys secrets, and pushes to `release`. Hosts with the `gitops` aspect pull and deploy automatically (~5 minutes).
 
-**Auto-deploy**: joker, lordhenry, minos, q, ratched, ursula
-
-**Manual-confirmation** (build automatically, require explicit trigger): doofenshmirtz, drhorrible, raishan
+Hero roles (beacon, forge) use manual confirmation — they build automatically but won't switch until explicitly triggered. Other hosts sensitive to unscheduled restarts can also opt into manual confirmation via their gitops aspect config.
 
 ```bash
 just deploy <host>    # Blocks until deployed; triggers manual confirmation if needed
@@ -279,22 +262,3 @@ IoT device manifests are encrypted and support both Zigbee (IEEE address) and Z-
 00000-00000-00000-00000-00000-00000-00000-00000:script_name:FriendlyName
 ```
 
-## Repository Structure
-
-```
-flake.nix                    # Root flake — exports tooling packages
-common/
-  host.nix                   # Host flake boilerplate (NixOS + Darwin)
-  device.nix                 # Device flake boilerplate (provisioning)
-  fort.nix                   # Service exposure, nginx, SSO, control plane needs
-  cluster-context.nix        # Cluster selection and manifest location
-clusters/<cluster>/
-  manifest.nix               # Domain, principals, forge config, VPN settings
-  hosts/<name>/manifest.nix  # Host config: roles, apps, aspects
-  devices/<uuid>/            # Auto-generated device bindings
-apps/<name>/default.nix      # App modules (41 apps)
-aspects/<name>/default.nix   # Aspect modules (16 aspects)
-roles/<name>.nix             # Role definitions (beacon, forge)
-device-profiles/<type>/      # Hardware base images
-pkgs/<name>/default.nix      # Custom derivations (14 packages)
-```
