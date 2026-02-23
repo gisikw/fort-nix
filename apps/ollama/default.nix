@@ -1,6 +1,15 @@
 { ... }:
 { config, pkgs, lib, ... }:
 let
+  ollama-vulkan-latest = pkgs.ollama-vulkan.overrideAttrs (old: rec {
+    version = "0.15.6";
+    src = old.src.override {
+      tag = "v${version}";
+      hash = "sha256-II9ffgkMj2yx7Sek5PuAgRnUIS1Kf1UeK71+DwAgBRE=";
+    };
+    vendorHash = "sha256-r7bSHOYAB5f3fRz7lKLejx6thPx0dR4UXoXu0XD7kVM=";
+  });
+
   dashboard = ./dashboard.py;
   dashboardPort = 11435;
 in
@@ -8,7 +17,7 @@ in
   services.ollama = {
     enable = true;
     acceleration = false;
-    package = pkgs.ollama-vulkan;
+    package = ollama-vulkan-latest;
     openFirewall = false;
   };
 
