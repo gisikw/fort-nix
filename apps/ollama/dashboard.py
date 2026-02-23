@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Ollama GPU dashboard — lists loaded models, offers evict/restart."""
+"""Ollama GPU dashboard — lists loaded models with unload controls."""
 
 import http.server
 import json
-import subprocess
 import urllib.request
 import os
 
@@ -32,15 +31,15 @@ HTML = r"""<!DOCTYPE html>
   .model-meta { font-size: 0.8rem; color: #888; margin-top: 0.15rem; }
   .empty { color: #999; font-style: italic; font-size: 0.9rem; }
   .error { color: #c00; font-size: 0.9rem; }
-  .evict-btn {
-    display: block; width: 100%; padding: 0.75rem;
-    background: #d32f2f; color: #fff; border: none; border-radius: 8px;
-    font-size: 1rem; font-weight: 600; cursor: pointer;
-    transition: background 0.15s;
+  .unload-btn {
+    padding: 0.25rem 0.6rem; background: #d32f2f; color: #fff;
+    border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer; transition: background 0.15s; float: right; margin-top: 0.1rem;
   }
-  .evict-btn:hover { background: #b71c1c; }
-  .evict-btn:disabled { background: #999; cursor: not-allowed; }
-  .status { text-align: center; font-size: 0.85rem; color: #666; margin-top: 0.5rem; min-height: 1.2em; }
+  .unload-btn:hover { background: #b71c1c; }
+  .unload-btn:disabled { background: #999; cursor: not-allowed; }
+  details summary { cursor: pointer; }
+  details summary h2 { display: inline; }
 </style>
 </head>
 <body>
@@ -52,12 +51,11 @@ HTML = r"""<!DOCTYPE html>
 </div>
 
 <div class="section" id="available-section">
-  <h2>Available Models</h2>
-  <div id="available">Loading&hellip;</div>
+  <details>
+    <summary><h2>Available Models</h2></summary>
+    <div id="available">Loading&hellip;</div>
+  </details>
 </div>
-
-<button class="evict-btn" onclick="evict()">Evict</button>
-<div class="status" id="status"></div>
 
 <script>
 function fmt(bytes) {
@@ -87,6 +85,7 @@ async function refresh() {
     } else {
       el.innerHTML = ps.models.map(m => `
         <div class="model">
+          <button class="unload-btn" onclick="unloadModel('${m.name}', this)">Unload</button>
           <div class="model-name">${m.name}</div>
           <div class="model-meta">
             VRAM: ${fmt(m.size_vram)} &middot; RAM: ${fmt(m.size - m.size_vram)}
@@ -117,36 +116,20 @@ async function refresh() {
   }
 }
 
-async function evict() {
-  const btn = document.querySelector('.evict-btn');
-  const status = document.getElementById('status');
+async function unloadModel(name, btn) {
   btn.disabled = true;
-  btn.textContent = 'Restarting\u2026';
-  status.textContent = '';
+  btn.textContent = '\u2026';
   try {
-    const r = await fetch('/evict', { method: 'POST' });
-    if (r.ok) {
-      status.textContent = 'Restart triggered. Waiting for ollama\u2026';
-      await poll();
-    } else {
-      status.textContent = 'Failed: ' + (await r.text());
-    }
+    const r = await fetch('/unload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: name })
+    });
+    if (!r.ok) console.error('Unload failed:', await r.text());
   } catch(e) {
-    status.textContent = 'Error: ' + e.message;
+    console.error('Unload error:', e);
   }
-  btn.disabled = false;
-  btn.textContent = 'Evict';
-}
-
-async function poll() {
-  for (let i = 0; i < 30; i++) {
-    await new Promise(r => setTimeout(r, 2000));
-    try {
-      const r = await fetch('/api/tags');
-      if (r.ok) { refresh(); return; }
-    } catch {}
-  }
-  document.getElementById('status').textContent = 'Timed out waiting for ollama';
+  setTimeout(refresh, 1000);
 }
 
 refresh();
@@ -169,9 +152,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if self.path == "/evict":
+        if self.path == "/unload":
             try:
-                subprocess.Popen(["systemctl", "restart", "ollama"])
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length)) if length else {}
+                model = body.get("model", "")
+                if not model:
+                    self.send_error(400, "missing model")
+                    return
+                payload = json.dumps({"model": model, "keep_alive": 0}).encode()
+                req = urllib.request.Request(
+                    OLLAMA_URL + "/api/generate",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    resp.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain")
                 self.end_headers()
