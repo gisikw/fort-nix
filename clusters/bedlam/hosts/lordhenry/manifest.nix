@@ -22,6 +22,10 @@ rec {
   module =
     { config, pkgs, ... }:
     {
+      # Disable Compute Wave Store and Resume — MES firmware bug on gfx1151
+      # causes GPU hangs under ROCm workloads (ROCm #5590)
+      config.boot.kernelParams = [ "amdgpu.cwsr_enable=0" ];
+
       config.environment.systemPackages = [
         pkgs.ffmpeg
         pkgs.neovim
