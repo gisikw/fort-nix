@@ -41,6 +41,16 @@ in
         sleep 2
       fi
       echo 1 > /sys/bus/pci/rescan
+
+      # Wait for amdgpu driver to re-create device nodes after rescan
+      for i in $(seq 1 30); do
+        if [ -e /dev/kfd ]; then
+          echo "GPU device nodes ready after ''${i}s"
+          exit 0
+        fi
+        sleep 1
+      done
+      echo "WARNING: /dev/kfd did not appear within 30s"
     '';
   };
 
