@@ -1,57 +1,84 @@
 # Fort Nix
 
-A declarative Nix-based homelab configuration using nixos-anywhere and deploy-rs.
+A declarative NixOS homelab infrastructure with a custom inter-host control plane, GitOps deployment, and unified service exposure with SSO.
 
-## Layered Host Configuration
+## Architecture Overview
 
-Fort supports multiple clusters simultaneously. Set the active cluster by
-exporting `CLUSTER=<name>` before running any `just` commands, or place the
-desired name in `.cluster` (copy `.cluster.example` to get started). All host
-and device flakes live under `./clusters/<cluster>/`, and the helper module
-`common/cluster-context.nix` is the single entry point for locating manifests,
-hosts, and devices on disk.
+Fort manages a cluster of NixOS hosts (and one macOS host) through layered, composable configuration. Each host's identity is built from:
 
-Each host still has its own `flake.nix` and `flake.lock` files for quick
-evaluation, but those files remain intentionally sparse. Shared host/device
-logic lives in `./common/host.nix` and `./common/device.nix`, while app,
-aspect, and role definitions remain under `./apps`, `./aspects`, and `./roles`.
-
-The configuration for a host is composed of several layers:
-
-- A **device profile**: Base-level image configuration (e.g., disk layout, bootloader)
-    - Defined in `./device-profiles/<profile>` (beelink, evo-x2, linode)
-- A **device entry**: Unique machine binding by UUID
+- A **device profile**: Base-level image (disk layout, bootloader, hardware quirks)
+    - Defined in `./device-profiles/<profile>` (beelink, evo-x2, linode, mac-mini)
+- A **device entry**: Unique machine binding by hardware UUID
     - Auto-generated in `./clusters/<cluster>/devices/<uuid>`
-- A **host**: Logical identity, tied to a device UUID
-    - Scaffolded under `./clusters/<cluster>/hosts/<name>`, with primary configuration via `manifest.nix`
+- A **host**: Logical identity with a manifest declaring what it runs
+    - Scaffolded under `./clusters/<cluster>/hosts/<name>`, primary config via `manifest.nix`
     - Composed of:
-        - **Aspects**: characteristics of the given host (e.g., `wifi-access`, `observable`, `mesh`)
-        - **Apps**: apps that are deployed on the host (e.g., `jellyfin`, `home-assistant`)
-        - **Roles**: predefined sets of aspects and apps
+        - **Roles**: Predefined bundles of apps + aspects (e.g., `forge`, `beacon`)
+        - **Apps**: Services deployed on the host (e.g., `jellyfin`, `ollama`)
+        - **Aspects**: Host characteristics (e.g., `mesh`, `observable`, `egress-vpn`)
+
+Fort supports multiple clusters simultaneously. Set the active cluster via `CLUSTER=<name>` or place the name in `.cluster`.
+
+### Cluster Topology (Bedlam)
+
+| Host | Profile | Role | Purpose |
+|------|---------|------|---------|
+| **drhorrible** | beelink | forge | Git hosting, CI/CD, observability, DNS, certs, binary cache, OIDC provider |
+| **raishan** | linode | beacon | Public VPS — Headscale mesh controller, public ingress, blog |
+| **joker** | beelink | — | General-purpose (currently baseline) |
+| **lordhenry** | evo-x2 | — | GPU compute — LLM inference, image gen, TTS, transcription (AMD Radeon 8060S) |
+| **minos** | beelink | — | IoT hub — Home Assistant, Frigate NVR, Zigbee, Z-Wave, MQTT |
+| **q** | beelink | — | Media & productivity — *arr stack, torrents (egress VPN), wiki, tasks |
+| **ratched** | evo-x2 | — | Dev sandbox — AI agents, notes, calendar sync, Matrix homeserver |
+| **ursula** | evo-x2 | — | Media library — Jellyfin, Audiobookshelf, Calibre-Web (ZFS storage) |
+| **doofenshmirtz** | evo-x2 | — | Media kiosk display |
+| **obrien** | mac-mini | — | macOS host (Xcode tooling) |
 
 ## Service Exposure
 
 Services are exposed through `fort.cluster.services`, which provides centralized management of TLS, DNS, and nginx routing. Each service declaration supports:
 
 - **visibility**: `vpn` (mesh-only), `local` (LAN + mesh), or `public` (internet-facing via beacon)
-- **sso**: Optional SSO integration via Pocket ID with modes including `oidc`, `headers`, `basicauth`, and `gatekeeper`
+- **sso**: Optional SSO integration via Pocket ID with modes: `none`, `oidc`, `headers`, `basicauth`, `gatekeeper`, `token`
+- **vpnBypass**: Skip auth for VPN requests while requiring it from the public internet
 
-Apps should declare their exposure in their module rather than requiring manual nginx configuration.
+Apps declare their exposure in their module — no manual nginx configuration needed. The control plane automatically handles DNS registration (Headscale + CoreDNS), SSL certificate distribution, OIDC client registration, and public proxy setup.
+
+## Control Plane
+
+Fort implements a distributed control plane for inter-host coordination. Hosts expose **capabilities** (RPC endpoints via FastCGI) and declare **needs** (resources they require from other hosts).
+
+### Key Capabilities
+
+| Capability | Provider | Purpose |
+|------------|----------|---------|
+| ssl-cert | certificate-broker | Wildcard cert distribution to all nginx hosts |
+| oidc-register | pocket-id | Automatic OIDC client registration for SSO services |
+| dns-headscale | beacon | Mesh DNS records for all services |
+| dns-coredns | forge | LAN DNS records for all services |
+| proxy | beacon | Public ingress routing for internet-facing services |
+| git-token | forge | Deploy tokens for GitOps and dev sandbox access |
+| deploy | gitops hosts | Trigger deployment on manual-confirmation hosts |
+| journal, systemd, read-file | all hosts | Remote debugging (dev-sandbox principal only) |
+
+### How It Works
+
+1. Apps declare services via `fort.cluster.services` — this generates needs automatically
+2. Provider hosts (forge, beacon, identity provider) aggregate needs on a timer
+3. Providers fulfill needs (issue certs, register OIDC clients, add DNS records, configure proxies)
+4. Consumer hosts receive responses, store state locally, and restart affected services
+5. Unfulfilled needs are retried with exponential backoff (nag protocol)
+
+The control plane is implemented in Go (`apps/*/provider/`, `aspects/*/provider/`) and served via FastCGI behind nginx with RBAC controlling which hosts can call which capabilities.
 
 ## Setting Up the Cluster
 
-The cluster depends on two "hero" roles that need to be provisioned before any others:
+The cluster depends on two "hero" roles that need to be provisioned first:
 
 ### Beacon
-The **beacon** is a host that exists as a coordination server for the mesh
-network. This is the box to which public DNS is pointed, and it runs Headscale.
-While you _could_ run this device on your home network, that would risk
-exposing your residential IP address. A minimal VPS (e.g., Linode) is
-sufficient for handling this workload.
+The **beacon** is a coordination server for the mesh network. Public DNS points here, and it runs Headscale. A minimal VPS (e.g., Linode) is sufficient.
 
-Once the beacon is created, you'll want to issue a preauthorization key so that
-additional nodes can be added to the mesh network:
-
+Once created, issue a preauthorization key:
 ```bash
 headscale users create fort
 headscale preauthkeys create --user fort --reusable --expiration 99y
@@ -60,183 +87,177 @@ headscale preauthkeys create --user fort --reusable --expiration 99y
 ```
 
 ### Forge
-The **forge** is responsible for monitoring and coordinating all other nodes on
-the system. It handles:
+The **forge** coordinates all other nodes. It handles:
 
-- Behind-the-firewall DNS resolution via CoreDNS
-- Service registry: queries nodes to track their exposed services
-- Container image caching via Zot (`containers.${domain}`)
-- SSL certificate retrieval and distribution for the network
+- Internal DNS resolution via CoreDNS (with ad blocking)
+- SSL certificate provisioning and distribution (ACME DNS-01 via Porkbun)
+- Git hosting via Forgejo with CI/CD (Actions), mirroring to GitHub
+- Nix binary cache via Attic
 - Observability stack (Prometheus, Grafana, Loki)
-- Git hosting via Forgejo with CI/CD via Actions
+- OCI container registry via Zot
+- OIDC identity provider (Pocket ID) backed by LDAP
 
-### CI/CD Pipeline
+## CI/CD Pipeline
 
-The forge runs Forgejo Actions workflows that automate the release process. A dedicated **CI age key** is used to decrypt secrets during CI:
+The forge runs Forgejo Actions workflows that automate the release process.
 
-- **Public key**: Stored in `clusters/<cluster>/manifest.nix` as `ciAgeKey`
-- **Private key**: Stored ONLY in Forgejo repository secrets as `CI_AGE_KEY`
+### Release Workflow (`release.yml`)
 
-The release workflow (`release.yml`) runs on pushes to `main`:
-1. Evaluates each host's agenix config to determine required secrets
-2. Re-keys secrets for their target devices
-3. Pushes to `release` branch
+Runs on push to `main`:
 
-To regenerate the CI key (if compromised or rotating):
-```bash
-nix shell nixpkgs#age -c age-keygen
-# Update ciAgeKey in cluster manifest with the public key
-# Update CI_AGE_KEY in Forgejo secrets with the private key
-# Re-key all secrets: nix run .#agenix -- -i ~/.ssh/fort -r
-```
+1. **PII scan** — checks for personally identifiable patterns against an encrypted denylist
+2. **Go tests** — validates all control plane provider code
+3. **Flake check** — evaluates root flake, all host flakes, and all device flakes
+4. **Secret re-keying** — re-keys `.age` secrets for target device host keys; tracks content SHAs to minimize unnecessary re-keying
+5. **Release branch** — creates/updates the `release` branch with re-keyed secrets
+6. **GitHub mirror** — pushes `main` to GitHub
+
+### Test Branches
+
+For risky changes, push to a `<hostname>-test` branch. CI will:
+
+1. Validate only that host's flake
+2. Re-key secrets only for that host
+3. Create a `release-<hostname>-test` branch
+
+The target host deploys with `switch-to-configuration test` — a reboot reverts to the last known-good config. Merge to `main` to finalize; delete the branch to abandon.
 
 ## Available Apps
 
-Fort includes modules for deploying a variety of self-hosted applications:
-
 | App | Description |
 |-----|-------------|
-| actualbudget | Self-hosted budgeting software |
+| actualbudget | Self-hosted budgeting |
+| apple-dist | Apple Developer distribution tools |
+| attic | Nix binary cache |
 | audiobookshelf | Audiobook and podcast server |
 | calibre-web | E-book management web interface |
-| coredns | Internal DNS for the mesh network |
-| fort-observability | Prometheus, Grafana, and Loki stack |
+| comfyui | Stable Diffusion workflow UI |
+| conduit | Matrix homeserver |
+| coredns | Internal DNS with ad blocking |
+| flatnotes | Markdown note-taking |
+| forgejo | Git hosting with CI/CD and GitHub mirroring |
+| fort-mcp | Model Context Protocol server |
+| fort-observability | Prometheus, Grafana, Loki stack |
+| fort-tokens | Bearer token management web UI |
+| frigate | NVR with AI object detection |
+| gatus | Health monitoring and status page |
 | headscale | Self-hosted Tailscale control server |
-| home-assistant | Home automation platform with Zigbee2MQTT integration |
+| homeassistant | Home automation platform |
 | homepage | Customizable dashboard |
+| hugo-blog | Static site generator |
 | jellyfin | Media streaming server |
-| lidarr, radarr, readarr, sonarr | Media management (*arr stack) |
-| ollama | Local LLM inference |
+| lidarr | Music collection manager |
+| ollama | Local LLM inference (Vulkan backend) |
 | open-webui | Web interface for Ollama |
-| outline | Team knowledge base and wiki |
-| pocket-id | SSO/OIDC identity provider backed by LDAP |
-| prowlarr | Indexer manager for *arr apps |
-| qbittorrent | BitTorrent client |
+| outline | Team knowledge base (OIDC SSO) |
+| pocket-id | OIDC identity provider backed by LDAP |
+| prowlarr | Indexer manager for *arr stack |
+| punchlist | Lightweight task list app |
+| qbittorrent | BitTorrent client (egress VPN) |
+| radarr | Movie collection manager |
+| radicale | CalDAV/CardDAV server |
+| readarr | Book collection manager |
 | sillytavern | LLM chat frontend |
+| silverbullet | Markdown-based personal knowledge management |
+| sonarr | TV show collection manager |
 | super-productivity | Task and time management |
+| termix | Terminal-based collaboration tool |
+| tts | Text-to-speech (Kokoro) |
+| upload-gateway | Web UI for uploading files to hosts |
+| vdirsyncer-auth | OAuth adapter for calendar sync |
 | vikunja | Task and project management |
+| whisper | Speech-to-text transcription |
 | zot | OCI container registry |
 
 ## Available Aspects
 
-Aspects are host characteristics that can be composed together:
-
 | Aspect | Description |
 |--------|-------------|
-| certificate-broker | Manages SSL certificate distribution |
-| deployer | Enables deploy-rs for host deployments |
-| egress-vpn | Routes traffic through external VPN |
+| certificate-broker | ACME wildcard cert provisioning and distribution |
+| deployer | deploy-rs SSH key generation for remote deploys |
+| dev-sandbox | Development environment with AI tooling and secret access |
+| egress-vpn | WireGuard namespace routing through external VPN |
+| gitops | Automatic deployment from release branch via comin |
+| host-status | Control plane endpoint for host health queries |
 | ldap | LLDAP directory service with bootstrapped users/groups |
-| mesh | Tailscale mesh network membership |
+| media-kiosk | Kiosk mode display |
+| mesh | Tailscale VPN mesh membership |
 | mosquitto | MQTT broker for IoT devices |
-| observable | Prometheus node exporter and log shipping |
+| observable | Prometheus node exporter for metrics scraping |
 | public-ingress | Public-facing nginx reverse proxy (beacon) |
-| service-registry | Discovers and tracks cluster services |
 | wifi-access | WiFi network configuration |
-| zfs | ZFS filesystem support |
-| zigbee2mqtt | Zigbee device gateway |
-| zwave-js-ui | Z-Wave device gateway |
+| zfs | ZFS filesystem support with optional pools |
+| zigbee2mqtt | Zigbee device gateway with declarative device naming |
+| zwave-js-ui | Z-Wave device gateway with declarative device naming |
 
 ## Setting Up a New Host
 
-Setting up a host can be done in a few minutes by following these steps.
+### Provisioning
 
-### Provisioning a Host
-
-First, ensure that you have a reasonable device profile set up for the hardware
-you're establishing. Then boot up the device, make any BIOS changes you may
-desire (ensuring it always reboots, and that it boots after power loss can be
-helpful), and boot the device into any environment with SSH root access open.
-The Ubuntu Server LiveISO is one example (Ctrl + Alt + F3 to hop into a fresh
-TTY and skip the installer) - just tweak your sshd_config, disable ufw, and
-start ssh.
+Boot the target device into any environment with SSH root access (e.g., Ubuntu Server LiveISO), then:
 
 ```bash
 just provision <device-type> <ip>
 # e.g. just provision beelink 192.168.1.42
 ```
 
-This will attempt to pull a unique fingerprint for the device and write a flake
-under `./clusters/<cluster>/devices/<uuid>` given that id. It will leverage
-nixos-anywhere to convert your machine into a NixOS box that you can assign as
-a host and deploy to.
+This fingerprints the device by hardware UUID, writes a device flake under `./clusters/<cluster>/devices/<uuid>`, and converts the machine to NixOS via nixos-anywhere.
 
-### Assigning a Host
-
-For a provisioned device, we can create a host flake setup.
+### Assigning
 
 ```bash
-just assign <device> <hostname>
+just assign <device-uuid> <hostname>
 # e.g. just assign f848d467-b339-4b5d-a8a0-de1ea07ba304 marmaduke
 ```
 
-This writes out the flake and additional files to `./clusters/<cluster>/hosts/<hostname>`,
-where you can subsequently tweak the `manifest.nix` file. It's recommended that
-you deploy the initial template _first_, so that subsequent deploys can be done
-over VPN.
+This creates the host flake at `./clusters/<cluster>/hosts/<hostname>`. Edit `manifest.nix` to declare apps, aspects, and roles, then deploy.
 
-### Deploying a Host
+### Deploying
 
-#### GitOps (Default for Most Hosts)
+#### GitOps (Default)
 
-Most hosts use **comin** for automatic GitOps deployment. When changes are pushed to `main`:
+Push to `main` and wait. CI validates, re-keys secrets, and pushes to `release`. Hosts with the `gitops` aspect pull and deploy automatically (~5 minutes).
 
-1. CI validates and re-keys secrets for the `release` branch
-2. Hosts with the `gitops` aspect automatically pull and deploy
+**Auto-deploy**: joker, lordhenry, minos, q, ratched, ursula
 
-No manual intervention needed - just push to `main` and wait (~5 minutes for CI + host poll).
-
-**GitOps hosts**: joker, lordhenry, minos, q, ratched, ursula
-
-#### Manual Deploy (Forge/Beacon)
-
-The forge (drhorrible) and beacon (raishan) require manual deployment since they run critical infrastructure that shouldn't auto-update:
+**Manual-confirmation** (build automatically, require explicit trigger): doofenshmirtz, drhorrible, raishan
 
 ```bash
-just deploy drhorrible
-just deploy raishan
+just deploy <host>    # Blocks until deployed; triggers manual confirmation if needed
 ```
 
 #### Initial Deploy
-
-For the first deploy of any host, provide the IP address:
 
 ```bash
 just deploy <hostname> <ip>
 # e.g. just deploy marmaduke 192.168.1.42
 ```
 
-When the `ip` value is omitted, it's assumed that you're targeting
-`<hostname>.fort.<base domain>`. You'll likely want to put your development box
-on the mesh network ASAP to ensure those resolve for you.
+When the IP is omitted, Fort targets `<hostname>.fort.<domain>` over the mesh.
 
-#### Emergency/Override Deploy
+## Access Control
 
-For any host (even GitOps ones), you can force an immediate deploy:
+Access is managed through **principals** defined in the cluster manifest. Each principal has a public key and roles:
 
-```bash
-just deploy <hostname>
-```
+| Role | Grants |
+|------|--------|
+| `root` | SSH as root to all hosts |
+| `dev-sandbox` | SSH as dev user on dev-sandbox hosts |
+| `secrets` | Can decrypt secrets (age key in agenix recipients) |
 
-Use this when:
-- GitOps is broken and you need to fix it
-- You need immediate deployment without waiting for CI
-- Testing changes locally before committing
+Secrets use **agenix**. On `main`, secrets are keyed for principals with the `secrets` role (dev/testing). CI re-keys them for target device host keys on the `release` branch.
 
-### Validating Changes
-
-Run `just test` regularly to execute `nix flake check` against the root flake
-and every host/device in the selected cluster. This command respects both
-`CLUSTER` and `.cluster`, so be sure the correct cluster is selected before
-running it.
-
-## Other Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `just fmt` | Format all Nix files with nixfmt |
+| `just test [host]` | Flake check (single host or all hosts/devices) |
+| `just deploy <host> [ip]` | Deploy a host (auto-detects method) |
+| `just provision <profile> <ip>` | Provision a new device |
+| `just assign <uuid> <name>` | Create a host from a provisioned device |
+| `just fmt` | Format all Nix files |
 | `just ssh <host>` | SSH into a host using the deploy key |
-| `just age <path>` | Edit an age-encrypted secret file |
+| `just age <path>` | Edit an age-encrypted secret |
 
 ## IoT and Home Automation
 
@@ -245,14 +266,35 @@ Fort supports declarative Home Assistant configuration with:
 - **Zigbee2MQTT**: Zigbee device gateway with declarative device naming
 - **Z-Wave JS UI**: Z-Wave device gateway with declarative device naming
 - **Mosquitto**: MQTT broker for device communication
-- **Home Assistant**: Automations, scenes, and scripts defined in Nix
+- **Frigate**: NVR with AI-powered object detection
+- **Home Assistant**: Automations, scenes, scripts, and dashboards defined in Nix
 
-IoT device manifests are encrypted and can define both Zigbee and Z-Wave devices with friendly names. The manifest format supports both device types:
+IoT device manifests are encrypted and support both Zigbee (IEEE address) and Z-Wave (DSK) devices:
 
 ```
-# Zigbee devices use IEEE address
+# Zigbee devices
 0x00158d00xxxxxxxx:script_name:Friendly Name
 
-# Z-Wave devices use DSK (note: name cannot contain spaces)
+# Z-Wave devices
 00000-00000-00000-00000-00000-00000-00000-00000:script_name:FriendlyName
+```
+
+## Repository Structure
+
+```
+flake.nix                    # Root flake — exports tooling packages
+common/
+  host.nix                   # Host flake boilerplate (NixOS + Darwin)
+  device.nix                 # Device flake boilerplate (provisioning)
+  fort.nix                   # Service exposure, nginx, SSO, control plane needs
+  cluster-context.nix        # Cluster selection and manifest location
+clusters/<cluster>/
+  manifest.nix               # Domain, principals, forge config, VPN settings
+  hosts/<name>/manifest.nix  # Host config: roles, apps, aspects
+  devices/<uuid>/            # Auto-generated device bindings
+apps/<name>/default.nix      # App modules (41 apps)
+aspects/<name>/default.nix   # Aspect modules (16 aspects)
+roles/<name>.nix             # Role definitions (beacon, forge)
+device-profiles/<type>/      # Hardware base images
+pkgs/<name>/default.nix      # Custom derivations (14 packages)
 ```
