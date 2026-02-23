@@ -1,8 +1,7 @@
 { ... }:
 { config, pkgs, lib, ... }:
 let
-  # Override ollama-rocm to a more recent version
-  ollama-rocm-latest = pkgs.ollama-rocm.overrideAttrs (old: rec {
+  ollama-vulkan-latest = pkgs.ollama-vulkan.overrideAttrs (old: rec {
     version = "0.15.6";
     src = old.src.override {
       tag = "v${version}";
@@ -19,12 +18,8 @@ in
 
   services.ollama = {
     enable = true;
-    acceleration = "rocm";
-    package = ollama-rocm-latest;
-    environmentVariables = {
-      HCC_AMDGPU_TARGET = "gfx1151";
-    };
-    rocmOverrideGfx = "11.0.0";
+    acceleration = false;
+    package = ollama-vulkan-latest;
     openFirewall = false;
   };
 
