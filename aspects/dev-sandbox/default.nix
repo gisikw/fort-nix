@@ -439,8 +439,8 @@ in
   };
 
   # Matrix-Claude bridge
-  systemd.services.exo-bridge = {
-    description = "Matrix-Claude bridge";
+  systemd.services.cranium = {
+    description = "Matrix-Claude bridge (cranium)";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
@@ -448,7 +448,7 @@ in
       Type = "simple";
       User = user;
       Group = "users";
-      WorkingDirectory = "${homeDir}/Projects/exocortex";
+      WorkingDirectory = "${homeDir}/Projects/cranium";
       Restart = "always";
       RestartSec = "5s";
       EnvironmentFile = "/var/lib/fort/dev-sandbox/env";
@@ -457,12 +457,13 @@ in
       HOME = homeDir;
       FORT_SSH_KEY = agentKeyPath;
       FORT_ORIGIN = "dev-sandbox";
+      CRANIUM_CONFIG = "${homeDir}/Projects/cranium/cranium.yaml";
     };
     path = devTools ++ [ pkgs.bash ];
     script = ''
       . /etc/set-environment
       export PATH="${homeDir}/.local/bin:$PATH"
-      exec ${homeDir}/Projects/exocortex/cmd/exo-bridge/exo-bridge
+      exec ${homeDir}/Projects/cranium/cranium
     '';
   };
 
