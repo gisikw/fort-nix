@@ -11,7 +11,7 @@
       User = "dev";
       Group = "users";
       WorkingDirectory = "/home/dev/Projects/exocortex";
-      ExecStart = "/home/dev/.local/bin/ko serve -p 9877";
+      ExecStart = "/home/dev/.local/bin/ko serve --port 9877";
       Restart = "on-failure";
       RestartSec = 5;
 
