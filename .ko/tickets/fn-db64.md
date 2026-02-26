@@ -1,6 +1,6 @@
 ---
 id: fn-db64
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-02-22T23:10:02Z

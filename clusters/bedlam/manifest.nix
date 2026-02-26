@@ -130,15 +130,6 @@ rec {
             };
           };
         };
-        "punchlist" = {
-          mirrors = {
-            github = {
-              remote = "github.com/gisikw/punchlist";
-              tokenFile = ./github-mirror-token.age;
-              branches = [ "main" ];
-            };
-          };
-        };
         "rep" = {
           mirrors = {
             github = {

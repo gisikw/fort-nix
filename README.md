@@ -137,7 +137,6 @@ The target host deploys with `switch-to-configuration test` — a reboot reverts
 | outline | Team knowledge base (OIDC SSO) |
 | pocket-id | OIDC identity provider backed by LDAP |
 | prowlarr | Indexer manager for *arr stack |
-| punchlist | Lightweight task list app |
 | qbittorrent | BitTorrent client (egress VPN) |
 | radarr | Movie collection manager |
 | radicale | CalDAV/CardDAV server |

@@ -1,8 +1,7 @@
 ---
 id: fn-a1cd
-status: open
+status: closed
 deps: []
-links: []
 created: 2026-02-22T07:39:03Z
 type: task
 priority: 2
