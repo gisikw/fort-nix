@@ -14,7 +14,6 @@ rec {
     }
     "vdirsyncer-auth"
     "radicale"
-    "punchlist"
     "knockout"
     "apple-dist"
     "conduit"
