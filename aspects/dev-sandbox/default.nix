@@ -19,6 +19,8 @@ let
   fort = import ../../pkgs/fort { inherit pkgs domain; };
   cursor-agent = import ../../pkgs/cursor-agent { inherit pkgs; };
   codex = import ../../pkgs/codex { inherit pkgs; };
+  gemini-cli = import ../../pkgs/gemini-cli { inherit pkgs; };
+  pi-coding-agent = import ../../pkgs/pi-coding-agent { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
   # Note: chmod 644 so dev user can read it for git credential helper
@@ -94,7 +96,9 @@ let
     claude-code
     codex
     cursor-agent
+    gemini-cli
     opencode
+    pi-coding-agent
     beads
     ticket
 
