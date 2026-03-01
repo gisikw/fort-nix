@@ -12,30 +12,14 @@ let
     sha256 = modelHash;
   };
 
-  # whisper-cpp with ROCm/hipBLAS support for AMD GPU
-  # HIP runtime detects gfx1102, HSA reports gfx1151 - compile for both
-  gpuTargets = "gfx1102;gfx1151";
-
-  whisper-cpp-rocm = (pkgs.whisper-cpp.override {
-    rocmSupport = true;
-    rocmGpuTargets = gpuTargets;
-  }).overrideAttrs (old: {
-    # Force HIP backend build - both old and new cmake flag names
-    cmakeFlags = (old.cmakeFlags or [ ]) ++ [
-      "-DGGML_HIP=ON"
-      "-DGGML_HIPBLAS=ON"
-      "-DAMDGPU_TARGETS=${gpuTargets}"
-    ];
-  });
+  # Vulkan-accelerated whisper-cpp — ROCm is unreliable on lordhenry's 8060S
+  whisper-cpp-vulkan = pkgs.whisper-cpp.override {
+    vulkanSupport = true;
+  };
 
   # Simple wrapper that pre-configures the model
   whisper-transcribe = pkgs.writeShellScriptBin "whisper-transcribe" ''
-    # ROCm environment for gfx1151 (Radeon 8060S)
-    export HSA_OVERRIDE_GFX_VERSION=11.0.2
-    export HCC_AMDGPU_TARGET=gfx1151
-
-    # Default to outputting just the text, but allow overrides
-    exec ${whisper-cpp-rocm}/bin/whisper-cli \
+    exec ${whisper-cpp-vulkan}/bin/whisper-cli \
       --model ${modelFile} \
       --output-txt \
       "$@"
@@ -50,14 +34,13 @@ let
 
 in
 {
+  hardware.graphics.enable = true;
+
   environment.systemPackages = [
     pkgs.ffmpeg
-    whisper-cpp-rocm
+    whisper-cpp-vulkan
     whisper-transcribe
   ];
-
-  # Ensure ROCm drivers are available
-  hardware.graphics.extraPackages = [ pkgs.rocmPackages.clr.icd ];
 
   # Expose transcribe capability for cluster-wide audio transcription
   fort.host.capabilities.transcribe = {
