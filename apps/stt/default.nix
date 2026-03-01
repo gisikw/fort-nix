@@ -8,26 +8,12 @@ let
     sha256 = "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2";
   };
 
-  # whisper-cpp with ROCm/hipBLAS support for AMD GPU
-  gpuTargets = "gfx1102;gfx1151";
-
-  whisper-cpp-rocm = (pkgs.whisper-cpp.override {
-    rocmSupport = true;
-    rocmGpuTargets = gpuTargets;
-  }).overrideAttrs (old: {
-    cmakeFlags = (old.cmakeFlags or [ ]) ++ [
-      "-DGGML_HIP=ON"
-      "-DGGML_HIPBLAS=ON"
-      "-DAMDGPU_TARGETS=${gpuTargets}"
-    ];
-  });
-
+  # CPU-only whisper-cpp — ROCm GPU on lordhenry is unreliable (page faults)
   whisper-transcribe = pkgs.writeShellScriptBin "whisper-transcribe" ''
-    export HSA_OVERRIDE_GFX_VERSION=11.0.2
-    export HCC_AMDGPU_TARGET=gfx1151
-    exec ${whisper-cpp-rocm}/bin/whisper-cli \
+    exec ${pkgs.whisper-cpp}/bin/whisper-cli \
       --model ${modelFile} \
       --output-txt \
+      --no-prints \
       "$@"
   '';
 
@@ -54,24 +40,18 @@ let
 
 in
 {
-  # ROCm drivers (merged with whisper app's identical declaration)
-  hardware.graphics.extraPackages = [ pkgs.rocmPackages.clr.icd ];
-
   systemd.services.stt = {
     description = "Speech-to-Text HTTP Service";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
-
-    environment = {
-      HSA_OVERRIDE_GFX_VERSION = "11.0.2";
-      HCC_AMDGPU_TARGET = "gfx1151";
-    };
 
     serviceConfig = {
       Type = "simple";
       ExecStart = "${stt}/bin/stt";
       Restart = "always";
       RestartSec = "5s";
+      DynamicUser = true;
+      PrivateTmp = true;
     };
   };
 
