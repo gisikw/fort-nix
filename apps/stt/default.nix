@@ -8,9 +8,13 @@ let
     sha256 = "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2";
   };
 
-  # CPU-only whisper-cpp — ROCm GPU on lordhenry is unreliable (page faults)
+  # Vulkan-accelerated whisper-cpp — ROCm is unreliable on lordhenry's 8060S
+  whisper-cpp-vulkan = pkgs.whisper-cpp.override {
+    vulkanSupport = true;
+  };
+
   whisper-transcribe = pkgs.writeShellScriptBin "whisper-transcribe" ''
-    exec ${pkgs.whisper-cpp}/bin/whisper-cli \
+    exec ${whisper-cpp-vulkan}/bin/whisper-cli \
       --model ${modelFile} \
       --output-txt \
       --no-prints \
@@ -40,6 +44,8 @@ let
 
 in
 {
+  hardware.graphics.enable = true;
+
   systemd.services.stt = {
     description = "Speech-to-Text HTTP Service";
     after = [ "network.target" ];
@@ -51,6 +57,7 @@ in
       Restart = "always";
       RestartSec = "5s";
       DynamicUser = true;
+      SupplementaryGroups = [ "video" "render" ];
       PrivateTmp = true;
     };
   };
