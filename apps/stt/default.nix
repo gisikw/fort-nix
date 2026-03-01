@@ -73,6 +73,7 @@ in
       Restart = "always";
       RestartSec = "5s";
       DynamicUser = true;
+      SupplementaryGroups = [ "video" "render" ];
       NoNewPrivileges = true;
       ProtectSystem = "strict";
       ProtectHome = true;
