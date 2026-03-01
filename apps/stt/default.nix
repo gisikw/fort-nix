@@ -72,12 +72,6 @@ in
       ExecStart = "${stt}/bin/stt";
       Restart = "always";
       RestartSec = "5s";
-      DynamicUser = true;
-      SupplementaryGroups = [ "video" "render" ];
-      NoNewPrivileges = true;
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      PrivateTmp = true;
     };
   };
 
