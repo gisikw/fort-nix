@@ -4,12 +4,32 @@
 let
   domain = rootManifest.fortConfig.settings.domain;
 
-  # Go handler for tts capability
+  # Go handler for tts capability (RPC-based, uploads result to target host)
   ttsProvider = import ./provider {
     inherit pkgs domain;
   };
 
   containerPort = 8880;
+  httpPort = 8788;
+
+  # HTTP service for direct "text in, audio out" access
+  ttsHttp = pkgs.buildGoModule {
+    pname = "tts-http";
+    version = "0.1.0";
+    src = ./http;
+    vendorHash = null;
+
+    ldflags = [
+      "-X main.backendURL=http://127.0.0.1:${toString containerPort}/v1/audio/speech"
+      "-X main.listenAddr=127.0.0.1:${toString httpPort}"
+    ];
+
+    meta = with pkgs.lib; {
+      description = "Text-to-speech HTTP service";
+      license = licenses.mit;
+      platforms = platforms.linux;
+    };
+  };
 
 in
 {
@@ -18,11 +38,36 @@ in
     ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
   };
 
-  # Expose tts capability for cluster-wide text-to-speech
+  # Expose tts capability for cluster-wide text-to-speech (RPC, upload-to-host)
   fort.host.capabilities.tts = {
     handler = "${ttsProvider}/bin/tts-provider";
     mode = "rpc";
     allowed = [ "dev-sandbox" ];
     description = "Synthesize speech from text and upload result to target host";
   };
+
+  # HTTP endpoint: tts.gisi.network
+  systemd.services.tts-http = {
+    description = "Text-to-Speech HTTP Service";
+    after = [ "network.target" "podman-kokoro-tts.service" ];
+    wantedBy = [ "multi-user.target" ];
+
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${ttsHttp}/bin/tts-http";
+      Restart = "always";
+      RestartSec = "5s";
+      DynamicUser = true;
+    };
+  };
+
+  fort.cluster.services = [{
+    name = "tts";
+    port = httpPort;
+    visibility = "public";
+    sso = {
+      mode = "token";
+      vpnBypass = true;
+    };
+  }];
 }
