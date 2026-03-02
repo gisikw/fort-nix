@@ -175,6 +175,15 @@ rec {
             };
           };
         };
+        "hearth" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/hearth";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
