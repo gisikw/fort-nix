@@ -13,6 +13,11 @@ let
   bootstrapDir = "/var/lib/temporal/bootstrap";
 
   sqlToolFlags = "--plugin postgres12 --ep 127.0.0.1 -p ${toString pgPort} -u ${dbUser}";
+
+  uiConfigDir = pkgs.writeTextDir "temporal-ui.yaml" (builtins.toJSON {
+    temporalGrpcAddress = "127.0.0.1:${toString grpcPort}";
+    port = uiPort;
+  });
 in
 {
   # --- PostgreSQL ---
@@ -210,14 +215,9 @@ in
     wants = [ "temporal.service" ];
     wantedBy = [ "multi-user.target" ];
 
-    environment = {
-      TEMPORAL_ADDRESS = "127.0.0.1:${toString grpcPort}";
-      TEMPORAL_UI_PORT = toString uiPort;
-    };
-
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server start";
+      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server --config ${uiConfigDir} --env temporal-ui start";
       Restart = "on-failure";
       RestartSec = "5s";
       DynamicUser = true;
