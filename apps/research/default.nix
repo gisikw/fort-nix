@@ -18,7 +18,7 @@ in
       Group = "users";
       WorkingDirectory = "${homeDir}/Projects/research";
       ExecStart = "${homeDir}/Projects/research/research-server --dir ${findingsDir} --port ${toString port}";
-      Restart = "on-failure";
+      Restart = "always";
       RestartSec = 5;
     };
   };
