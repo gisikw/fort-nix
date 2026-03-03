@@ -61,7 +61,7 @@ in
         psql -h 127.0.0.1 -U postgres -d postgres -c \
           "CREATE ROLE ${dbUser} LOGIN;"
 
-      MARKER="${bootstrapDir}/schema-initialized"
+      MARKER="${bootstrapDir}/schema-v2"
       if [ ! -f "$MARKER" ]; then
         echo "=== Initial schema setup ==="
 
