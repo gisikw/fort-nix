@@ -15,6 +15,7 @@ rec {
     "vdirsyncer-auth"
     "radicale"
     "knockout"
+    "research"
     "apple-dist"
     "conduit"
     "temporal"

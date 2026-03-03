@@ -184,6 +184,15 @@ rec {
             };
           };
         };
+        "research" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/research";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
