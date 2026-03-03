@@ -14,7 +14,7 @@ let
 
   sqlToolFlags = "--plugin postgres12 --ep 127.0.0.1 -p ${toString pgPort} -u ${dbUser}";
 
-  uiConfigDir = pkgs.writeTextDir "temporal-ui.yaml" (builtins.toJSON {
+  uiConfig = pkgs.writeText "temporal-ui.yaml" (builtins.toJSON {
     temporalGrpcAddress = "127.0.0.1:${toString grpcPort}";
     port = uiPort;
   });
@@ -217,7 +217,11 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server --root / --config ${uiConfigDir} --env temporal-ui start";
+      ExecStartPre = "+" + pkgs.writeShellScript "temporal-ui-setup" ''
+        mkdir -p /run/temporal-ui/config
+        cp ${uiConfig} /run/temporal-ui/config/temporal-ui.yaml
+      '';
+      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server --env temporal-ui start";
       Restart = "on-failure";
       RestartSec = "5s";
       DynamicUser = true;
