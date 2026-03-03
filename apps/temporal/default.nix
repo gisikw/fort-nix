@@ -17,6 +17,7 @@ let
   uiConfig = pkgs.writeText "temporal-ui.yaml" (builtins.toJSON {
     temporalGrpcAddress = "127.0.0.1:${toString grpcPort}";
     port = uiPort;
+    enableUi = true;
   });
 in
 {
