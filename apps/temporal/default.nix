@@ -1,0 +1,238 @@
+{ subdomain ? "temporal", ... }:
+{ config, lib, pkgs, ... }:
+
+let
+  temporal = pkgs.temporal;
+  temporalSqlTool = "${temporal}/bin/temporal-sql-tool";
+  schemaDir = "${temporal}/share/schema/postgresql/v12";
+
+  uiPort = 8233;
+  grpcPort = 7233;
+  pgPort = 5432;
+  dbUser = "temporal";
+  bootstrapDir = "/var/lib/temporal/bootstrap";
+
+  sqlToolFlags = "--plugin postgres12 --ep 127.0.0.1 -p ${toString pgPort} -u ${dbUser}";
+in
+{
+  # --- PostgreSQL ---
+  services.postgresql = {
+    enable = true;
+    # Trust auth on localhost — dev sandbox, no password complexity needed
+    authentication = lib.mkForce ''
+      # TYPE  DATABASE        USER            ADDRESS                 METHOD
+      local   all             all                                     trust
+      host    all             all             127.0.0.1/32            trust
+      host    all             all             ::1/128                 trust
+    '';
+  };
+
+  # --- Schema Bootstrap ---
+  systemd.services.temporal-schema-bootstrap = {
+    description = "Temporal database schema setup and migration";
+    after = [ "postgresql.service" ];
+    requires = [ "postgresql.service" ];
+    wantedBy = [ "multi-user.target" ];
+
+    path = [ temporal pkgs.postgresql ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+
+    script = ''
+      set -euo pipefail
+
+      mkdir -p ${bootstrapDir}
+
+      # Wait for PostgreSQL to accept connections
+      for i in $(seq 1 30); do
+        if psql -h 127.0.0.1 -U postgres -d postgres -c "SELECT 1" > /dev/null 2>&1; then
+          break
+        fi
+        echo "Waiting for PostgreSQL..."
+        sleep 2
+      done
+
+      # Ensure temporal role exists
+      psql -h 127.0.0.1 -U postgres -d postgres -tc \
+        "SELECT 1 FROM pg_roles WHERE rolname='${dbUser}'" | grep -q 1 || \
+        psql -h 127.0.0.1 -U postgres -d postgres -c \
+          "CREATE ROLE ${dbUser} LOGIN;"
+
+      MARKER="${bootstrapDir}/schema-initialized"
+      if [ ! -f "$MARKER" ]; then
+        echo "=== Initial schema setup ==="
+
+        # Create databases
+        psql -h 127.0.0.1 -U postgres -d postgres -tc \
+          "SELECT 1 FROM pg_database WHERE datname='temporal'" | grep -q 1 || \
+          psql -h 127.0.0.1 -U postgres -d postgres -c \
+            "CREATE DATABASE temporal OWNER ${dbUser};"
+
+        psql -h 127.0.0.1 -U postgres -d postgres -tc \
+          "SELECT 1 FROM pg_database WHERE datname='temporal_visibility'" | grep -q 1 || \
+          psql -h 127.0.0.1 -U postgres -d postgres -c \
+            "CREATE DATABASE temporal_visibility OWNER ${dbUser};"
+
+        # Apply base schema (embedded)
+        ${temporalSqlTool} ${sqlToolFlags} \
+          --db temporal setup-schema -v 0.0 \
+          --schema-name postgresql/v12/temporal
+
+        ${temporalSqlTool} ${sqlToolFlags} \
+          --db temporal_visibility setup-schema -v 0.0 \
+          --schema-name postgresql/v12/visibility
+
+        touch "$MARKER"
+        echo "Initial schema setup complete"
+      fi
+
+      # Always run versioned migrations (idempotent — skips already-applied)
+      echo "=== Running schema migrations ==="
+      ${temporalSqlTool} ${sqlToolFlags} \
+        --db temporal update-schema \
+        -d ${schemaDir}/temporal/versioned
+
+      ${temporalSqlTool} ${sqlToolFlags} \
+        --db temporal_visibility update-schema \
+        -d ${schemaDir}/visibility/versioned
+
+      echo "Schema migrations complete"
+    '';
+  };
+
+  # --- Temporal Server (NixOS module) ---
+  services.temporal = {
+    enable = true;
+    settings = {
+      log = {
+        stdout = true;
+        level = "info";
+      };
+      persistence = {
+        numHistoryShards = 4;
+        defaultStore = "default";
+        visibilityStore = "visibility";
+        datastores = {
+          default.sql = {
+            pluginName = "postgres12";
+            databaseName = "temporal";
+            connectAddr = "127.0.0.1:${toString pgPort}";
+            user = dbUser;
+            password = "";
+            maxConns = 20;
+            maxIdleConns = 20;
+          };
+          visibility.sql = {
+            pluginName = "postgres12";
+            databaseName = "temporal_visibility";
+            connectAddr = "127.0.0.1:${toString pgPort}";
+            user = dbUser;
+            password = "";
+            maxConns = 10;
+            maxIdleConns = 10;
+          };
+        };
+      };
+      global = {
+        membership.broadcastAddress = "127.0.0.1";
+      };
+      services = {
+        frontend.rpc = {
+          grpcPort = grpcPort;
+          membershipPort = 6933;
+          bindOnLocalHost = true;
+        };
+        history.rpc = {
+          grpcPort = 7234;
+          membershipPort = 6934;
+          bindOnLocalHost = true;
+        };
+        matching.rpc = {
+          grpcPort = 7235;
+          membershipPort = 6935;
+          bindOnLocalHost = true;
+        };
+        worker.rpc = {
+          grpcPort = 7239;
+          membershipPort = 6939;
+          bindOnLocalHost = true;
+        };
+      };
+      clusterMetadata = {
+        enableGlobalNamespace = false;
+        failoverVersionIncrement = 10;
+        masterClusterName = "active";
+        currentClusterName = "active";
+        clusterInformation.active = {
+          enabled = true;
+          initialFailoverVersion = 1;
+          rpcName = "frontend";
+          rpcAddress = "127.0.0.1:${toString grpcPort}";
+        };
+      };
+      dcRedirectionPolicy.policy = "noop";
+      archival = {
+        history.state = "disabled";
+        visibility.state = "disabled";
+      };
+      namespaceDefaults.archival = {
+        history.state = "disabled";
+        visibility.state = "disabled";
+      };
+      publicClient.hostPort = "127.0.0.1:${toString grpcPort}";
+    };
+  };
+
+  # Depend on schema bootstrap
+  systemd.services.temporal = {
+    after = [ "temporal-schema-bootstrap.service" ];
+    requires = [ "temporal-schema-bootstrap.service" ];
+  };
+
+  # --- Temporal UI ---
+  systemd.services.temporal-ui = {
+    description = "Temporal Web UI";
+    after = [ "temporal.service" ];
+    wants = [ "temporal.service" ];
+    wantedBy = [ "multi-user.target" ];
+
+    environment = {
+      TEMPORAL_ADDRESS = "127.0.0.1:${toString grpcPort}";
+      TEMPORAL_UI_PORT = toString uiPort;
+    };
+
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server start";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      DynamicUser = true;
+      RuntimeDirectory = "temporal-ui";
+      WorkingDirectory = "/run/temporal-ui";
+      CapabilityBoundingSet = [ "" ];
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      PrivateTmp = true;
+      ProtectHome = true;
+      ProtectSystem = "strict";
+      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+    };
+  };
+
+  # Persistent bootstrap state
+  systemd.tmpfiles.rules = [
+    "d ${bootstrapDir} 0700 root root -"
+  ];
+
+  # --- Service Exposure ---
+  fort.cluster.services = [{
+    name = "temporal";
+    inherit subdomain;
+    port = uiPort;
+    visibility = "local";
+    sso.mode = "none";
+  }];
+}

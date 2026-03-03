@@ -112,6 +112,9 @@ let
     # Diagramming
     d2
 
+    # Workflow orchestration
+    temporal-cli
+
     # Matrix
     matrix-conduit
   ];

@@ -17,6 +17,7 @@ rec {
     "knockout"
     "apple-dist"
     "conduit"
+    "temporal"
   ];
 
   aspects = [
