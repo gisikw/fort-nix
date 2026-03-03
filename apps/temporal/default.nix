@@ -129,6 +129,7 @@ in
             pluginName = "postgres12";
             databaseName = "temporal";
             connectAddr = "127.0.0.1:${toString pgPort}";
+            connectProtocol = "tcp";
             user = dbUser;
             password = "";
             maxConns = 20;
@@ -138,6 +139,7 @@ in
             pluginName = "postgres12";
             databaseName = "temporal_visibility";
             connectAddr = "127.0.0.1:${toString pgPort}";
+            connectProtocol = "tcp";
             user = dbUser;
             password = "";
             maxConns = 10;
