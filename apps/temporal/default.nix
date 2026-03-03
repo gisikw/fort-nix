@@ -217,7 +217,7 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server --config ${uiConfigDir} --env temporal-ui start";
+      ExecStart = "${pkgs.temporal-ui-server}/bin/temporal-ui-server --root / --config ${uiConfigDir} --env temporal-ui start";
       Restart = "on-failure";
       RestartSec = "5s";
       DynamicUser = true;
