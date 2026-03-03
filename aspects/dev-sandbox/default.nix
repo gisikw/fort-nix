@@ -109,6 +109,9 @@ let
     vdirsyncer
     khal
 
+    # Diagramming
+    d2
+
     # Matrix
     matrix-conduit
   ];
