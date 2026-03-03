@@ -65,31 +65,40 @@ in
       if [ ! -f "$MARKER" ]; then
         echo "=== Initial schema setup ==="
 
-        # Create databases
-        psql -h 127.0.0.1 -U postgres -d postgres -tc \
-          "SELECT 1 FROM pg_database WHERE datname='temporal'" | grep -q 1 || \
-          psql -h 127.0.0.1 -U postgres -d postgres -c \
-            "CREATE DATABASE temporal OWNER ${dbUser};"
+        # Drop databases if they exist (clean slate when marker is absent)
+        psql -h 127.0.0.1 -U postgres -d postgres -c \
+          "DROP DATABASE IF EXISTS temporal;"
+        psql -h 127.0.0.1 -U postgres -d postgres -c \
+          "DROP DATABASE IF EXISTS temporal_visibility;"
 
-        psql -h 127.0.0.1 -U postgres -d postgres -tc \
-          "SELECT 1 FROM pg_database WHERE datname='temporal_visibility'" | grep -q 1 || \
-          psql -h 127.0.0.1 -U postgres -d postgres -c \
-            "CREATE DATABASE temporal_visibility OWNER ${dbUser};"
+        # Create fresh databases
+        psql -h 127.0.0.1 -U postgres -d postgres -c \
+          "CREATE DATABASE temporal OWNER ${dbUser};"
+        psql -h 127.0.0.1 -U postgres -d postgres -c \
+          "CREATE DATABASE temporal_visibility OWNER ${dbUser};"
 
-        # Apply base schema (embedded)
+        # Create version tracking tables (no --schema-name; let update-schema
+        # apply the actual schema from v1.0 onward)
         ${temporalSqlTool} ${sqlToolFlags} \
-          --db temporal setup-schema -v 0.0 \
-          --schema-name postgresql/v12/temporal
+          --db temporal setup-schema -v 0.0
 
         ${temporalSqlTool} ${sqlToolFlags} \
-          --db temporal_visibility setup-schema -v 0.0 \
-          --schema-name postgresql/v12/visibility
+          --db temporal_visibility setup-schema -v 0.0
+
+        # Apply all versioned migrations (v1.0 through current)
+        ${temporalSqlTool} ${sqlToolFlags} \
+          --db temporal update-schema \
+          -d ${schemaDir}/temporal/versioned
+
+        ${temporalSqlTool} ${sqlToolFlags} \
+          --db temporal_visibility update-schema \
+          -d ${schemaDir}/visibility/versioned
 
         touch "$MARKER"
         echo "Initial schema setup complete"
       fi
 
-      # Always run versioned migrations (idempotent — skips already-applied)
+      # On subsequent runs, apply any new migrations (idempotent)
       echo "=== Running schema migrations ==="
       ${temporalSqlTool} ${sqlToolFlags} \
         --db temporal update-schema \
