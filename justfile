@@ -586,35 +586,63 @@ test host="":
   #!/usr/bin/env bash
   set -euo pipefail
 
-  run_flake_check() {
-    local target="$1"
-    echo "[Fort] nix flake check ${target}"
-    NIX_CONFIG=$'warn-dirty = false\n' nix flake check "${target}"
-  }
+  export NIX_CONFIG=$'warn-dirty = false\n'
 
   hosts_root="./hosts"
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
 
   # Single host mode
   if [[ -n "{{host}}" ]]; then
-    run_flake_check "${hosts_root}/{{host}}"
+    echo "[Fort] nix flake check ${hosts_root}/{{host}}"
+    nix flake check "${hosts_root}/{{host}}"
     exit 0
   fi
 
-  # Full validation
-  run_flake_check "."
+  # Full validation — all flake checks in parallel
+  fail=0
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' EXIT
+
+  nix flake check . > "$tmpdir/root.log" 2>&1 &
 
   for host in "${hosts_root}"/*; do
     [[ -d "${host}" ]] || continue
-    run_flake_check "${host}"
+    name=$(basename "$host")
+    nix flake check "${host}" > "$tmpdir/host-${name}.log" 2>&1 &
   done
 
   devices_root="./devices"
   if [[ -n "{{cluster}}" ]]; then devices_root="./clusters/{{cluster}}/devices"; fi
   for device in "${devices_root}"/*; do
     [[ -d "${device}" ]] || continue
-    run_flake_check "${device}"
+    name=$(basename "$device")
+    nix flake check "${device}" > "$tmpdir/device-${name}.log" 2>&1 &
   done
+
+  for job in $(jobs -p); do
+    if ! wait "$job"; then fail=1; fi
+  done
+
+  # Print results
+  echo "[Fort] nix flake check ."
+  cat "$tmpdir/root.log"
+  for host in "${hosts_root}"/*; do
+    [[ -d "${host}" ]] || continue
+    name=$(basename "$host")
+    echo "[Fort] nix flake check ${host}"
+    cat "$tmpdir/host-${name}.log"
+  done
+  for device in "${devices_root}"/*; do
+    [[ -d "${device}" ]] || continue
+    name=$(basename "$device")
+    echo "[Fort] nix flake check ${device}"
+    cat "$tmpdir/device-${name}.log"
+  done
+
+  if [[ "$fail" -ne 0 ]]; then
+    echo "[Fort] Flake checks failed"
+    exit 1
+  fi
 
   # Run Go tests for provider directories
   for provider_dir in ./apps/*/provider ./aspects/*/provider; do
