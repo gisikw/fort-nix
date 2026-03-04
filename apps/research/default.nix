@@ -28,7 +28,7 @@ in
     inherit port;
     visibility = "public";
     sso = {
-      mode = "token";
+      mode = "oidc";
       vpnBypass = true;
     };
   }];
