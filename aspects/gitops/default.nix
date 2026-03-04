@@ -201,6 +201,7 @@ else
     remotes = [{
       name = "origin";
       url = repoUrl;
+      poller.period = 30;
       branches.main.name = "release";
       # Testing branch for safe experimentation (deployed with switch-to-configuration test)
       # Push to <hostname>-test on main, CI creates release-<hostname>-test

@@ -61,23 +61,43 @@ jobs:
 
       - name: Check host flakes
         run: |
+          fail=0
           for host_dir in ./clusters/bedlam/hosts/*/; do
             host=$(basename "$host_dir")
-            echo "::group::Checking host: $host"
-            nix flake check "$host_dir" --no-build
+            echo "Checking host: $host"
+            nix flake check "$host_dir" --no-build > "/tmp/check-host-${host}.log" 2>&1 &
+          done
+          for job in $(jobs -p); do
+            if ! wait "$job"; then fail=1; fi
+          done
+          for host_dir in ./clusters/bedlam/hosts/*/; do
+            host=$(basename "$host_dir")
+            echo "::group::Host: $host"
+            cat "/tmp/check-host-${host}.log"
             echo "::endgroup::"
           done
+          [ "$fail" -eq 0 ]
         env:
           NIX_CONFIG: "warn-dirty = false"
 
       - name: Check device flakes
         run: |
+          fail=0
           for device_dir in ./clusters/bedlam/devices/*/; do
             device=$(basename "$device_dir")
-            echo "::group::Checking device: $device"
-            nix flake check "$device_dir" --no-build
+            echo "Checking device: $device"
+            nix flake check "$device_dir" --no-build > "/tmp/check-device-${device}.log" 2>&1 &
+          done
+          for job in $(jobs -p); do
+            if ! wait "$job"; then fail=1; fi
+          done
+          for device_dir in ./clusters/bedlam/devices/*/; do
+            device=$(basename "$device_dir")
+            echo "::group::Device: $device"
+            cat "/tmp/check-device-${device}.log"
             echo "::endgroup::"
           done
+          [ "$fail" -eq 0 ]
         env:
           NIX_CONFIG: "warn-dirty = false"
 
@@ -93,60 +113,76 @@ jobs:
       - name: Collect secrets and build recipients map
         id: collect
         run: |
-          mkdir -p /tmp/release-work
+          mkdir -p /tmp/release-work/per-host
 
-          # Will hold: { "path/to/secret.age": { "recipients": ["key1", ...], "contentSha": "abc123" }, ... }
-          echo '{}' > /tmp/release-work/recipients-map.json
+          # Collect each host's secrets in parallel
+          for host_dir in ./clusters/bedlam/hosts/*/; do
+            host=$(basename "$host_dir")
+            (
+              outfile="/tmp/release-work/per-host/${host}.json"
+              logfile="/tmp/release-work/per-host/${host}.log"
+              echo '{}' > "$outfile"
 
+              # Get device UUID from host manifest
+              device_uuid=$(nix eval --raw --file "${host_dir}/manifest.nix" device 2>/dev/null || echo "")
+              if [ -z "$device_uuid" ]; then
+                echo "::warning::Could not get device UUID for $host, skipping" > "$logfile"
+                exit 0
+              fi
+
+              # Get device public key
+              device_key=$(nix eval --raw --file "./clusters/bedlam/devices/${device_uuid}/manifest.nix" pubkey 2>/dev/null || echo "")
+              if [ -z "$device_key" ]; then
+                echo "::warning::Could not get device key for $host (device $device_uuid), skipping" > "$logfile"
+                exit 0
+              fi
+
+              {
+                echo "Device: $device_uuid"
+                echo "Key: ${device_key:0:20}..."
+              } > "$logfile"
+
+              # Get secrets this host uses (try nixos first, then darwin)
+              secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${host}.config.age.secrets" --json 2>/dev/null \
+                || nix eval "${host_dir}#darwinConfigurations.${host}.config.age.secrets" --json 2>/dev/null \
+                || echo "{}")
+
+              # Build per-host map: { "path": { "recipients": ["key"], "contentSha": "..." } }
+              echo "$secrets_json" | jq -r 'to_entries[] | .value.file // empty' | while read -r secret_file; do
+                secret_path=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
+                echo "  Secret: $secret_path" >> "$logfile"
+                content_sha=$(git log -1 --format=%H -- "$secret_path" 2>/dev/null || echo "unknown")
+
+                jq --arg path "$secret_path" --arg key "$device_key" --arg sha "$content_sha" \
+                  '.[$path] = {
+                    recipients: ((.[$path].recipients // []) + [$key] | unique | sort),
+                    contentSha: $sha
+                  }' "$outfile" > "${outfile}.tmp"
+                mv "${outfile}.tmp" "$outfile"
+              done
+            ) &
+          done
+          wait
+
+          # Print logs and merge per-host maps
           for host_dir in ./clusters/bedlam/hosts/*/; do
             host=$(basename "$host_dir")
             echo "::group::Collecting secrets for $host"
-
-            # Get device UUID from host manifest
-            device_uuid=$(nix eval --raw --file "${host_dir}/manifest.nix" device 2>/dev/null || echo "")
-            if [ -z "$device_uuid" ]; then
-              echo "::warning::Could not get device UUID for $host, skipping"
-              echo "::endgroup::"
-              continue
-            fi
-
-            # Get device public key
-            device_key=$(nix eval --raw --file "./clusters/bedlam/devices/${device_uuid}/manifest.nix" pubkey 2>/dev/null || echo "")
-            if [ -z "$device_key" ]; then
-              echo "::warning::Could not get device key for $host (device $device_uuid), skipping"
-              echo "::endgroup::"
-              continue
-            fi
-
-            echo "Device: $device_uuid"
-            echo "Key: ${device_key:0:20}..."
-
-            # Get secrets this host uses (try nixos first, then darwin)
-            secrets_json=$(nix eval "${host_dir}#nixosConfigurations.${host}.config.age.secrets" --json 2>/dev/null \
-              || nix eval "${host_dir}#darwinConfigurations.${host}.config.age.secrets" --json 2>/dev/null \
-              || echo "{}")
-
-            # Extract .file paths and add device key to recipients map
-            echo "$secrets_json" | jq -r 'to_entries[] | .value.file // empty' | while read -r secret_file; do
-              # Strip /nix/store/*-source/ prefix to get relative path
-              secret_path=$(echo "$secret_file" | sed 's|^/nix/store/[^/]*-source/||')
-              echo "  Secret: $secret_path"
-
-              # Get the SHA of the last commit that changed this secret file
-              content_sha=$(git log -1 --format=%H -- "$secret_path" 2>/dev/null || echo "unknown")
-
-              # Add/update this secret in the map with recipient and content SHA
-              jq --arg path "$secret_path" --arg key "$device_key" --arg sha "$content_sha" \
-                '.[$path] = {
-                  recipients: ((.[$path].recipients // []) + [$key] | unique | sort),
-                  contentSha: $sha
-                }' \
-                /tmp/release-work/recipients-map.json > /tmp/release-work/recipients-map.json.tmp
-              mv /tmp/release-work/recipients-map.json.tmp /tmp/release-work/recipients-map.json
-            done
-
+            cat "/tmp/release-work/per-host/${host}.log" 2>/dev/null || true
             echo "::endgroup::"
           done
+
+          # Merge: for each secret path, union recipients across hosts
+          jq -s '
+            reduce .[] as $host ({};
+              reduce ($host | to_entries[]) as $e (.;
+                .[$e.key] = {
+                  recipients: ((.[$e.key].recipients // []) + $e.value.recipients | unique | sort),
+                  contentSha: $e.value.contentSha
+                }
+              )
+            )
+          ' /tmp/release-work/per-host/*.json > /tmp/release-work/recipients-map.json
 
           echo "Final recipients map:"
           jq . /tmp/release-work/recipients-map.json
