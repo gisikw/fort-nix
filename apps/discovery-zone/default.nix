@@ -12,7 +12,7 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
 
-    path = [ "${homeDir}/.local/bin" ];
+    path = [ "${homeDir}/.local" ];
 
     serviceConfig = {
       Type = "simple";
