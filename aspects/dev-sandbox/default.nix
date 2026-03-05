@@ -91,6 +91,7 @@ let
     # Elixir
     elixir
     erlang
+    postgresql
 
     # C/build tools
     gcc
@@ -155,6 +156,9 @@ in
 
   # Install dev tools system-wide
   environment.systemPackages = devTools;
+
+  # PostgreSQL for local development
+  services.postgresql.enable = true;
 
   # Enable zsh with tmux auto-attach
   programs.zsh = {
