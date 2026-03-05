@@ -1,5 +1,5 @@
 { ... }:
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 
 let
   port = 9878;
@@ -12,7 +12,7 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
 
-    path = [ "${homeDir}/.local" ];
+    path = config.environment.systemPackages ++ [ "${homeDir}/.local" ];
 
     serviceConfig = {
       Type = "simple";
