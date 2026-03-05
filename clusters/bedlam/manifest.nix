@@ -184,10 +184,10 @@ rec {
             };
           };
         };
-        "research" = {
+        "discovery-zone" = {
           mirrors = {
             github = {
-              remote = "github.com/gisikw/research";
+              remote = "github.com/gisikw/discovery-zone";
               tokenFile = ./github-mirror-token.age;
               branches = [ "main" ];
             };
