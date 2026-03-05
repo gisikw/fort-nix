@@ -88,6 +88,10 @@ let
     rustfmt
     clippy
 
+    # Elixir
+    elixir
+    erlang
+
     # C/build tools
     gcc
     pkg-config
