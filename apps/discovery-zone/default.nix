@@ -12,6 +12,8 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
 
+    path = [ "${homeDir}/.local/bin" ];
+
     serviceConfig = {
       Type = "simple";
       User = "dev";
