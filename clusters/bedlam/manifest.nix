@@ -202,6 +202,15 @@ rec {
             };
           };
         };
+        "xo" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/xo";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
