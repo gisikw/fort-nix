@@ -32,7 +32,7 @@ in
 
   fort.cluster.services = [
     {
-      name = "craniumv2";
+      name = "cranium";
       inherit port;
       visibility = "public";
       sso = {
