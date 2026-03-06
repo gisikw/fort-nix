@@ -19,6 +19,7 @@ rec {
     "apple-dist"
     "conduit"
     "temporal"
+    "cranium-v2"
   ];
 
   aspects = [
