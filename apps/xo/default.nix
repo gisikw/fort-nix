@@ -24,7 +24,7 @@ in
         "HOME=/home/dev"
         "MIX_ENV=dev"
         "PORT=${toString port}"
-        "PATH=${pkgs.lib.makeBinPath (with pkgs; [ elixir erlang git coreutils bash esbuild tailwindcss_4 ])}:/run/current-system/sw/bin"
+        "PATH=${pkgs.lib.makeBinPath (with pkgs; [ elixir erlang git coreutils bash esbuild tailwindcss_4 ])}:/home/dev/.local/bin:/run/current-system/sw/bin"
       ];
     };
   };
