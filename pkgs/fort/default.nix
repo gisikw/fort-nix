@@ -72,7 +72,7 @@ let
     BODY_FILE="$(${pkgs.coreutils}/bin/mktemp)"
     trap "${pkgs.coreutils}/bin/rm -f '$HEADER_FILE' '$BODY_FILE'" EXIT
 
-    HTTP_CODE="$(${pkgs.curl}/bin/curl -s -w '%{http_code}' -o "$BODY_FILE" \
+    HTTP_CODE="$(${pkgs.curl}/bin/curl -sk -w '%{http_code}' -o "$BODY_FILE" \
       --max-time 30 \
       -X POST \
       -H "Content-Type: application/json" \
