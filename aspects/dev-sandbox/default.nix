@@ -479,7 +479,7 @@ in
       FORT_ORIGIN = "dev-sandbox";
       CRANIUM_CONFIG = "${homeDir}/Projects/cranium/cranium.yaml";
     };
-    path = devTools ++ [ pkgs.bash ];
+    path = devTools ++ [ pkgs.bash pkgs.ffmpeg ];
     script = ''
       . /etc/set-environment
       export PATH="${homeDir}/.local/bin:$PATH"
