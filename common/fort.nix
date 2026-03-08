@@ -318,6 +318,8 @@ in
     # Generate self-signed placeholder certs so nginx can start on fresh hosts.
     # Real certs arrive via ssl-cert need and trigger an nginx reload.
     (lib.mkIf (config.services.nginx.enable && !isCertProvider) {
+      # nginx runs with ProtectSystem=strict — need write access for cert bootstrap
+      systemd.services.nginx.serviceConfig.ReadWritePaths = [ "/var/lib/fort/ssl" ];
       systemd.services.nginx.preStart = lib.mkBefore ''
         if [ ! -f /var/lib/fort/ssl/${domain}/fullchain.pem ]; then
           mkdir -p /var/lib/fort/ssl/${domain}
