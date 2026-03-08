@@ -15,12 +15,7 @@
       ...
     }:
     import ../../../../common/device.nix {
-      inherit
-        self
-        nixpkgs
-        disko
-        impermanence
-        ;
+      inherit self nixpkgs disko impermanence;
       deviceDir = ./.;
     };
 }
