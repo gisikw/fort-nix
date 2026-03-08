@@ -195,6 +195,17 @@ else
     handler = atticTokenHandler;
   };
 
+  # Ensure token file exists (possibly empty) so comin starts without crashing
+  # on fresh hosts. The real token arrives via fort-provider's git-token need,
+  # which restarts comin once delivered.
+  systemd.services.comin.preStart = ''
+    if [ ! -f "${tokenFile}" ]; then
+      mkdir -p "${credDir}"
+      touch "${tokenFile}"
+      chmod 600 "${tokenFile}"
+    fi
+  '';
+
   services.comin = {
     enable = true;
 
