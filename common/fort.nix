@@ -315,6 +315,22 @@ in
       '';
     }
 
+    # Generate self-signed placeholder certs so nginx can start on fresh hosts.
+    # Real certs arrive via ssl-cert need and trigger an nginx reload.
+    (lib.mkIf (config.services.nginx.enable && !isCertProvider) {
+      systemd.services.nginx.preStart = lib.mkBefore ''
+        if [ ! -f /var/lib/fort/ssl/${domain}/fullchain.pem ]; then
+          mkdir -p /var/lib/fort/ssl/${domain}
+          ${pkgs.openssl}/bin/openssl req -x509 -newkey ec \
+            -pkeyopt ec_paramgen_curve:prime256v1 \
+            -days 1 -nodes -subj "/CN=${domain}" \
+            -keyout /var/lib/fort/ssl/${domain}/key.pem \
+            -out /var/lib/fort/ssl/${domain}/fullchain.pem 2>/dev/null
+          cp /var/lib/fort/ssl/${domain}/fullchain.pem /var/lib/fort/ssl/${domain}/chain.pem
+        fi
+      '';
+    })
+
     # SSL certificate need - all hosts with nginx that aren't the cert provider
     (lib.mkIf (config.services.nginx.enable && !isCertProvider) {
       fort.host.needs.ssl-cert.default = {
