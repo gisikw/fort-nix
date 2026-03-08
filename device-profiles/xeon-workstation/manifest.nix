@@ -3,7 +3,7 @@
   system = "x86_64-linux";
   impermanent = true;
   module =
-    { modulesPath, config, ... }:
+    { modulesPath, config, pkgs, ... }:
     {
       imports = [
         (modulesPath + "/installer/scan/not-detected.nix")
@@ -15,6 +15,9 @@
         efiInstallAsRemovable = true;
         devices = [ "nodev" ];
       };
+
+      # Intel CPU microcode (Sandy/Ivy Bridge-E era)
+      hardware.cpu.intel.updateMicrocode = true;
 
       services.openssh.enable = true;
 
