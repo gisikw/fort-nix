@@ -120,6 +120,9 @@ let
     # Workflow orchestration
     temporal-cli
 
+    # Media
+    ffmpeg
+
     # Matrix
     matrix-conduit
   ];
