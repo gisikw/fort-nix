@@ -320,7 +320,7 @@ in
     (lib.mkIf (config.services.nginx.enable && !isCertProvider) {
       # nginx runs with ProtectSystem=strict — need write access for cert bootstrap.
       # tmpfiles ensures the dir exists before systemd sets up the namespace mount.
-      systemd.tmpfiles.rules = [ "d /var/lib/fort/ssl 0755 root root -" ];
+      systemd.tmpfiles.rules = [ "d /var/lib/fort/ssl/${domain} 0755 nginx nginx -" ];
       systemd.services.nginx.serviceConfig.ReadWritePaths = [ "/var/lib/fort/ssl" ];
       systemd.services.nginx.preStart = lib.mkBefore ''
         if [ ! -f /var/lib/fort/ssl/${domain}/fullchain.pem ]; then
