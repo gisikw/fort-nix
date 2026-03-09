@@ -103,11 +103,11 @@ func transcribe(req *validatedRequest) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Convert to mp3 (whisper works best with mp3/wav)
-	mp3Path := filepath.Join(tmpDir, "audio.mp3")
-	fmt.Fprintf(os.Stderr, "[transcribe] converting %s to mp3\n", sourceName)
+	// Convert to 16kHz mono WAV (required by VAD preprocessing and preferred by whisper-cpp)
+	wavPath := filepath.Join(tmpDir, "audio.wav")
+	fmt.Fprintf(os.Stderr, "[transcribe] converting %s to wav\n", sourceName)
 
-	ffCmd := exec.Command(ffmpegPath, "-i", sourcePath, "-y", "-vn", "-acodec", "libmp3lame", "-q:a", "2", mp3Path)
+	ffCmd := exec.Command(ffmpegPath, "-i", sourcePath, "-y", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavPath)
 	ffCmd.Stderr = os.Stderr
 	if err := ffCmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "[transcribe] ERROR: ffmpeg conversion failed: %v\n", err)
@@ -115,10 +115,10 @@ func transcribe(req *validatedRequest) {
 	}
 
 	// Run whisper-transcribe
-	fmt.Fprintf(os.Stderr, "[transcribe] running whisper on %s\n", mp3Path)
+	fmt.Fprintf(os.Stderr, "[transcribe] running whisper on %s\n", wavPath)
 
-	// whisper-transcribe outputs to audio.mp3.txt in same directory
-	wsCmd := exec.Command(whisperPath, "-f", mp3Path)
+	// whisper-transcribe outputs to audio.wav.txt in same directory
+	wsCmd := exec.Command(whisperPath, "-f", wavPath)
 	wsCmd.Dir = tmpDir
 	wsCmd.Stderr = os.Stderr
 	if err := wsCmd.Run(); err != nil {
@@ -127,7 +127,7 @@ func transcribe(req *validatedRequest) {
 	}
 
 	// Read the output
-	txtPath := mp3Path + ".txt"
+	txtPath := wavPath + ".txt"
 	txtContent, err := os.ReadFile(txtPath)
 	if err != nil {
 		// Whisper failed silently - write error message

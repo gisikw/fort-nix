@@ -17,8 +17,20 @@ let
     vulkanSupport = true;
   };
 
-  # Simple wrapper that pre-configures the model
+  # Silero VAD silence stripper (CPU-only, ~165x real-time)
+  vad-strip = import ../../pkgs/vad-strip { inherit pkgs; };
+
+  # Wrapper that runs VAD silence stripping then whisper-cli
   whisper-transcribe = pkgs.writeShellScriptBin "whisper-transcribe" ''
+    # Strip silence via Silero VAD before transcription (non-fatal)
+    prev=""
+    for arg in "$@"; do
+      if [ "$prev" = "-f" ] && [ -f "$arg" ]; then
+        ${vad-strip}/bin/vad-strip "$arg" || true
+        break
+      fi
+      prev="$arg"
+    done
     exec ${whisper-cpp-vulkan}/bin/whisper-cli \
       --model ${modelFile} \
       --output-txt \
