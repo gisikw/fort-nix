@@ -5,8 +5,6 @@ let
   subdomain = "vdirsyncer-auth";
   port = 8088;
   dataDir = "/var/lib/vdirsyncer";
-  user = "vdirsyncer";
-  group = "vdirsyncer";
 
   pythonEnv = pkgs.python3.withPackages (ps: [ ps.requests ]);
 
@@ -16,41 +14,25 @@ let
   '';
 in
 {
-  users.users.${user} = {
-    isSystemUser = true;
-    group = group;
-    description = "vdirsyncer OAuth service";
-    home = dataDir;
-  };
-
-  users.groups.${group} = { };
-
-  # Allow dev user to read the token file
-  users.users.dev.extraGroups = [ group ];
-
-  # Setgid + default ACLs: both vdirsyncer service and dev user write tokens here.
-  # vdirsyncer (sync service, running as dev) does atomic writes that create new inodes,
-  # so we need default ACLs ensuring both users always get rw on newly created files.
+  # Single user for both auth helper and sync timer eliminates the two-writer
+  # permission problem that five previous fixes (group perms, chown, setgid,
+  # default ACLs) couldn't solve — vdirsyncer's atomic writes create files
+  # with mode 0600, zeroing the ACL mask regardless of directory defaults.
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 2770 ${user} ${group}"
-    "a+ ${dataDir} - - - - default:user::rwx"
-    "a+ ${dataDir} - - - - default:user:dev:rw-"
-    "a+ ${dataDir} - - - - default:group::rw-"
-    "a+ ${dataDir} - - - - default:mask::rwx"
-    "a+ ${dataDir} - - - - default:other::---"
+    "d ${dataDir} 0700 dev users"
   ];
 
   age.secrets.oauth-client-id = {
     file = ../../aspects/dev-sandbox/oauth-client-id.age;
-    owner = user;
-    group = group;
+    owner = "dev";
+    group = "users";
     mode = "0400";
   };
 
   age.secrets.oauth-client-secret = {
     file = ../../aspects/dev-sandbox/oauth-client-secret.age;
-    owner = user;
-    group = group;
+    owner = "dev";
+    group = "users";
     mode = "0400";
   };
 
@@ -61,17 +43,14 @@ in
 
     serviceConfig = {
       Type = "simple";
-      User = user;
-      Group = group;
+      User = "dev";
+      Group = "users";
       WorkingDirectory = dataDir;
       Restart = "always";
       RestartSec = 5;
 
       RuntimeDirectory = "vdirsyncer-auth";
       RuntimeDirectoryMode = "0700";
-
-      # Ensure files are group-writable (belt + suspenders with ACL)
-      UMask = "0007";
 
       # Hardening
       NoNewPrivileges = true;

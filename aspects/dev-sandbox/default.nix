@@ -273,10 +273,10 @@ in
     };
     path = with pkgs; [ coreutils ];
     script = ''
-      # Ensure token file is owned by vdirsyncer and group-readable
+      # Fix token ownership (both auth helper and sync now run as dev)
       if [ -f /var/lib/vdirsyncer/token ]; then
-        chown vdirsyncer:vdirsyncer /var/lib/vdirsyncer/token
-        chmod 640 /var/lib/vdirsyncer/token
+        chown dev:users /var/lib/vdirsyncer/token
+        chmod 600 /var/lib/vdirsyncer/token
       fi
 
       # Read secrets (only root can read these)
@@ -380,7 +380,7 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
       User = user;
-      Group = "vdirsyncer";  # Need vdirsyncer group to read token
+      Group = "users";
     };
     path = with pkgs; [ vdirsyncer ];
     script = ''
@@ -416,7 +416,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = user;
-      Group = "vdirsyncer";
+      Group = "users";
     };
     path = with pkgs; [ vdirsyncer coreutils ];
     script = ''
