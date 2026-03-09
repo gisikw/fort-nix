@@ -271,13 +271,16 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
     };
-    path = with pkgs; [ coreutils ];
+    path = with pkgs; [ coreutils acl ];
     script = ''
-      # Fix token ownership (both auth helper and sync now run as dev)
+      # Fix token ownership and strip stale ACLs from previous multi-user setup
       if [ -f /var/lib/vdirsyncer/token ]; then
         chown dev:users /var/lib/vdirsyncer/token
+        setfacl -b /var/lib/vdirsyncer/token
         chmod 600 /var/lib/vdirsyncer/token
       fi
+      # Strip stale default ACLs from directory
+      setfacl -b /var/lib/vdirsyncer
 
       # Read secrets (only root can read these)
       CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
