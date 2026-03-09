@@ -433,11 +433,11 @@ in
     '';
   };
 
-  # Daily briefing (12:15 UTC = 6:15am Central during CST, 5:15am during CDT)
+  # Daily briefing (11:15 UTC = 6:15am Central during CDT, 5:15am during CST)
   systemd.timers.daily-briefing = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*-*-* 12:15:00";
+      OnCalendar = "*-*-* 11:15:00";
       Persistent = true;  # Run if missed while system was off
     };
   };
