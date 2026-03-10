@@ -9,25 +9,33 @@ in
   systemd.services.cranium-v2 = {
     description = "Cranium v2 - LLM inference pipeline HTTP API";
     wantedBy = [ "multi-user.target" ];
-    after = [ "network.target" "postgresql.service" ];
-    wants = [ "postgresql.service" ];
+    after = [ "network-online.target" "postgresql.service" ];
+    wants = [ "network-online.target" "postgresql.service" ];
 
     serviceConfig = {
       Type = "simple";
       User = "dev";
       Group = "users";
       WorkingDirectory = projectDir;
-      EnvironmentFile = "${projectDir}/.env";
-      ExecStart = "${pkgs.elixir}/bin/mix run --no-halt";
+      EnvironmentFile = [
+        "${projectDir}/.env"
+        "/var/lib/fort/dev-sandbox/env"
+      ];
       Restart = "on-failure";
       RestartSec = 5;
-
-      Environment = [
-        "HOME=/home/dev"
-        "MIX_ENV=dev"
-        "PATH=${pkgs.lib.makeBinPath (with pkgs; [ elixir erlang git coreutils bash ])}:/run/current-system/sw/bin"
-      ];
     };
+    environment = {
+      HOME = "/home/dev";
+      MIX_ENV = "dev";
+      FORT_SSH_KEY = "/var/lib/fort/dev-sandbox/agent-key";
+      FORT_ORIGIN = "dev-sandbox";
+    };
+    path = with pkgs; [ elixir erlang git coreutils bash ffmpeg ];
+    script = ''
+      . /etc/set-environment
+      export PATH="/home/dev/.local/bin:$PATH"
+      exec mix run --no-halt
+    '';
   };
 
   fort.cluster.services = [
