@@ -20,7 +20,7 @@ rec {
     "conduit"
     "temporal"
     "cranium"
-    "xo"
+    "cupola"
   ];
 
   aspects = [

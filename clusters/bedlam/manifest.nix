@@ -202,10 +202,10 @@ rec {
             };
           };
         };
-        "xo" = {
+        "cupola" = {
           mirrors = {
             github = {
-              remote = "github.com/gisikw/xo";
+              remote = "github.com/gisikw/cupola";
               tokenFile = ./github-mirror-token.age;
               branches = [ "main" ];
             };

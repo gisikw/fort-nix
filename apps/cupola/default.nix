@@ -3,11 +3,11 @@
 
 let
   port = 4001;
-  projectDir = "/home/dev/Projects/xo";
+  projectDir = "/home/dev/Projects/cupola";
 in
 {
-  systemd.services.xo = {
-    description = "XO - Command center dashboard";
+  systemd.services.cupola = {
+    description = "Cupola - Command center dashboard";
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
 
@@ -33,7 +33,7 @@ in
 
   fort.cluster.services = [
     {
-      name = "xo";
+      name = "cupola";
       inherit port;
       visibility = "public";
       sso = {
