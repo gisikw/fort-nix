@@ -301,6 +301,7 @@ in
       b = "google_calendar_local"
       collections = ["from a", "from b"]
       metadata = ["color"]
+      conflict_resolution = "a wins"
 
       [storage google_calendar_remote]
       type = "google_calendar"
