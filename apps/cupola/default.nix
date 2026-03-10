@@ -35,9 +35,9 @@ in
     {
       name = "cupola";
       inherit port;
-      visibility = "local";
+      visibility = "public";
       sso = {
-        mode = "oidc";
+        mode = "gatekeeper";
         vpnBypass = true;
       };
     }
