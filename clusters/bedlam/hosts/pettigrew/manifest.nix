@@ -6,7 +6,10 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "observable" ];
+  aspects = [
+    "observable"
+    { name = "wifi-access"; credentialsFile = ./wifi-credentials.env.age; }
+  ];
 
   module =
     { config, ... }:

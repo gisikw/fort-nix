@@ -18,6 +18,7 @@ let
 in
 {
   "./aspects/wifi-access/credentials.env.age".publicKeys = activeKeys;
+  "./clusters/bedlam/hosts/pettigrew/wifi-credentials.env.age".publicKeys = activeKeys;
   "./aspects/mesh/auth-key.age".publicKeys = activeKeys;
   "./aspects/certificate-broker/dns-provider.env.age".publicKeys = activeKeys;
   "./aspects/deployer/deployer-key.age".publicKeys = activeKeys;

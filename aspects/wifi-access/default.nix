@@ -1,8 +1,8 @@
-{ ... }:
+{ credentialsFile ? null, ... }:
 { config, ... }:
 {
   age.secrets.nm-secrets = {
-    file = ./credentials.env.age;
+    file = if credentialsFile != null then credentialsFile else ./credentials.env.age;
     owner = "root";
     group = "root";
   };
