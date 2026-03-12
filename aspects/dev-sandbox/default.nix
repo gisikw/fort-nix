@@ -117,6 +117,9 @@ let
     # Diagramming
     d2
 
+    # Search
+    (import ../../pkgs/qmd { inherit pkgs; })
+
     # Workflow orchestration
     temporal-cli
 

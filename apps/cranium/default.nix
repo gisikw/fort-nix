@@ -30,7 +30,7 @@ in
       FORT_SSH_KEY = "/var/lib/fort/dev-sandbox/agent-key";
       FORT_ORIGIN = "dev-sandbox";
     };
-    path = with pkgs; [ elixir erlang git coreutils bash ffmpeg ];
+    path = with pkgs; [ elixir erlang git coreutils bash ffmpeg (import ../../pkgs/qmd { inherit pkgs; }) ];
     script = ''
       . /etc/set-environment
       export PATH="/home/dev/.local/bin:$PATH"
