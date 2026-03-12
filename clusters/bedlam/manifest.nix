@@ -211,6 +211,15 @@ rec {
             };
           };
         };
+        "gloss" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/gloss";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
       };
     };
   };
