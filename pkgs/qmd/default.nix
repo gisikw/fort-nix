@@ -3,6 +3,16 @@
 let
   version = "2.0.1";
 
+  sqliteWithExtensions = pkgs.sqlite.overrideAttrs (old: {
+    configureFlags = (old.configureFlags or []) ++ [
+      "--enable-load-extension"
+    ];
+  });
+in
+pkgs.buildNpmPackage {
+  pname = "qmd";
+  inherit version;
+
   src = pkgs.fetchFromGitHub {
     owner = "tobi";
     repo = "qmd";
@@ -10,38 +20,31 @@ let
     hash = "sha256-UoR9iyxqbjwAbEmiC/kxS10lvdBJmDuQigS/aEgEzDs=";
   };
 
-  sqliteWithExtensions = pkgs.sqlite.overrideAttrs (old: {
-    configureFlags = (old.configureFlags or []) ++ [
-      "--enable-load-extension"
-    ];
-  });
-in
-pkgs.stdenv.mkDerivation {
-  pname = "qmd";
-  inherit version src;
+  postPatch = ''
+    cp ${./package-lock.json} package-lock.json
+  '';
 
-  nativeBuildInputs = [
-    pkgs.bun
-    pkgs.makeWrapper
-    pkgs.python3
+  npmDepsHash = "sha256-kkf9kRsH8lDpQ8tDyMKBCLb4hnqRY92bwWK8yc2hne4=";
+
+  nativeBuildInputs = with pkgs; [
+    python3
+    nodePackages.node-gyp
+    pkg-config
+    makeWrapper
+    typescript
   ];
 
   buildInputs = [ sqliteWithExtensions ];
 
-  buildPhase = ''
-    export HOME=$(mktemp -d)
-    bun install --frozen-lockfile
-  '';
+  nodejs = pkgs.nodejs_22;
 
-  installPhase = ''
-    mkdir -p $out/lib/qmd $out/bin
+  # Build TypeScript to dist/
+  npmBuildScript = "build";
 
-    cp -r node_modules $out/lib/qmd/
-    cp -r src $out/lib/qmd/
-    cp package.json $out/lib/qmd/
-
-    makeWrapper ${pkgs.bun}/bin/bun $out/bin/qmd \
-      --add-flags "$out/lib/qmd/src/qmd.ts" \
+  postInstall = ''
+    rm -f $out/bin/qmd
+    makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/qmd \
+      --add-flags "$out/lib/node_modules/@tobilu/qmd/dist/cli/qmd.js" \
       --set LD_LIBRARY_PATH "${sqliteWithExtensions.out}/lib"
   '';
 
