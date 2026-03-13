@@ -44,7 +44,7 @@ let
   # RetroArch config
   retroarchCfg = pkgs.writeText "retroarch.cfg" ''
     video_fullscreen = "true"
-    video_driver = "gl"
+    video_driver = "vulkan"
     video_vsync = "true"
     video_threaded = "true"
     video_hard_sync = "true"
@@ -266,8 +266,17 @@ in
     };
   };
 
-  # GPU and graphics support
-  hardware.graphics.enable = true;
+  # GPU and graphics support (Vulkan required for N64 emulation performance)
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+    extraPackages = with pkgs; [
+      intel-media-driver
+      intel-compute-runtime
+      vulkan-loader
+      mesa
+    ];
+  };
 
   # Audio
   security.rtkit.enable = true;
