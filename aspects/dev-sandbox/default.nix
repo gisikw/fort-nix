@@ -440,6 +440,48 @@ in
     '';
   };
 
+  # Hoard sync: pull sources, commit, push → triggers QMD re-index on lordhenry
+  systemd.timers.hoard-sync = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5m";
+      OnUnitActiveSec = "30m";
+    };
+  };
+
+  systemd.services.hoard-sync = {
+    description = "Sync hoard knowledge base and push";
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      Group = "users";
+      WorkingDirectory = "${homeDir}/Projects/hoard";
+    };
+    environment = {
+      HOME = homeDir;
+    };
+    path = with pkgs; [ just bash coreutils findutils gnugrep gnused git jq openssh ];
+    script = ''
+      # Skip if repo doesn't exist yet
+      if [ ! -d "${homeDir}/Projects/hoard/.git" ]; then
+        echo "Hoard repo not found, skipping"
+        exit 0
+      fi
+
+      just sync
+
+      # Commit and push if there are changes
+      cd "${homeDir}/Projects/hoard"
+      git add -A
+      if ! git diff --cached --quiet; then
+        git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        git push
+      else
+        echo "No changes to commit"
+      fi
+    '';
+  };
+
   # Daily briefing (11:15 UTC = 6:15am Central during CDT, 5:15am during CST)
   systemd.timers.daily-briefing = {
     wantedBy = [ "timers.target" ];
