@@ -98,7 +98,7 @@ runner:
   labels:
     - "hoard:host"
   envs:
-    PATH: "${lib.makeBinPath [ qmd pkgs.bash pkgs.coreutils pkgs.gnused pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq ]}"
+    PATH: "${lib.makeBinPath [ qmd pkgs.bash pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq ]}"
     HOME: "${dataDir}"
 YAML
     '';
