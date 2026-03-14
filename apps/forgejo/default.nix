@@ -465,4 +465,17 @@ EOF
     description = "Register runtime package store paths from CI builds";
     allowed = [ "ci" ];  # Only CI can register packages
   };
+
+  # Runner registration token for remote Forgejo Actions runners
+  fort.host.capabilities.runner-token = {
+    handler = pkgs.writeShellScript "runner-token-handler" ''
+      TOKEN=$(cat ${bootstrapDir}/admin-token)
+      REG_TOKEN=$(${pkgs.curl}/bin/curl -sf \
+        -H "Authorization: token $TOKEN" \
+        "http://localhost:3001/api/v1/admin/runners/registration-token" \
+        | ${pkgs.jq}/bin/jq -r '.token')
+      ${pkgs.jq}/bin/jq -n --arg token "$REG_TOKEN" '{"token": $token}'
+    '';
+    description = "Generate Forgejo Actions runner registration token";
+  };
 }
