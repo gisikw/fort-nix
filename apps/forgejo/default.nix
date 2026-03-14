@@ -467,15 +467,23 @@ EOF
   };
 
   # Runner registration token for remote Forgejo Actions runners
+  # Input: {"origin:runner-token-id": {"request": {}}, ...}
+  # Output: {"origin:runner-token-id": {"token": "..."}, ...}
   fort.host.capabilities.runner-token = {
     handler = pkgs.writeShellScript "runner-token-handler" ''
+      set -euo pipefail
       TOKEN=$(cat ${bootstrapDir}/admin-token)
       REG_TOKEN=$(${pkgs.curl}/bin/curl -sf \
         -H "Authorization: token $TOKEN" \
         "http://localhost:3001/api/v1/admin/runners/registration-token" \
         | ${pkgs.jq}/bin/jq -r '.token')
-      ${pkgs.jq}/bin/jq -n --arg token "$REG_TOKEN" '{"token": $token}'
+
+      # Build per-requester response (same token for all)
+      response=$(${pkgs.jq}/bin/jq -n --arg token "$REG_TOKEN" '{token: $token}')
+      ${pkgs.jq}/bin/jq --argjson resp "$response" \
+        'to_entries | map({key: .key, value: $resp}) | from_entries'
     '';
+    mode = "async";
     description = "Generate Forgejo Actions runner registration token";
   };
 }
