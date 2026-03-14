@@ -32,11 +32,24 @@ pkgs.buildNpmPackage {
     pkg-config
     makeWrapper
     typescript
+    autoPatchelfHook
   ];
 
-  buildInputs = [ sqliteWithExtensions ];
+  buildInputs = [
+    sqliteWithExtensions
+    pkgs.vulkan-loader
+    pkgs.stdenv.cc.cc.lib
+  ];
 
   nodejs = pkgs.nodejs_22;
+
+  # Prebuilt binaries include CUDA and musl variants we don't need — ignore their missing deps
+  autoPatchelfIgnoreMissingDeps = [
+    "libcudart.so.*"
+    "libcublas.so.*"
+    "libcuda.so.*"
+    "libc.musl-*"
+  ];
 
   # Build TypeScript to dist/
   npmBuildScript = "build";
@@ -45,7 +58,11 @@ pkgs.buildNpmPackage {
     rm -f $out/bin/qmd
     makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/qmd \
       --add-flags "$out/lib/node_modules/@tobilu/qmd/dist/cli/qmd.js" \
-      --set LD_LIBRARY_PATH "${sqliteWithExtensions.out}/lib"
+      --set LD_LIBRARY_PATH "${pkgs.lib.makeLibraryPath [
+        sqliteWithExtensions.out
+        pkgs.vulkan-loader
+        pkgs.stdenv.cc.cc.lib
+      ]}"
   '';
 
   meta = with pkgs.lib; {

@@ -8,6 +8,7 @@ rec {
     "comfyui"
     "ollama"
     "open-webui"
+    "qmd"
     "sillytavern"
     "stt"
     "tts"
