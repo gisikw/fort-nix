@@ -22,7 +22,7 @@ let
     snes9x = "${pkgs.libretro.snes9x}/lib/retroarch/cores/snes9x_libretro.so";
     nestopia = "${pkgs.libretro.nestopia}/lib/retroarch/cores/nestopia_libretro.so";
     genesis-plus-gx = "${pkgs.libretro.genesis-plus-gx}/lib/retroarch/cores/genesis_plus_gx_libretro.so";
-    mupen64plus = "${pkgs.libretro.mupen64plus}/lib/retroarch/cores/mupen64plus_next_libretro.so";
+    parallel-n64 = "${pkgs.libretro.parallel-n64}/lib/retroarch/cores/parallel_n64_libretro.so";
   };
 
   # Chromium wrapped with kiosk flags (launchable via RFID card)
@@ -146,7 +146,7 @@ let
     # N64
     "0007741136" = {
       rom_path = "${romsDir}/n64/Super Smash Bros. (U) [!].zip";
-      emulator = cores.mupen64plus;
+      emulator = cores.parallel-n64;
       artwork = "${artworkDir}/super-smash-bros.png";
     };
 
