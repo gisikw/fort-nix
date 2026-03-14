@@ -62,6 +62,10 @@ in
 
     environment = {
       HOME = dataDir;
+      # Force Node to resolve "localhost" as 127.0.0.1 — QMD's HTTP server
+      # hardcodes listen("localhost") and NixOS resolves it to ::1 (IPv6),
+      # but nginx proxies to 127.0.0.1 (IPv4).
+      NODE_OPTIONS = "--dns-result-order=ipv4first";
     };
 
     serviceConfig = {
