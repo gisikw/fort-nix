@@ -7,7 +7,7 @@ A declarative NixOS homelab infrastructure with a custom inter-host control plan
 Fort manages a cluster of NixOS hosts (and one macOS host) through layered, composable configuration. Each host's identity is built from:
 
 - A **device profile**: Base-level image (disk layout, bootloader, hardware quirks)
-    - Defined in `./device-profiles/<profile>` (beelink, evo-x2, linode, mac-mini)
+    - Defined in `./device-profiles/<profile>` (beelink, evo-x2, linode, mac-mini, raspberry-pi-5, xeon-workstation)
 - A **device entry**: Unique machine binding by hardware UUID
     - Auto-generated in `./clusters/<cluster>/devices/<uuid>`
 - A **host**: Logical identity with a manifest declaring what it runs
@@ -119,6 +119,9 @@ The target host deploys with `switch-to-configuration test` — a reboot reverts
 | comfyui | Stable Diffusion workflow UI |
 | conduit | Matrix homeserver |
 | coredns | Internal DNS with ad blocking |
+| cranium | Matrix-to-agent bridge and session dispatcher |
+| cupola | Command center dashboard (Elixir/Phoenix) |
+| discovery-zone | Research findings server |
 | flatnotes | Markdown note-taking |
 | forgejo | Git hosting with CI/CD and GitHub mirroring |
 | fort-mcp | Model Context Protocol server |
@@ -131,6 +134,7 @@ The target host deploys with `switch-to-configuration test` — a reboot reverts
 | homepage | Customizable dashboard |
 | hugo-blog | Static site generator |
 | jellyfin | Media streaming server |
+| knockout | Git-native issue tracker with agent pipeline |
 | lidarr | Music collection manager |
 | ollama | Local LLM inference (Vulkan backend) |
 | open-webui | Web interface for Ollama |
@@ -138,13 +142,16 @@ The target host deploys with `switch-to-configuration test` — a reboot reverts
 | pocket-id | OIDC identity provider backed by LDAP |
 | prowlarr | Indexer manager for *arr stack |
 | qbittorrent | BitTorrent client (egress VPN) |
+| qmd | Markdown search and embedding service |
 | radarr | Movie collection manager |
 | radicale | CalDAV/CardDAV server |
 | readarr | Book collection manager |
 | sillytavern | LLM chat frontend |
 | silverbullet | Markdown-based personal knowledge management |
 | sonarr | TV show collection manager |
+| stt | Speech-to-text HTTP service (Whisper + Vulkan) |
 | super-productivity | Task and time management |
+| temporal | Workflow orchestration server |
 | termix | Terminal-based collaboration tool |
 | tts | Text-to-speech (Kokoro) |
 | upload-gateway | Web UI for uploading files to hosts |
