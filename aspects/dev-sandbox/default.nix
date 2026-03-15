@@ -572,10 +572,22 @@ in
   };
 
   # Development services
-  fort.cluster.services = [{
-    name = "bz";
-    port = 6167;
-    visibility = "vpn";
-    sso.mode = "none";
-  }];
+  fort.cluster.services = [
+    {
+      name = "bz";
+      port = 6167;
+      visibility = "vpn";
+      sso.mode = "none";
+    }
+    {
+      name = "ko";
+      subdomain = "ko";
+      port = 9876;
+      visibility = "local";
+      sso = {
+        mode = "gatekeeper";
+        vpnBypass = true;
+      };
+    }
+  ];
 }
