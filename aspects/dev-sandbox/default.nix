@@ -460,7 +460,7 @@ in
     environment = {
       HOME = homeDir;
     };
-    path = with pkgs; [ just bash coreutils findutils gnugrep gnused git jq openssh ];
+    path = with pkgs; [ just bash coreutils findutils gnugrep gnused git jq yq openssh ];
     script = ''
       # Skip if repo doesn't exist yet
       if [ ! -d "${homeDir}/Projects/hoard/.git" ]; then
