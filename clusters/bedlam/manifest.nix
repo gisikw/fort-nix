@@ -220,6 +220,15 @@ rec {
             };
           };
         };
+        "headjack" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/headjack";
+              tokenFile = ./github-mirror-token.age;
+              branches = [ "main" ];
+            };
+          };
+        };
         "exocortex" = {};
         "hoard" = {};
       };
