@@ -11,11 +11,11 @@
       User = "dev";
       Group = "users";
       WorkingDirectory = "/home/dev/Projects/exocortex";
-      ExecStart = "/home/dev/.local/bin/ko serve --port 19876";
+      ExecStart = "/run/managed-bin/ko serve --port 19876";
       Restart = "on-failure";
       RestartSec = 5;
 
-      Environment = "PATH=${pkgs.git}/bin:/home/dev/.local/bin:/run/current-system/sw/bin";
+      Environment = "PATH=${pkgs.git}/bin:/run/managed-bin:/run/current-system/sw/bin";
     };
   };
 }

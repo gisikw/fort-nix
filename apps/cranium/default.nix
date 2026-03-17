@@ -33,7 +33,7 @@ in
     path = with pkgs; [ elixir erlang git coreutils bash ffmpeg (import ../../pkgs/qmd { inherit pkgs; }) ];
     script = ''
       . /etc/set-environment
-      export PATH="/home/dev/.local/bin:$PATH"
+      export PATH="/run/managed-bin:/home/dev/.local/bin:$PATH"
       exec mix run --no-halt
     '';
   };

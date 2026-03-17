@@ -24,7 +24,7 @@ in
         "HOME=/home/dev"
         "MIX_ENV=dev"
         "PORT=${toString port}"
-        "PATH=${pkgs.lib.makeBinPath (with pkgs; [ elixir erlang git coreutils bash esbuild tailwindcss_4 ])}:/home/dev/.local/bin:/run/current-system/sw/bin"
+        "PATH=${pkgs.lib.makeBinPath (with pkgs; [ elixir erlang git coreutils bash esbuild tailwindcss_4 ])}:/run/managed-bin:/home/dev/.local/bin:/run/current-system/sw/bin"
         "FORT_SSH_KEY=/var/lib/fort/dev-sandbox/agent-key"
         "FORT_ORIGIN=dev-sandbox"
       ];
