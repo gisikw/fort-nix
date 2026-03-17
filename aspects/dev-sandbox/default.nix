@@ -582,7 +582,7 @@ in
     {
       name = "ko";
       subdomain = "ko";
-      port = 9876;
+      port = 19876;
       visibility = "local";
       sso = {
         mode = "gatekeeper";
