@@ -116,6 +116,7 @@ The target host deploys with `switch-to-configuration test` — a reboot reverts
 | attic | Nix binary cache |
 | audiobookshelf | Audiobook and podcast server |
 | calibre-web | E-book management web interface |
+| cdn | Static asset hosting |
 | comfyui | Stable Diffusion workflow UI |
 | conduit | Matrix homeserver |
 | coredns | Internal DNS with ad blocking |

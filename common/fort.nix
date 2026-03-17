@@ -143,7 +143,7 @@ in
           envFile = "/var/lib/fort-auth/${svc.name}/oauth2-proxy.env";
           subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
           publicUrl = "https://${subdomain}.${domain}";
-        in lib.optionalAttrs (svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token") {
+        in lib.optionalAttrs (svc.staticRoot == null && svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token") {
           "oauth2-proxy-${svc.name}" = {
             wantedBy = [ "multi-user.target" ];
 
@@ -217,9 +217,10 @@ in
             svc:
             let
               subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+              isStatic = svc.staticRoot != null;
               needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token";
               isTokenMode = svc.sso.mode == "token";
-              directBackend = "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
+              directBackend = lib.optionalString (!isStatic) "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
               authProxySocket = "http://unix:/run/fort-auth/${svc.name}.sock";
             in
             {
@@ -228,7 +229,21 @@ in
                 forceSSL = true;
                 sslCertificate = "/var/lib/fort/ssl/${domain}/fullchain.pem";
                 sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
-                locations."/" = {
+                # Static file serving mode
+                root = lib.mkIf isStatic svc.staticRoot;
+                locations."/" = if isStatic then {
+                  extraConfig = lib.concatStringsSep "\n" (lib.filter (s: s != "") [
+                    "try_files $uri $uri/ =404;"
+                    (lib.optionalString (svc.visibility == "vpn") ''
+                      if ($is_vpn = 0) {
+                        return 444;
+                      }
+                    '')
+                    (lib.optionalString (svc.maxBodySize != null) ''
+                      client_max_body_size ${svc.maxBodySize};
+                    '')
+                  ]);
+                } else {
                   extraConfig = lib.concatStringsSep "\n" (lib.filter (s: s != "") [
                     # Ensure cookies are forwarded (not included in recommendedProxySettings)
                     "proxy_set_header Cookie $http_cookie;"

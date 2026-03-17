@@ -23,6 +23,7 @@ rec {
     "headjack"
     "cupola"
     "excalidraw"
+    "cdn"
   ];
 
   aspects = [

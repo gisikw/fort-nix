@@ -24,8 +24,15 @@
                 };
 
                 port = lib.mkOption {
-                  type = int;
-                  description = "Internal port where the service listens.";
+                  type = nullOr int;
+                  default = null;
+                  description = "Internal port where the service listens. Required unless staticRoot is set.";
+                };
+
+                staticRoot = lib.mkOption {
+                  type = nullOr str;
+                  default = null;
+                  description = "If set, serve static files from this path instead of proxying to a port.";
                 };
 
                 inEgressNamespace = lib.mkOption {
