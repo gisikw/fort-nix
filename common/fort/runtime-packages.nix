@@ -7,6 +7,7 @@
 #   fort.host.runtimePackages = [
 #     { repo = "infra/bz"; }
 #     { repo = "infra/wicket"; constraint = "release"; }
+#     { repo = "infra/knockout"; restartServices = [ "knockout" ]; }
 #   ];
 #
 { cluster, ... }:
@@ -32,9 +33,9 @@ let
   # Convert repo name to a safe identifier (replace / with -)
   repoToId = repo: builtins.replaceStrings [ "/" ] [ "-" ] repo;
 
-  # Handler script for processing runtime package responses
+  # Per-package handler script for processing runtime package responses
   # Receives JSON on stdin: { repo, rev, storePath, updatedAt, error }
-  runtimePackageHandler = pkgs.writeShellScript "handle-runtime-package" ''
+  mkHandler = pkg: pkgs.writeShellScript "handle-runtime-package-${repoToId pkg.repo}" ''
     set -euo pipefail
 
     response=$(${pkgs.coreutils}/bin/cat)
@@ -80,6 +81,12 @@ let
       echo "Warning: $store_path has no bin/ directory"
     fi
 
+    # Restart associated services
+    ${lib.concatMapStringsSep "\n    " (svc: ''
+      echo "Restarting ${svc}..."
+      ${pkgs.systemd}/bin/systemctl restart "${svc}.service" || echo "Warning: failed to restart ${svc}"
+    '') (pkg.restartServices or [])}
+
     echo "Deployed $repo@$rev"
   '';
 
@@ -92,7 +99,7 @@ let
         repo = pkg.repo;
         constraint = pkg.constraint or "main";
       };
-      handler = runtimePackageHandler;
+      handler = mkHandler pkg;
       nag = "15m";
     };
   }) cfg);
@@ -112,6 +119,12 @@ in
           default = "main";
           description = "Branch or tag to track";
           example = "release";
+        };
+        restartServices = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "Systemd services to restart when a new version is delivered";
+          example = [ "knockout" ];
         };
       };
     });

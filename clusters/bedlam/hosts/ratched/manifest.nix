@@ -46,6 +46,7 @@ rec {
         runtimePackages = [
           { repo = "infra/bz"; }
           { repo = "infra/unum"; }
+          { repo = "infra/knockout"; restartServices = [ "knockout" ]; }
         ];
       };
 
