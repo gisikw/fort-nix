@@ -12,19 +12,30 @@ let
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <title>App Distribution</title>
+      <link rel="stylesheet" href="https://cdn.gisi.network/theme/tokens.css">
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          background: #1a1a2e;
-          color: #e0e0e0;
+          font-family: var(--f-body);
+          font-size: var(--fs-body);
+          line-height: var(--lh-body);
+          background: var(--c-bg);
+          color: var(--c-text);
           padding: 2rem;
           min-height: 100vh;
         }
-        h1 { color: #ff6188; margin-bottom: 1.5rem; }
+        h1 {
+          font-family: var(--f-brand);
+          font-weight: var(--fw-brand);
+          letter-spacing: var(--ls-brand);
+          color: var(--c-primary);
+          font-size: var(--fs-h2);
+          margin-bottom: 1.5rem;
+        }
         .apps { display: flex; flex-direction: column; gap: 1rem; max-width: 600px; }
         .app {
-          background: #2d2a2e;
+          background: var(--c-surface);
+          border: 1px solid var(--c-border);
           border-radius: 12px;
           padding: 1.25rem;
           display: flex;
@@ -32,23 +43,28 @@ let
           gap: 1rem;
         }
         .app-info { flex: 1; }
-        .app-name { font-size: 1.1rem; font-weight: 600; }
-        .app-meta { font-size: 0.8rem; color: #888; }
+        .app-name {
+          font-family: var(--f-heading);
+          font-weight: var(--fw-heading);
+          font-size: 1.1rem;
+        }
+        .app-meta { font-size: var(--fs-small); color: var(--c-text-muted); }
         .install-btn {
-          background: #ff6188;
-          color: #fff;
+          background: var(--c-primary);
+          color: var(--c-primary-fg);
           border: none;
           border-radius: 8px;
           padding: 0.6rem 1.2rem;
+          font-family: var(--f-heading);
           font-size: 1rem;
-          font-weight: 600;
+          font-weight: var(--fw-heading);
           text-decoration: none;
           cursor: pointer;
           white-space: nowrap;
           margin-left: auto;
         }
-        .install-btn:hover { background: #ff7e9a; }
-        .empty { color: #888; font-style: italic; }
+        .install-btn:hover { background: var(--c-accent); }
+        .empty { color: var(--c-text-faint); font-style: italic; }
       </style>
     </head>
     <body>

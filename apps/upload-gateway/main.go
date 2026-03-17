@@ -181,22 +181,15 @@ const indexHTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload - Fort</title>
+  <link rel="stylesheet" href="https://cdn.gisi.network/theme/tokens.css">
   <style>
-    :root {
-      --bg: #1a1a2e;
-      --card: #16213e;
-      --accent: #0f3460;
-      --text: #e4e4e4;
-      --text-muted: #888;
-      --ok: #4ecca3;
-      --err: #e74c3c;
-      --border: #2a3f5f;
-    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: var(--f-body);
+      font-size: var(--fs-body);
+      line-height: var(--lh-body);
+      background: var(--c-bg);
+      color: var(--c-text);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -204,15 +197,20 @@ const indexHTML = `<!DOCTYPE html>
       padding: 1rem;
     }
     .card {
-      background: var(--card);
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
       border-radius: 16px;
       padding: 2rem;
       width: 100%;
       max-width: 420px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
     h1 {
-      font-size: 1.5rem;
+      font-family: var(--f-brand);
+      font-weight: var(--fw-brand);
+      letter-spacing: var(--ls-brand);
+      color: var(--c-primary);
+      font-size: var(--fs-h2);
       margin-bottom: 1.5rem;
       text-align: center;
     }
@@ -222,33 +220,36 @@ const indexHTML = `<!DOCTYPE html>
     label {
       display: block;
       margin-bottom: 0.5rem;
-      color: var(--text-muted);
-      font-size: 0.9rem;
+      font-family: var(--f-heading);
+      color: var(--c-text-muted);
+      font-size: var(--fs-small);
+      letter-spacing: var(--ls-heading);
     }
     select, input[type="file"] {
       width: 100%;
       padding: 0.75rem 1rem;
-      border: 2px solid var(--border);
+      border: 2px solid var(--c-border);
       border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--c-bg);
+      color: var(--c-text);
+      font-family: var(--f-body);
       font-size: 1rem;
       transition: border-color 0.2s;
     }
     select:focus, input[type="file"]:focus {
       outline: none;
-      border-color: var(--ok);
+      border-color: var(--c-primary);
     }
     select {
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23665a50' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 1rem center;
     }
     .file-input-wrapper {
       position: relative;
-      border: 2px dashed var(--border);
+      border: 2px dashed var(--c-border);
       border-radius: 8px;
       padding: 2rem 1rem;
       text-align: center;
@@ -256,8 +257,8 @@ const indexHTML = `<!DOCTYPE html>
       transition: border-color 0.2s, background 0.2s;
     }
     .file-input-wrapper:hover, .file-input-wrapper.dragover {
-      border-color: var(--ok);
-      background: rgba(78, 204, 163, 0.05);
+      border-color: var(--c-primary);
+      background: var(--c-emphasis);
     }
     .file-input-wrapper input {
       position: absolute;
@@ -267,14 +268,15 @@ const indexHTML = `<!DOCTYPE html>
     }
     .file-input-wrapper .icon {
       font-size: 2rem;
+      color: var(--c-text-faint);
       margin-bottom: 0.5rem;
     }
     .file-input-wrapper .text {
-      color: var(--text-muted);
+      color: var(--c-text-muted);
     }
     .file-input-wrapper .filename {
-      color: var(--ok);
-      font-weight: 500;
+      color: var(--c-primary);
+      font-weight: var(--fw-emphasis);
       margin-top: 0.5rem;
       word-break: break-all;
     }
@@ -283,15 +285,17 @@ const indexHTML = `<!DOCTYPE html>
       padding: 1rem;
       border: none;
       border-radius: 8px;
-      background: var(--ok);
-      color: var(--bg);
+      background: var(--c-primary);
+      color: var(--c-primary-fg);
+      font-family: var(--f-heading);
       font-size: 1rem;
-      font-weight: 600;
+      font-weight: var(--fw-heading);
+      letter-spacing: var(--ls-heading);
       cursor: pointer;
       transition: opacity 0.2s, transform 0.1s;
     }
     button:hover:not(:disabled) {
-      opacity: 0.9;
+      background: var(--c-accent);
     }
     button:active:not(:disabled) {
       transform: scale(0.98);
@@ -304,30 +308,30 @@ const indexHTML = `<!DOCTYPE html>
       margin-top: 1.5rem;
       padding: 1rem;
       border-radius: 8px;
-      font-family: monospace;
-      font-size: 0.85rem;
+      font-family: var(--f-code);
+      font-size: var(--fs-code);
       word-break: break-all;
     }
     .result.success {
-      background: rgba(78, 204, 163, 0.1);
-      border: 1px solid var(--ok);
-      color: var(--ok);
+      background: var(--c-success-bg);
+      border: 1px solid var(--c-success);
+      color: var(--c-success);
     }
     .result.error {
-      background: rgba(231, 76, 60, 0.1);
-      border: 1px solid var(--err);
-      color: var(--err);
+      background: var(--c-error-bg);
+      border: 1px solid var(--c-error);
+      color: var(--c-error);
     }
     .progress {
       margin-top: 1rem;
       height: 4px;
-      background: var(--border);
+      background: var(--c-border);
       border-radius: 2px;
       overflow: hidden;
     }
     .progress-bar {
       height: 100%;
-      background: var(--ok);
+      background: var(--c-primary);
       width: 0%;
       transition: width 0.3s;
     }

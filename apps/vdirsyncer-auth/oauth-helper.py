@@ -51,15 +51,20 @@ class OAuthHandler(BaseHTTPRequestHandler):
 <html>
 <head>
     <title>vdirsyncer OAuth</title>
+    <link rel="stylesheet" href="https://cdn.gisi.network/theme/tokens.css">
     <style>
-        body {{ font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
-        .btn {{ display: inline-block; padding: 12px 24px; background: #4285f4; color: white;
-                text-decoration: none; border-radius: 4px; font-size: 16px; }}
-        .btn:hover {{ background: #357abd; }}
+        body {{ font-family: var(--f-body); font-size: var(--fs-body); line-height: var(--lh-body);
+                max-width: 600px; margin: 50px auto; padding: 20px; background: var(--c-bg); color: var(--c-text); }}
+        h1 {{ font-family: var(--f-brand); font-weight: var(--fw-brand); letter-spacing: var(--ls-brand);
+              color: var(--c-primary); font-size: var(--fs-h2); }}
+        .btn {{ display: inline-block; padding: 12px 24px; background: var(--c-primary); color: var(--c-primary-fg);
+                text-decoration: none; border-radius: 4px; font-family: var(--f-heading);
+                font-weight: var(--fw-heading); font-size: 16px; }}
+        .btn:hover {{ background: var(--c-accent); }}
         .status {{ padding: 16px; border-radius: 4px; margin: 20px 0; }}
-        .status.ok {{ background: #e6f4ea; border: 1px solid #34a853; }}
-        .status.warn {{ background: #fef7e0; border: 1px solid #fbbc04; }}
-        .status.none {{ background: #f1f3f4; border: 1px solid #dadce0; }}
+        .status.ok {{ background: var(--c-success-bg); border: 1px solid var(--c-success); }}
+        .status.warn {{ background: var(--c-warning-bg); border: 1px solid var(--c-warning); }}
+        .status.none {{ background: var(--c-emphasis); border: 1px solid var(--c-border); }}
     </style>
 </head>
 <body>
@@ -67,7 +72,7 @@ class OAuthHandler(BaseHTTPRequestHandler):
     {"<div class='status ok'><strong>Token exists</strong><br>" + token_status + "</div>" if token_status else
      "<div class='status none'>No token configured yet.</div>"}
     <p><a href="/start" class="btn">{"Re-authorize" if token_exists else "Authorize"} Google Calendar</a></p>
-    <p style="color: #666; font-size: 14px;">
+    <p style="color: var(--c-text-muted); font-size: var(--fs-small);">
         This will request read/write access to your Google Calendar for vdirsyncer sync.
     </p>
 </body>
@@ -138,9 +143,15 @@ class OAuthHandler(BaseHTTPRequestHandler):
 <html>
 <head>
     <title>Authorization Complete</title>
+    <link rel="stylesheet" href="https://cdn.gisi.network/theme/tokens.css">
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-        .success { padding: 16px; background: #e6f4ea; border: 1px solid #34a853; border-radius: 4px; }
+        body { font-family: var(--f-body); font-size: var(--fs-body); line-height: var(--lh-body);
+               max-width: 600px; margin: 50px auto; padding: 20px; background: var(--c-bg); color: var(--c-text); }
+        h1 { font-family: var(--f-brand); font-weight: var(--fw-brand); letter-spacing: var(--ls-brand);
+             color: var(--c-primary); font-size: var(--fs-h2); }
+        .success { padding: 16px; background: var(--c-success-bg); border: 1px solid var(--c-success); border-radius: 4px; }
+        a { color: var(--c-link); }
+        a:hover { color: var(--c-accent); }
     </style>
 </head>
 <body>
