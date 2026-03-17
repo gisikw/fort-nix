@@ -1,8 +1,12 @@
 { ... }:
-{ ... }:
+{ lib, ... }:
 {
-  # nginx needs o+x on /home/dev to traverse to the cdn root
+  # nginx needs to read from /home/dev/Projects/hoard/cdn
   system.activationScripts.cdnPerms = "chmod o+x /home/dev";
+  systemd.services.nginx.serviceConfig = {
+    ProtectHome = lib.mkForce "tmpfs";
+    BindReadOnlyPaths = [ "/home/dev/Projects/hoard/cdn" ];
+  };
 
   fort.cluster.services = [
     {
