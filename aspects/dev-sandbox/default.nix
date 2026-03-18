@@ -583,7 +583,7 @@ in
       name = "ko";
       subdomain = "ko";
       port = 19876;
-      visibility = "local";
+      visibility = "public";
       sso = {
         mode = "gatekeeper";
         vpnBypass = true;
