@@ -554,6 +554,17 @@ let
       '';
       example = "1h";
     };
+
+    neverSatisfied = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        If true, the need is never permanently satisfied — the consumer
+        re-checks on every nag cycle. The handler should no-op when
+        nothing has changed. Useful for runtime packages that may be
+        updated upstream between deploys.
+      '';
+    };
   };
 
   # Capability option type
@@ -666,6 +677,7 @@ let
           request = cfg.request;
           handler = toString cfg.handler;
           nag_seconds = parseDuration cfg.nag;
+          never_satisfied = cfg.neverSatisfied or false;
         })
       ) needs);
   in builtins.toJSON (flattenNeeds config.fort.host.needs);
@@ -724,6 +736,7 @@ let
       request=$(echo "$need" | ${pkgs.jq}/bin/jq -c --arg id "$id" '(.request // {}) + {"_fort_need_id": $id}')
       handler=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.handler')
       nag_seconds=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.nag_seconds // 900')
+      never_satisfied=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.never_satisfied // false')
 
       # Get current state for this need
       need_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" '.[$id] // {satisfied: false, last_sought: 0, request_hash: ""}')
@@ -744,8 +757,8 @@ let
           '.[$id].satisfied = false | .[$id].last_sought = 0')
       fi
 
-      # Check if already satisfied
-      if [ "$satisfied" = "true" ]; then
+      # Check if already satisfied (skip for never_satisfied needs like runtime packages)
+      if [ "$satisfied" = "true" ] && [ "$never_satisfied" != "true" ]; then
         log "[$id] Already satisfied"
         continue
       fi

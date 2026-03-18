@@ -56,6 +56,18 @@ let
       exit 1
     fi
 
+    # Check if any binary already points to this store path (no-op on same version)
+    if [ -d "$store_path/bin" ]; then
+      first_bin=$(${pkgs.coreutils}/bin/ls "$store_path/bin/" | ${pkgs.coreutils}/bin/head -n1)
+      if [ -n "$first_bin" ]; then
+        current_target=$(${pkgs.coreutils}/bin/readlink "/run/managed-bin/$first_bin" 2>/dev/null || true)
+        if [ "$current_target" = "$store_path/bin/$first_bin" ]; then
+          echo "$repo@$rev already deployed, skipping"
+          exit 0
+        fi
+      fi
+    fi
+
     echo "Realizing $repo@$rev -> $store_path"
 
     # Realize the store path (pulls from attic if not local)
@@ -101,6 +113,7 @@ let
       };
       handler = mkHandler pkg;
       nag = "15m";
+      neverSatisfied = true;
     };
   }) cfg);
 
