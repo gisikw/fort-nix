@@ -24,6 +24,7 @@ rec {
     "cupola"
     "excalidraw"
     "cdn"
+    "litmus"
   ];
 
   aspects = [
@@ -47,6 +48,7 @@ rec {
           { repo = "infra/bz"; }
           { repo = "infra/unum"; }
           { repo = "infra/knockout"; restartServices = [ "knockout" ]; }
+          { repo = "infra/litmus"; restartServices = [ "litmus" ]; }
         ];
       };
 
