@@ -25,7 +25,7 @@ in
     };
     path = with pkgs; [ coreutils ];
     script = ''
-      exec ${projectDir}/headjack
+      exec /run/managed-bin/headjack
     '';
   };
 }

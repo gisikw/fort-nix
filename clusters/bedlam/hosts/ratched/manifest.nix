@@ -49,6 +49,7 @@ rec {
           { repo = "infra/unum"; }
           { repo = "infra/knockout"; restartServices = [ "knockout" ]; }
           { repo = "infra/litmus"; restartServices = [ "litmus" ]; }
+          { repo = "infra/headjack"; restartServices = [ "headjack" ]; }
         ];
       };
 
