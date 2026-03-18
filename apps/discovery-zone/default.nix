@@ -12,8 +12,6 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
 
-    path = config.environment.systemPackages ++ [ "${homeDir}/.local" ];
-
     serviceConfig = {
       Type = "simple";
       User = "dev";
@@ -22,6 +20,8 @@ in
       ExecStart = "${homeDir}/Projects/discovery-zone/discovery-zone --dir ${findingsDir} --port ${toString port}";
       Restart = "always";
       RestartSec = 5;
+
+      Environment = "PATH=/run/managed-bin:${homeDir}/.local/bin:/run/current-system/sw/bin";
     };
   };
 
