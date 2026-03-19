@@ -21,6 +21,7 @@ let
   codex = import ../../pkgs/codex { inherit pkgs; };
   gemini-cli = import ../../pkgs/gemini-cli { inherit pkgs; };
   pi-coding-agent = import ../../pkgs/pi-coding-agent { inherit pkgs; };
+  clauded = import ../../pkgs/clauded { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
   # Note: chmod 644 so dev user can read it for git credential helper
@@ -108,6 +109,7 @@ let
     gemini-cli
     opencode
     pi-coding-agent
+    clauded
     beads
     ticket
 
@@ -541,6 +543,37 @@ in
       . /etc/set-environment
       export PATH="/run/managed-bin:${homeDir}/.local/bin:$PATH"
       exec ${homeDir}/Projects/cranium/cranium
+    '';
+  };
+
+  # Process-isolated Claude invocation daemon
+  # Runs in its own process tree so spawned `claude` processes don't trigger
+  # Claude Code's Bash tool output suppression (which blanks output when any
+  # claude process exists in the caller's process tree).
+  systemd.services.clauded = {
+    description = "Claude process-isolated daemon";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "simple";
+      User = user;
+      Group = "users";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      RuntimeDirectory = "clauded";
+      RuntimeDirectoryMode = "0700";
+    };
+    environment = {
+      HOME = homeDir;
+      FORT_SSH_KEY = agentKeyPath;
+      FORT_ORIGIN = "dev-sandbox";
+    };
+    path = devTools ++ [ pkgs.bash ];
+    script = ''
+      set -a
+      . /var/lib/fort/dev-sandbox/env
+      set +a
+      export PATH="/run/managed-bin:$PATH"
+      exec ${clauded}/bin/clauded serve
     '';
   };
 
