@@ -99,6 +99,10 @@ let
 
     # Claude/AI tools
     claude-code
+    (pkgs.writeShellScriptBin "claude-spawn" ''
+      unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
+      exec ${pkgs.claude-code}/bin/claude "$@"
+    '')
     codex
     cursor-agent
     gemini-cli
