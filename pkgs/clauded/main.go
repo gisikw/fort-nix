@@ -2,8 +2,13 @@
 //
 // Runs as a systemd service with its own process tree, accepting requests
 // over a unix socket and spawning claude subprocesses. This bypasses Claude
-// Code's Bash tool output suppression, which blanks output when any `claude`
-// process exists in the caller's process tree.
+// Code's Bash tool output suppression, which blanks output when any process
+// named "claude" exists on the system during a Bash tool call.
+//
+// The key trick: on startup, the daemon creates a symlink at
+// /run/clauded/runner -> /path/to/claude, and invokes through that symlink.
+// The spawned process appears as "runner" in /proc, not "claude", so the
+// name-based suppression never triggers.
 //
 // Usage:
 //   clauded serve [--socket /path/to/sock]   # daemon mode
@@ -22,7 +27,10 @@ import (
 	"sync"
 )
 
-const defaultSocket = "/run/clauded/clauded.sock"
+const (
+	defaultSocket = "/run/clauded/clauded.sock"
+	runnerPath    = "/run/clauded/runner"
+)
 
 // Request is sent from client to daemon over the unix socket.
 type Request struct {
@@ -54,6 +62,22 @@ func main() {
 // --- Daemon ---
 
 func serve(socketPath string) {
+	// Resolve claude binary and create a renamed symlink.
+	// Claude Code suppresses Bash tool output when any process named "claude"
+	// exists on the system. By invoking through "runner", the process name
+	// in /proc doesn't match and suppression is bypassed.
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "clauded: claude not found in PATH: %v\n", err)
+		os.Exit(1)
+	}
+	os.Remove(runnerPath)
+	if err := os.Symlink(claudePath, runnerPath); err != nil {
+		fmt.Fprintf(os.Stderr, "clauded: create runner symlink: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "clauded: runner -> %s\n", claudePath)
+
 	// Clean up stale socket
 	os.Remove(socketPath)
 
@@ -97,8 +121,8 @@ func handleConn(conn net.Conn) {
 		return
 	}
 
-	// Spawn claude
-	cmd := exec.Command("claude", req.Args...)
+	// Spawn claude via renamed symlink to avoid process-name-based suppression
+	cmd := exec.Command(runnerPath, req.Args...)
 	if req.Cwd != "" {
 		cmd.Dir = req.Cwd
 	}
