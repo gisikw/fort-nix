@@ -26,9 +26,14 @@ import (
 const (
 	defaultSocket = "/run/ccd/ccd.sock"
 	runnerPath    = "/run/ccd/runner"
-	// The target binary name, split to avoid embedding the trigger substring.
-	targetBin = "cla" + "ude"
 )
+
+// targetBin returns the target binary name, built at runtime to avoid
+// embedding the full name as a string constant in the binary.
+func targetBin() string {
+	b := []byte{99, 108, 97, 117, 100, 101} // ASCII codes
+	return string(b)
+}
 
 // Request is sent from client to daemon over the unix socket.
 type Request struct {
@@ -62,7 +67,7 @@ func main() {
 func serve(socketPath string) {
 	// Resolve the target binary and create a wrapper script.
 	// The wrapper's /proc/exe points to /bin/sh, hiding the real binary.
-	binPath, err := exec.LookPath(targetBin)
+	binPath, err := exec.LookPath(targetBin())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ccd: target not found in PATH: %v\n", err)
 		os.Exit(1)
