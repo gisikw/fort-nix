@@ -1,6 +1,13 @@
 { subdomain ? null, rootManifest, ... }:
 { config, lib, pkgs, ... }:
 let
+  # Pin forgejo to nixpkgs commit with v13 (actions API support)
+  # without upgrading the entire flake's nixpkgs
+  forgejoPkgs = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/fea3b367d61c1a6592bc47c72f40a9f3e6a53e96.tar.gz";
+    sha256 = "01py97nq5ss8kfkmcs8zmmahmcd6ykcjjb2kivgp5b36hji3xm8q";
+  }) { system = pkgs.system; };
+
   domain = rootManifest.fortConfig.settings.domain;
   forgeConfig = rootManifest.fortConfig.forge;
   authDir = "/var/lib/fort-auth/git";
@@ -82,6 +89,7 @@ in
 
   services.forgejo = {
     enable = true;
+    package = forgejoPkgs.forgejo;
     database.type = "sqlite3";
     settings = {
       server = {
