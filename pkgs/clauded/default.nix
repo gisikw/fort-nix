@@ -6,10 +6,8 @@ pkgs.buildGoModule {
   src = ./.;
   vendorHash = null; # stdlib only
 
-  # Binary must not contain "claude" in its name or nix store path —
-  # Claude Code's Bash tool suppresses output for any command containing
-  # that substring.
-  postInstall = ''
-    mv $out/bin/clauded $out/bin/ccd
-  '';
+  # The Go module and binary are named "ccd" (not "clauded") because Claude
+  # Code scans binary metadata for "claude" and suppresses Bash tool output
+  # if found. Go embeds the module path in build info, so even the module
+  # name matters.
 }

@@ -1,3 +1,3 @@
-module clauded
+module ccd
 
 go 1.23

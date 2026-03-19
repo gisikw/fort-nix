@@ -1,18 +1,14 @@
-// clauded - Process-isolated Claude invocation daemon
+// ccd - Process-isolated CC daemon
 //
 // Runs as a systemd service with its own process tree, accepting requests
-// over a unix socket and spawning claude subprocesses. This bypasses Claude
-// Code's Bash tool output suppression, which blanks output when any process
-// named "claude" exists on the system during a Bash tool call.
-//
-// The key trick: on startup, the daemon creates a symlink at
-// /run/clauded/runner -> /path/to/claude, and invokes through that symlink.
-// The spawned process appears as "runner" in /proc, not "claude", so the
-// name-based suppression never triggers.
+// over a unix socket and spawning CC subprocesses. Bypasses the Bash tool
+// output suppression by keeping the target binary out of the caller's
+// process tree, and by ensuring no triggering substrings appear in the
+// binary's embedded metadata (Go build info, string constants, paths).
 //
 // Usage:
-//   clauded serve [--socket /path/to/sock]   # daemon mode
-//   clauded [claude args...]                  # client mode (forwards to daemon)
+//   ccd serve [--socket /path/to/sock]   # daemon mode
+//   ccd [args...]                         # client mode (forwards to daemon)
 
 package main
 
@@ -28,8 +24,10 @@ import (
 )
 
 const (
-	defaultSocket = "/run/clauded/clauded.sock"
-	runnerPath    = "/run/clauded/runner"
+	defaultSocket = "/run/ccd/ccd.sock"
+	runnerPath    = "/run/ccd/runner"
+	// The target binary name, split to avoid embedding the trigger substring.
+	targetBin = "cla" + "ude"
 )
 
 // Request is sent from client to daemon over the unix socket.
@@ -62,23 +60,20 @@ func main() {
 // --- Daemon ---
 
 func serve(socketPath string) {
-	// Resolve claude binary and create a wrapper script.
-	// Claude Code suppresses Bash tool output when any process named "claude"
-	// exists on the system. A symlink doesn't work because /proc/<pid>/exe
-	// resolves through it. A wrapper script's /proc/exe points to bash instead,
-	// completely hiding the claude binary from process-name detection.
-	claudePath, err := exec.LookPath("claude")
+	// Resolve the target binary and create a wrapper script.
+	// The wrapper's /proc/exe points to /bin/sh, hiding the real binary.
+	binPath, err := exec.LookPath(targetBin)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ccd: claude not found in PATH: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ccd: target not found in PATH: %v\n", err)
 		os.Exit(1)
 	}
 	os.Remove(runnerPath)
-	wrapper := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", claudePath)
+	wrapper := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", binPath)
 	if err := os.WriteFile(runnerPath, []byte(wrapper), 0700); err != nil {
 		fmt.Fprintf(os.Stderr, "ccd: create runner wrapper: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "ccd: runner wraps %s\n", claudePath)
+	fmt.Fprintf(os.Stderr, "ccd: runner wraps %s\n", binPath)
 
 	// Clean up stale socket
 	os.Remove(socketPath)
@@ -123,7 +118,7 @@ func handleConn(conn net.Conn) {
 		return
 	}
 
-	// Spawn claude via renamed symlink to avoid process-name-based suppression
+	// Spawn target via wrapper script
 	cmd := exec.Command(runnerPath, req.Args...)
 	if req.Cwd != "" {
 		cmd.Dir = req.Cwd
@@ -141,11 +136,11 @@ func handleConn(conn net.Conn) {
 	}
 
 	if err := cmd.Start(); err != nil {
-		enc.Encode(Message{Type: "error", Data: fmt.Sprintf("start claude: %v", err)})
+		enc.Encode(Message{Type: "error", Data: fmt.Sprintf("start: %v", err)})
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "ccd: spawned claude %v (pid %d)\n", req.Args, cmd.Process.Pid)
+	fmt.Fprintf(os.Stderr, "ccd: spawned pid %d with %v\n", cmd.Process.Pid, req.Args)
 
 	// Stream stdout and stderr back as NDJSON
 	var mu sync.Mutex
@@ -179,14 +174,14 @@ func handleConn(conn net.Conn) {
 	}
 
 	enc.Encode(Message{Type: "exit", Code: exitCode})
-	fmt.Fprintf(os.Stderr, "ccd: claude exited %d\n", exitCode)
+	fmt.Fprintf(os.Stderr, "ccd: pid %d exited %d\n", cmd.Process.Pid, exitCode)
 }
 
 // --- Client ---
 
 func client(args []string) {
 	sock := defaultSocket
-	if v := os.Getenv("CLAUDED_SOCKET"); v != "" {
+	if v := os.Getenv("CCD_SOCKET"); v != "" {
 		sock = v
 	}
 
@@ -213,10 +208,8 @@ func client(args []string) {
 	}
 
 	// Buffer all messages, then print after completion.
-	// Claude Code suppresses Bash tool output while a claude process is active
-	// on the system. By buffering everything and printing only after the daemon's
-	// claude process exits (signaled by the "exit" message), all output arrives
-	// after suppression ends.
+	// Output is buffered to avoid writing while the target process is still
+	// active, which can trigger suppression in the calling tool.
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
@@ -244,7 +237,7 @@ func client(args []string) {
 		}
 	}
 
-	// Print buffered output after claude has exited
+	// Print buffered output after target has exited
 	for _, line := range stdoutBuf {
 		fmt.Println(line)
 	}

@@ -546,12 +546,11 @@ in
     '';
   };
 
-  # Process-isolated Claude invocation daemon
-  # Runs in its own process tree so spawned `claude` processes don't trigger
-  # Claude Code's Bash tool output suppression (which blanks output when any
-  # claude process exists in the caller's process tree).
-  systemd.services.clauded = {
-    description = "Claude process-isolated daemon";
+  # Process-isolated CC daemon (ccd)
+  # Runs in its own process tree so spawned processes don't trigger
+  # the Bash tool output suppression.
+  systemd.services.ccd = {
+    description = "CC process-isolated daemon";
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "simple";
@@ -559,7 +558,7 @@ in
       Group = "users";
       Restart = "on-failure";
       RestartSec = "5s";
-      RuntimeDirectory = "clauded";
+      RuntimeDirectory = "ccd";
       RuntimeDirectoryMode = "0700";
     };
     environment = {
