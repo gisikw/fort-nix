@@ -212,11 +212,18 @@ func client(args []string) {
 		uc.CloseWrite()
 	}
 
-	// Stream response
+	// Buffer all messages, then print after completion.
+	// Claude Code suppresses Bash tool output while a claude process is active
+	// on the system. By buffering everything and printing only after the daemon's
+	// claude process exits (signaled by the "exit" message), all output arrives
+	// after suppression ends.
 	scanner := bufio.NewScanner(conn)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
+	var stdoutBuf []string
+	var stderrBuf []string
 	exitCode := 1
+
 	for scanner.Scan() {
 		var msg Message
 		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
@@ -226,15 +233,23 @@ func client(args []string) {
 
 		switch msg.Type {
 		case "stdout":
-			fmt.Println(msg.Data)
+			stdoutBuf = append(stdoutBuf, msg.Data)
 		case "stderr":
-			fmt.Fprintln(os.Stderr, msg.Data)
+			stderrBuf = append(stderrBuf, msg.Data)
 		case "error":
 			fmt.Fprintf(os.Stderr, "ccd: daemon error: %s\n", msg.Data)
 			os.Exit(1)
 		case "exit":
 			exitCode = msg.Code
 		}
+	}
+
+	// Print buffered output after claude has exited
+	for _, line := range stdoutBuf {
+		fmt.Println(line)
+	}
+	for _, line := range stderrBuf {
+		fmt.Fprintln(os.Stderr, line)
 	}
 
 	os.Exit(exitCode)
