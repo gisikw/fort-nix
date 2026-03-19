@@ -101,7 +101,7 @@ let
     claude-code
     (pkgs.writeShellScriptBin "claude-spawn" ''
       unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-      exec ${pkgs.claude-code}/bin/claude "$@"
+      exec claude "$@"
     '')
     codex
     cursor-agent
