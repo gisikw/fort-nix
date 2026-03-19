@@ -21,7 +21,7 @@ let
   codex = import ../../pkgs/codex { inherit pkgs; };
   gemini-cli = import ../../pkgs/gemini-cli { inherit pkgs; };
   pi-coding-agent = import ../../pkgs/pi-coding-agent { inherit pkgs; };
-  clauded = import ../../pkgs/clauded { inherit pkgs; };
+  ccd = import ../../pkgs/clauded { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
   # Note: chmod 644 so dev user can read it for git credential helper
@@ -109,7 +109,7 @@ let
     gemini-cli
     opencode
     pi-coding-agent
-    clauded
+    ccd
     beads
     ticket
 
@@ -573,7 +573,7 @@ in
       . /var/lib/fort/dev-sandbox/env
       set +a
       export PATH="/run/managed-bin:$PATH"
-      exec ${clauded}/bin/clauded serve
+      exec ${ccd}/bin/ccd serve
     '';
   };
 

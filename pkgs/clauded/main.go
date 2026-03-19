@@ -69,23 +69,23 @@ func serve(socketPath string) {
 	// completely hiding the claude binary from process-name detection.
 	claudePath, err := exec.LookPath("claude")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "clauded: claude not found in PATH: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ccd: claude not found in PATH: %v\n", err)
 		os.Exit(1)
 	}
 	os.Remove(runnerPath)
 	wrapper := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", claudePath)
 	if err := os.WriteFile(runnerPath, []byte(wrapper), 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "clauded: create runner wrapper: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ccd: create runner wrapper: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "clauded: runner wraps %s\n", claudePath)
+	fmt.Fprintf(os.Stderr, "ccd: runner wraps %s\n", claudePath)
 
 	// Clean up stale socket
 	os.Remove(socketPath)
 
 	ln, err := net.Listen("unix", socketPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "clauded: listen %s: %v\n", socketPath, err)
+		fmt.Fprintf(os.Stderr, "ccd: listen %s: %v\n", socketPath, err)
 		os.Exit(1)
 	}
 	defer ln.Close()
@@ -93,12 +93,12 @@ func serve(socketPath string) {
 	// Allow owner-only access (systemd RuntimeDirectoryMode handles dir perms)
 	os.Chmod(socketPath, 0700)
 
-	fmt.Fprintf(os.Stderr, "clauded: listening on %s\n", socketPath)
+	fmt.Fprintf(os.Stderr, "ccd: listening on %s\n", socketPath)
 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "clauded: accept: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ccd: accept: %v\n", err)
 			continue
 		}
 		go handleConn(conn)
@@ -145,7 +145,7 @@ func handleConn(conn net.Conn) {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "clauded: spawned claude %v (pid %d)\n", req.Args, cmd.Process.Pid)
+	fmt.Fprintf(os.Stderr, "ccd: spawned claude %v (pid %d)\n", req.Args, cmd.Process.Pid)
 
 	// Stream stdout and stderr back as NDJSON
 	var mu sync.Mutex
@@ -179,7 +179,7 @@ func handleConn(conn net.Conn) {
 	}
 
 	enc.Encode(Message{Type: "exit", Code: exitCode})
-	fmt.Fprintf(os.Stderr, "clauded: claude exited %d\n", exitCode)
+	fmt.Fprintf(os.Stderr, "ccd: claude exited %d\n", exitCode)
 }
 
 // --- Client ---
@@ -192,7 +192,7 @@ func client(args []string) {
 
 	conn, err := net.Dial("unix", sock)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "clauded: connect %s: %v\n", sock, err)
+		fmt.Fprintf(os.Stderr, "ccd: connect %s: %v\n", sock, err)
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -203,7 +203,7 @@ func client(args []string) {
 	// Send request
 	req := Request{Args: args, Cwd: cwd}
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
-		fmt.Fprintf(os.Stderr, "clauded: send request: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ccd: send request: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -220,7 +220,7 @@ func client(args []string) {
 	for scanner.Scan() {
 		var msg Message
 		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
-			fmt.Fprintf(os.Stderr, "clauded: decode message: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ccd: decode message: %v\n", err)
 			continue
 		}
 
@@ -230,7 +230,7 @@ func client(args []string) {
 		case "stderr":
 			fmt.Fprintln(os.Stderr, msg.Data)
 		case "error":
-			fmt.Fprintf(os.Stderr, "clauded: daemon error: %s\n", msg.Data)
+			fmt.Fprintf(os.Stderr, "ccd: daemon error: %s\n", msg.Data)
 			os.Exit(1)
 		case "exit":
 			exitCode = msg.Code
