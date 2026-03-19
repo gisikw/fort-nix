@@ -506,6 +506,7 @@ in
     };
     path = devTools ++ [ pkgs.bash ];
     script = ''
+      export PATH="/run/managed-bin:$PATH"
       ${homeDir}/Projects/exocortex/scripts/daily-briefing/run.sh
     '';
   };
