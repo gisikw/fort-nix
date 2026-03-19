@@ -62,21 +62,23 @@ func main() {
 // --- Daemon ---
 
 func serve(socketPath string) {
-	// Resolve claude binary and create a renamed symlink.
+	// Resolve claude binary and create a wrapper script.
 	// Claude Code suppresses Bash tool output when any process named "claude"
-	// exists on the system. By invoking through "runner", the process name
-	// in /proc doesn't match and suppression is bypassed.
+	// exists on the system. A symlink doesn't work because /proc/<pid>/exe
+	// resolves through it. A wrapper script's /proc/exe points to bash instead,
+	// completely hiding the claude binary from process-name detection.
 	claudePath, err := exec.LookPath("claude")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "clauded: claude not found in PATH: %v\n", err)
 		os.Exit(1)
 	}
 	os.Remove(runnerPath)
-	if err := os.Symlink(claudePath, runnerPath); err != nil {
-		fmt.Fprintf(os.Stderr, "clauded: create runner symlink: %v\n", err)
+	wrapper := fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", claudePath)
+	if err := os.WriteFile(runnerPath, []byte(wrapper), 0700); err != nil {
+		fmt.Fprintf(os.Stderr, "clauded: create runner wrapper: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "clauded: runner -> %s\n", claudePath)
+	fmt.Fprintf(os.Stderr, "clauded: runner wraps %s\n", claudePath)
 
 	// Clean up stale socket
 	os.Remove(socketPath)
