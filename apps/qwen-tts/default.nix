@@ -91,10 +91,8 @@ in
         "test -d /app/repo/.git && (cd /app/repo && git pull -q) || git clone -q https://github.com/groxaxo/Qwen3-TTS-Openai-Fastapi.git /app/repo"
         # Install project with API deps + gradio for voice studio
         "/venv/bin/pip install --cache-dir /pip-cache -e '/app/repo[api]' gradio 2>&1 | tail -1"
-        # Start voice design server in background (lazy-loads VoiceDesign model on first use)
-        "/venv/bin/python /app/voice-design.py &"
-        # Run main TTS server
-        "cd /app/repo && exec /venv/bin/python -m api.main"
+        # Start voice design server in background, then run main TTS server
+        "/venv/bin/python /app/voice-design.py & cd /app/repo && exec /venv/bin/python -m api.main"
       ])
     ];
 
