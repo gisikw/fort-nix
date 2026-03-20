@@ -116,20 +116,14 @@ let
     # String literals in the script body are constructed at runtime to avoid
     # triggering the Bash tool's command-string pattern matching.
     (pkgs.writeShellScriptBin "ccd" ''
-      SOCK="/run/ccd/ccd.sock"
-      if [ ! -S "$SOCK" ]; then
-        echo "ccd: daemon not running (no socket at $SOCK)" >&2
-        exit 1
-      fi
-      # Build flag strings at runtime to keep them out of script literals
-      FLAG=$(printf '\x2d\x70')
-      NSP=$(printf '\x2d\x2dno-session-\x70ersistence')
+      # ccd client — talks to the ccd daemon via nc + jq.
+      # Uses /tmp as cwd to avoid session conflicts with the caller's
+      # project directory (claude detects .claude/ and interferes with
+      # the parent session's output capture).
       PROMPT="$1"
-      CWD="$(pwd)"
-      REQ=$(${pkgs.jq}/bin/jq -n --arg f "$FLAG" --arg p "$PROMPT" --arg n "$NSP" --arg c "$CWD" \
-        '{"args": [$f, $p, $n], "cwd": $c}')
-      echo "$REQ" | ${pkgs.libressl.nc}/bin/nc -U "$SOCK" | \
-        ${pkgs.jq}/bin/jq -r 'if .type == "stdout" and .data then .data elif .type == "stderr" and .data then .data | halt_error(0) elif .type == "error" then .data | halt_error(1) else empty end'
+      echo '{"args":["-p","'"$PROMPT"'","--no-session-persistence"],"cwd":"/tmp"}' | \
+        ${pkgs.libressl.nc}/bin/nc -U /run/ccd/ccd.sock | \
+        ${pkgs.jq}/bin/jq -r 'select(.type == "stdout") | .data'
     '')
     beads
     ticket
