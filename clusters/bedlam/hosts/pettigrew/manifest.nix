@@ -1,6 +1,6 @@
 rec {
   hostName = "pettigrew";
-  device = "03000200-0400-0500-0006-000700080009";
+  device = "30e33af3-522c-479d-908b-10e057e5667f";
 
   roles = [ ];
 
