@@ -38,7 +38,7 @@ def load_model():
 
     log.info("loading Qwen3-TTS-12Hz-0.6B-VoiceDesign...")
     model = Qwen3TTSModel.from_pretrained(
-        "Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign",
+        "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
         device_map="cuda:0",
         dtype=torch.bfloat16,
         attn_implementation="sdpa",
