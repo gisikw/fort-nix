@@ -27,8 +27,24 @@ provision profile target user="admin":
   fi
 
 _fingerprint-hardware target:
+  #!/usr/bin/env bash
   echo "[Fort] Fingerprinting physical hardware"
-  ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{target}} 'cat /sys/class/dmi/id/product_uuid'
+  GARBAGE_UUID="03000200-0400-0500-0006-000700080009"
+  uuid=$(ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{target}} \
+    'cat /sys/class/dmi/id/product_uuid' | tr -d '\r\n' | tr '[:upper:]' '[:lower:]')
+  if [[ "$uuid" == "$GARBAGE_UUID" ]]; then
+    echo "[Fort] DMI product_uuid is a known placeholder, deriving from primary NIC MAC" >&2
+    mac=$(ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{target}} \
+      'ip link show $(ip route show default | awk "/default/{print \$5}" | head -1) | awk "/ether/{print \$2}"' \
+      | tr -d '\r\n')
+    if [[ -z "$mac" ]]; then
+      echo "[Fort] ERROR: Could not determine primary NIC MAC address" >&2
+      exit 1
+    fi
+    # UUIDv5: fort namespace (derived from fort.gisi.network) + MAC address
+    uuid=$(python3 -c "import uuid; ns = uuid.uuid5(uuid.NAMESPACE_DNS, 'fort.{{domain}}'); print(uuid.uuid5(ns, '$mac'))")
+  fi
+  echo "$uuid"
 
 _fingerprint-darwin target user="admin":
   echo "[Fort] Fingerprinting macOS hardware"
