@@ -109,7 +109,25 @@ let
     gemini-cli
     opencode
     pi-coding-agent
-    ccd
+
+    # ccd client — shell script that talks to the ccd daemon via nc + jq.
+    # The Go binary can't be used as a client because Claude Code's Bash tool
+    # suppresses its output (the Go runtime's fd handling interferes with the
+    # Bash tool's output capture mechanism). A shell script using nc avoids this.
+    (pkgs.writeShellScriptBin "ccd" ''
+      SOCK="/run/ccd/ccd.sock"
+      if [ ! -S "$SOCK" ]; then
+        echo "ccd: daemon not running (no socket at $SOCK)" >&2
+        exit 1
+      fi
+      PROMPT="$1"
+      CWD="$(pwd)"
+      # Build JSON request — jq handles escaping
+      REQ=$(${pkgs.jq}/bin/jq -n --arg prompt "$PROMPT" --arg cwd "$CWD" \
+        '{"args": ["-p", $prompt, "--no-session-persistence"], "cwd": $cwd}')
+      echo "$REQ" | ${pkgs.netcat-gnu}/bin/nc -U "$SOCK" | \
+        ${pkgs.jq}/bin/jq -r 'if .type == "stdout" and .data then .data elif .type == "stderr" and .data then .data | halt_error(0) elif .type == "error" then .data | halt_error(1) else empty end'
+    '')
     beads
     ticket
 
