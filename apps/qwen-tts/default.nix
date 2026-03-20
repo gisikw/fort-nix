@@ -16,6 +16,12 @@ let
       1.7B-CustomVoice:
         hf_id: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
         type: customvoice
+      0.6B-Base:
+        hf_id: Qwen/Qwen3-TTS-12Hz-0.6B-Base
+        type: base
+      1.7B-Base:
+        hf_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+        type: base
     optimization:
       attention: sdpa
       compile_mode: max-autotune
@@ -105,6 +111,18 @@ in
   systemd.services.podman-qwen-tts.serviceConfig = {
     Restart = lib.mkForce "on-failure";
     RestartSec = "30s";
+  };
+
+  # Voice Studio (mounted at /voice-studio/) generates file URLs without its
+  # subpath prefix — requests hit /gradio_api/file=... instead of
+  # /voice-studio/gradio_api/file=... causing 404s. Rewrite to fix.
+  services.nginx.virtualHosts."qwen-tts.${domain}".locations."~ ^/gradio_api/" = {
+    proxyPass = "http://127.0.0.1:${toString port}";
+    proxyWebsockets = true;
+    extraConfig = ''
+      rewrite ^/gradio_api/(.*) /voice-studio/gradio_api/$1 break;
+      proxy_set_header Cookie $http_cookie;
+    '';
   };
 
   fort.cluster.services = [
