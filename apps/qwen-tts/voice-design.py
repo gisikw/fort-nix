@@ -36,7 +36,7 @@ def load_model():
         return
     from qwen_tts import Qwen3TTSModel
 
-    log.info("loading Qwen3-TTS-12Hz-0.6B-VoiceDesign...")
+    log.info("loading Qwen3-TTS-12Hz-1.7B-VoiceDesign...")
     model = Qwen3TTSModel.from_pretrained(
         "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
         device_map="cuda:0",
@@ -100,7 +100,7 @@ async def generate(req: DesignRequest):
 @app.get("/health")
 def health():
     return {"status": "ok" if model is not None else "not_loaded",
-            "model": "Qwen3-TTS-12Hz-0.6B-VoiceDesign"}
+            "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign"}
 
 
 @app.get("/", response_class=HTMLResponse)
