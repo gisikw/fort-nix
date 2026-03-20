@@ -4,7 +4,7 @@ rec {
 
   roles = [ ];
 
-  apps = [ "vllm" ];
+  apps = [ "qwen-tts" ];
 
   aspects = [ "observable" "nvidia-gpu" ];
 
