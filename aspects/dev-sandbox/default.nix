@@ -125,7 +125,7 @@ let
       # Build JSON request — jq handles escaping
       REQ=$(${pkgs.jq}/bin/jq -n --arg prompt "$PROMPT" --arg cwd "$CWD" \
         '{"args": ["-p", $prompt, "--no-session-persistence"], "cwd": $cwd}')
-      echo "$REQ" | ${pkgs.netcat-gnu}/bin/nc -U "$SOCK" | \
+      echo "$REQ" | ${pkgs.nmap}/bin/ncat -U "$SOCK" | \
         ${pkgs.jq}/bin/jq -r 'if .type == "stdout" and .data then .data elif .type == "stderr" and .data then .data | halt_error(0) elif .type == "error" then .data | halt_error(1) else empty end'
     '')
     beads
