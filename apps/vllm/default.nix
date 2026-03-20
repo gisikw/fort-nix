@@ -18,14 +18,11 @@ in
       HF_HOME = "/hf";
     };
 
+    # Nightly image is missing soundfile dep needed by mistral_common for audio
+    entrypoint = "/bin/bash";
     cmd = [
-      "--model" "mistralai/Voxtral-Mini-4B-Realtime-2602"
-      "--compilation-config" ''{"cudagraph_mode":"PIECEWISE"}''
-      "--tensor-parallel-size" "1"
-      "--max-model-len" "32000"
-      "--gpu-memory-utilization" "0.90"
-      "--host" "0.0.0.0"
-      "--port" (toString vllmPort)
+      "-c"
+      ''pip install soundfile >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --compilation-config '{"cudagraph_mode":"PIECEWISE"}' --tensor-parallel-size 1 --max-model-len 32000 --gpu-memory-utilization 0.90 --host 0.0.0.0 --port ${toString vllmPort}''
     ];
 
     extraOptions = [

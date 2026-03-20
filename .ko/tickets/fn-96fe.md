@@ -1,6 +1,6 @@
 ---
 id: fn-96fe
-status: open
+status: in_progress
 deps: []
 created: 2026-03-08T07:44:29Z
 type: task
