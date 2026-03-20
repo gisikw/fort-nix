@@ -67,8 +67,12 @@ in
     {
       name = "qwen-tts";
       port = port;
-      visibility = "vpn";
-      sso.mode = "none";
+      visibility = "public";
+      sso = {
+        mode = "gatekeeper";
+        vpnBypass = true;
+        groups = [ "admin" ];
+      };
       health.endpoint = "/health";
     }
   ];

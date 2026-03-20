@@ -1,9 +1,8 @@
 import io
-import json
 import logging
 import subprocess
-import tempfile
 
+import gradio as gr
 import numpy as np
 import soundfile as sf
 import torch
@@ -15,7 +14,7 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO, format="[qwen-tts] %(message)s")
 log = logging.getLogger("qwen-tts")
 
-app = FastAPI()
+app = FastAPI(root_path="/api")
 
 model = None
 
@@ -155,5 +154,55 @@ def voices():
     }
 
 
+def gradio_synthesize(text, speaker, language, instructions):
+    """Gradio interface function — shares the model with the API."""
+    if not text:
+        return None
+
+    voice_key = speaker.lower()
+    speaker_info = SPEAKERS.get(voice_key)
+    if not speaker_info:
+        return None
+
+    speaker_name, default_lang = speaker_info
+    lang = language if language != "Auto" else default_lang
+
+    log.info("ui: voice=%s lang=%s text=%s", speaker_name, lang, repr(text[:80]))
+
+    wavs, sr = model.generate_custom_voice(
+        text=text,
+        language=lang,
+        speaker=speaker_name,
+        instruct=instructions or "",
+    )
+
+    return (sr, wavs[0])
+
+
+LANGUAGES = [
+    "Auto", "Chinese", "English", "Japanese", "Korean",
+    "German", "French", "Russian", "Portuguese", "Spanish", "Italian",
+]
+
+demo = gr.Interface(
+    fn=gradio_synthesize,
+    inputs=[
+        gr.Textbox(label="Text", lines=3, placeholder="Enter text to synthesize..."),
+        gr.Dropdown(choices=list(SPEAKERS.keys()), value="ryan", label="Speaker"),
+        gr.Dropdown(choices=LANGUAGES, value="Auto", label="Language"),
+        gr.Textbox(
+            label="Instructions (optional)",
+            placeholder="e.g., whisper, speak angrily, with warmth",
+        ),
+    ],
+    outputs=gr.Audio(label="Generated Speech"),
+    title="Qwen3-TTS",
+    description="Text-to-speech with instruction-driven style control.",
+)
+
+# Mount FastAPI at /api, Gradio UI at root
+full_app = gr.mount_gradio_app(app, demo, path="/")
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8880)
+    uvicorn.run(full_app, host="0.0.0.0", port=8880)
