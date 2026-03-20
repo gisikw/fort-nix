@@ -4,9 +4,9 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [ "vllm" ];
 
-  aspects = [ "observable" ];
+  aspects = [ "observable" "nvidia-gpu" ];
 
   module =
     { config, ... }:
