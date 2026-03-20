@@ -123,7 +123,7 @@ let
       PROMPT="$1"
       echo '{"args":["-p","'"$PROMPT"'","--no-session-persistence"],"cwd":"/tmp"}' | \
         ${pkgs.libressl.nc}/bin/nc -U /run/ccd/ccd.sock | \
-        ${pkgs.jq}/bin/jq -r 'select(.type == "stdout") | .data'
+        ${pkgs.jq}/bin/jq -r 'select(.type == "stdout" and .data) | .data'
     '')
     beads
     ticket
