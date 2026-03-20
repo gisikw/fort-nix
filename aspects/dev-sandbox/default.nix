@@ -128,7 +128,7 @@ let
       CWD="$(pwd)"
       REQ=$(${pkgs.jq}/bin/jq -n --arg f "$FLAG" --arg p "$PROMPT" --arg n "$NSP" --arg c "$CWD" \
         '{"args": [$f, $p, $n], "cwd": $c}')
-      echo "$REQ" | ${pkgs.nmap}/bin/ncat -U "$SOCK" | \
+      echo "$REQ" | ${pkgs.libressl.nc}/bin/nc -U "$SOCK" | \
         ${pkgs.jq}/bin/jq -r 'if .type == "stdout" and .data then .data elif .type == "stderr" and .data then .data | halt_error(0) elif .type == "error" then .data | halt_error(1) else empty end'
     '')
     beads
