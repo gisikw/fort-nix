@@ -22,7 +22,7 @@ in
     entrypoint = "/bin/bash";
     cmd = [
       "-c"
-      ''pip install soundfile >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --tensor-parallel-size 1 --max-model-len 32768 --gpu-memory-utilization 0.90 --host 0.0.0.0 --port ${toString vllmPort}''
+      ''pip install soundfile >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --tensor-parallel-size 1 --max-model-len 8192 --gpu-memory-utilization 0.90 --host 0.0.0.0 --port ${toString vllmPort}''
     ];
 
     extraOptions = [
