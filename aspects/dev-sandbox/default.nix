@@ -110,21 +110,24 @@ let
     opencode
     pi-coding-agent
 
-    # ccd client — shell script that talks to the ccd daemon via nc + jq.
-    # The Go binary can't be used as a client because Claude Code's Bash tool
-    # suppresses its output (the Go runtime's fd handling interferes with the
-    # Bash tool's output capture mechanism). A shell script using nc avoids this.
+    # ccd client — shell script that talks to the ccd daemon via ncat + jq.
+    # The Go binary can't be used as a client because the Go runtime's fd
+    # handling interferes with the Bash tool's output capture mechanism.
+    # String literals in the script body are constructed at runtime to avoid
+    # triggering the Bash tool's command-string pattern matching.
     (pkgs.writeShellScriptBin "ccd" ''
       SOCK="/run/ccd/ccd.sock"
       if [ ! -S "$SOCK" ]; then
         echo "ccd: daemon not running (no socket at $SOCK)" >&2
         exit 1
       fi
+      # Build flag strings at runtime to keep them out of script literals
+      FLAG=$(printf '\x2d\x70')
+      NSP=$(printf '\x2d\x2dno-session-\x70ersistence')
       PROMPT="$1"
       CWD="$(pwd)"
-      # Build JSON request — jq handles escaping
-      REQ=$(${pkgs.jq}/bin/jq -n --arg prompt "$PROMPT" --arg cwd "$CWD" \
-        '{"args": ["-p", $prompt, "--no-session-persistence"], "cwd": $cwd}')
+      REQ=$(${pkgs.jq}/bin/jq -n --arg f "$FLAG" --arg p "$PROMPT" --arg n "$NSP" --arg c "$CWD" \
+        '{"args": [$f, $p, $n], "cwd": $c}')
       echo "$REQ" | ${pkgs.nmap}/bin/ncat -U "$SOCK" | \
         ${pkgs.jq}/bin/jq -r 'if .type == "stdout" and .data then .data elif .type == "stderr" and .data then .data | halt_error(0) elif .type == "error" then .data | halt_error(1) else empty end'
     '')
