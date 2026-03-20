@@ -1,6 +1,6 @@
 rec {
   hostName = "frankenstein";
-  device = "533a26f4-6daf-4eb9-8548-3fb0adb3e4d6";
+  device = "e3cf262e-c319-5d58-bfc5-16b531e3377b";
 
   roles = [ ];
 
