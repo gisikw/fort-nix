@@ -84,6 +84,10 @@ def load_model():
         dtype=torch.bfloat16,
         attn_implementation="sdpa",
     )
+    # torch.compile for kernel fusion — first inference is slow (compilation),
+    # subsequent calls should be significantly faster
+    log.info("compiling model with torch.compile...")
+    model.model = torch.compile(model.model, mode="reduce-overhead")
     log.info("model loaded, ready to serve")
 
 
