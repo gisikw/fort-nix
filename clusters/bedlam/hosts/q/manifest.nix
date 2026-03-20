@@ -1,6 +1,6 @@
 rec {
   hostName = "q";
-  device = "03000200-0400-0500-0006-000700080009";
+  device = "cbc32a2f-a1bc-5a97-a6d8-911ed8c61ba3";
 
   roles = [ ];
 
