@@ -10,9 +10,9 @@ let
     destination = "/server.py";
   };
 
-  # PyTorch 2.6 with CUDA 12.6 — SM 12.0 (Blackwell) works through driver
-  # forward compatibility with the host's beta NVIDIA driver.
-  baseImage = "pytorch/pytorch:2.6.0-cuda12.6-cudnn9-runtime";
+  # CUDA 12.8 runtime — includes SM 12.0 (Blackwell) kernel support.
+  # PyTorch cu126 lacks SM 12.0 kernels and PTX JIT fails for bf16 casts.
+  baseImage = "nvidia/cuda:12.8.1-runtime-ubuntu24.04";
 in
 {
   virtualisation.oci-containers.containers.qwen-tts = {
@@ -26,7 +26,18 @@ in
     entrypoint = "/bin/bash";
     cmd = [
       "-c"
-      ''pip install --cache-dir /pip-cache qwen-tts fastapi uvicorn soundfile >/dev/null 2>&1 && exec python /app/server.py''
+      (builtins.concatStringsSep " && " [
+        # Install Python + system deps (fast, ~10s)
+        "apt-get update -qq"
+        "apt-get install -qq -y python3 python3-pip python3-venv ffmpeg sox libsndfile1 >/dev/null 2>&1"
+        # Create venv + install PyTorch with CUDA 12.8 SM 12.0 support
+        "python3 -m venv /opt/venv"
+        "/opt/venv/bin/pip install --cache-dir /pip-cache torch torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -1"
+        # Install qwen-tts + API deps
+        "/opt/venv/bin/pip install --cache-dir /pip-cache qwen-tts fastapi uvicorn soundfile 2>&1 | tail -1"
+        # Run server
+        "exec /opt/venv/bin/python /app/server.py"
+      ])
     ];
 
     extraOptions = [
