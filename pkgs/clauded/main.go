@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 )
 
 const (
@@ -49,6 +50,14 @@ type Message struct {
 }
 
 func main() {
+	// Close inherited fd 3+ immediately. The Bash tool uses fd 3 as a control
+	// pipe for process monitoring. If child processes hold it open or interfere
+	// with it, the Bash tool cannot retrieve captured output. Closing extra fds
+	// prevents any interaction — the client only needs stdin/stdout/stderr.
+	for fd := 3; fd < 20; fd++ {
+		syscall.Close(fd)
+	}
+
 	if len(os.Args) >= 2 && os.Args[1] == "serve" {
 		sock := defaultSocket
 		for i, arg := range os.Args[2:] {
