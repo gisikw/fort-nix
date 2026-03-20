@@ -3,6 +3,13 @@
 let
   domain = rootManifest.fortConfig.settings.domain;
   port = 8880;
+  voiceDesignPort = 8881;
+
+  voiceDesignScript = pkgs.writeTextFile {
+    name = "voice-design-server";
+    text = builtins.readFile ./voice-design.py;
+    destination = "/voice-design.py";
+  };
 
   # Optimized backend config — 0.6B model for speed on 16GB VRAM (5060 Ti).
   # torch.compile on codebook predictor + TF32 + cuDNN benchmark = ~25-35% speedup.
@@ -56,7 +63,10 @@ in
 {
   virtualisation.oci-containers.containers.qwen-tts = {
     image = baseImage;
-    ports = [ "127.0.0.1:${toString port}:${toString port}" ];
+    ports = [
+      "127.0.0.1:${toString port}:${toString port}"
+      "127.0.0.1:${toString voiceDesignPort}:${toString voiceDesignPort}"
+    ];
 
     environment = {
       HF_HOME = "/hf";
@@ -81,7 +91,9 @@ in
         "test -d /app/repo/.git && (cd /app/repo && git pull -q) || git clone -q https://github.com/groxaxo/Qwen3-TTS-Openai-Fastapi.git /app/repo"
         # Install project with API deps + gradio for voice studio
         "/venv/bin/pip install --cache-dir /pip-cache -e '/app/repo[api]' gradio 2>&1 | tail -1"
-        # Run with optimized backend
+        # Start voice design server in background (lazy-loads VoiceDesign model on first use)
+        "/venv/bin/python /app/voice-design.py &"
+        # Run main TTS server
         "cd /app/repo && exec /venv/bin/python -m api.main"
       ])
     ];
@@ -97,6 +109,7 @@ in
       "/var/lib/qwen-tts/venv:/venv:Z"
       "/var/lib/qwen-tts/repo:/app/repo:Z"
       "${configFile}:/app/config.yaml:ro"
+      "${voiceDesignScript}/voice-design.py:/app/voice-design.py:ro"
     ];
   };
 
@@ -113,16 +126,28 @@ in
     RestartSec = "30s";
   };
 
-  # Voice Studio (mounted at /voice-studio/) generates file URLs without its
-  # subpath prefix — requests hit /gradio_api/file=... instead of
-  # /voice-studio/gradio_api/file=... causing 404s. Rewrite to fix.
-  services.nginx.virtualHosts."qwen-tts.${domain}".locations."~ ^/gradio_api/" = {
-    proxyPass = "http://127.0.0.1:${toString port}";
-    proxyWebsockets = true;
-    extraConfig = ''
-      rewrite ^/gradio_api/(.*) /voice-studio/gradio_api/$1 break;
-      proxy_set_header Cookie $http_cookie;
-    '';
+  services.nginx.virtualHosts."qwen-tts.${domain}".locations = {
+    # Voice Design — standalone page calling qwen_tts VoiceDesign model directly.
+    # Runs on separate port, lazy-loads model on first request.
+    "/voice-design/" = {
+      proxyPass = "http://127.0.0.1:${toString voiceDesignPort}/";
+      proxyWebsockets = true;
+      extraConfig = ''
+        proxy_set_header Cookie $http_cookie;
+        proxy_read_timeout 300s;
+      '';
+    };
+    # Voice Studio (mounted at /voice-studio/) generates file URLs without its
+    # subpath prefix — requests hit /gradio_api/file=... instead of
+    # /voice-studio/gradio_api/file=... causing 404s. Rewrite to fix.
+    "~ ^/gradio_api/" = {
+      proxyPass = "http://127.0.0.1:${toString port}";
+      proxyWebsockets = true;
+      extraConfig = ''
+        rewrite ^/gradio_api/(.*) /voice-studio/gradio_api/$1 break;
+        proxy_set_header Cookie $http_cookie;
+      '';
+    };
   };
 
   fort.cluster.services = [
