@@ -8,8 +8,7 @@ let
 
   exoTtsProxy = import ./proxy {
     inherit pkgs;
-    refAudioPath = config.age.secrets.exo-voice-audio.path;
-    refTranscriptPath = config.age.secrets.exo-voice-transcript.path;
+    backendURL = "http://127.0.0.1:${toString port}";
   };
 
   voiceDesignScript = pkgs.writeTextFile {
@@ -81,6 +80,7 @@ in
       TTS_CONFIG = "/app/config.yaml";
       TTS_WARMUP_ON_START = "true";
       ENABLE_VOICE_STUDIO = "true";
+      VOICE_LIBRARY_DIR = "/voice-library";
     };
 
     entrypoint = "/bin/bash";
@@ -115,6 +115,7 @@ in
       "/var/lib/qwen-tts/pip-cache:/pip-cache:Z"
       "/var/lib/qwen-tts/venv:/venv:Z"
       "/var/lib/qwen-tts/repo:/app/repo:Z"
+      "/var/lib/qwen-tts/voice-library:/voice-library:ro"
       "${configFile}:/app/config.yaml:ro"
       "${voiceDesignScript}/voice-design.py:/app/voice-design.py:ro"
     ];
@@ -126,6 +127,7 @@ in
     "d /var/lib/qwen-tts/pip-cache 0755 root root -"
     "d /var/lib/qwen-tts/venv 0755 root root -"
     "d /var/lib/qwen-tts/repo 0755 root root -"
+    "d /var/lib/qwen-tts/voice-library 0755 root root -"
   ];
 
   systemd.services.podman-qwen-tts.serviceConfig = {
@@ -157,12 +159,12 @@ in
     };
   };
 
-  # Voice clone can take >60s on 1.7B-Base; bump from nginx default
+  # Voice clone can take >60s; bump from nginx default
   services.nginx.virtualHosts."exo-tts.${domain}".locations."/".extraConfig = lib.mkAfter ''
     proxy_read_timeout 300s;
   '';
 
-  # Exo voice reference — decrypted at activation, read by proxy at startup
+  # Exo voice reference — decrypted at activation, assembled into voice profile
   age.secrets.exo-voice-audio = {
     file = ./exo-voice.wav.age;
     owner = "root";
@@ -172,7 +174,33 @@ in
     owner = "root";
   };
 
-  # Exo TTS proxy — bakes in voice reference, proxies to groxaxo backend
+  # Assemble voice profile from decrypted secrets before container starts
+  systemd.services.exo-voice-profile = {
+    description = "Assemble Exo voice profile for Qwen TTS";
+    before = [ "podman-qwen-tts.service" ];
+    requiredBy = [ "podman-qwen-tts.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      mkdir -p /var/lib/qwen-tts/voice-library/profiles/exo
+      cp ${config.age.secrets.exo-voice-audio.path} /var/lib/qwen-tts/voice-library/profiles/exo/reference.wav
+      REF_TEXT=$(cat ${config.age.secrets.exo-voice-transcript.path})
+      cat > /var/lib/qwen-tts/voice-library/profiles/exo/meta.json <<EOF
+      {
+        "name": "exo",
+        "profile_id": "exo",
+        "ref_audio_filename": "reference.wav",
+        "ref_text": "$REF_TEXT",
+        "x_vector_only_mode": false,
+        "language": "English"
+      }
+      EOF
+    '';
+  };
+
+  # Exo TTS proxy — sends clone:exo to /v1/audio/speech, callers just send text
   systemd.services.exo-tts-proxy = {
     description = "Exo TTS proxy";
     after = [ "podman-qwen-tts.service" ];

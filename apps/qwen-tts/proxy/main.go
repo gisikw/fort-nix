@@ -2,30 +2,21 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 )
 
 // Injected at build time
 var (
-	listenAddr        = ":8882"
-	backendURL        = "http://127.0.0.1:8880"
-	refAudioPath      = ""
-	refTranscriptPath = ""
+	listenAddr = ":8882"
+	backendURL = "http://127.0.0.1:8880"
 )
 
-var (
-	refAudioB64   string
-	refTranscript string
-	httpClient    = &http.Client{Timeout: 300 * time.Second}
-)
+var httpClient = &http.Client{Timeout: 300 * time.Second}
 
 // Request from the caller — just text and optional format
 type SpeechRequest struct {
@@ -33,44 +24,21 @@ type SpeechRequest struct {
 	ResponseFormat string `json:"response_format,omitempty"`
 }
 
-// VoiceCloneRequest matches the groxaxo /v1/audio/voice-clone schema
-type VoiceCloneRequest struct {
+// Request sent to backend — uses voice library profile
+type BackendRequest struct {
+	Model          string `json:"model"`
+	Voice          string `json:"voice"`
 	Input          string `json:"input"`
-	RefAudio       string `json:"ref_audio"`
-	RefText        string `json:"ref_text"`
-	Language       string `json:"language"`
 	ResponseFormat string `json:"response_format"`
 }
 
 func main() {
-	if err := loadReference(); err != nil {
-		log.Fatalf("failed to load reference data: %v", err)
-	}
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/audio/speech", handleSpeech)
 	mux.HandleFunc("/health", handleHealth)
 
-	log.Printf("exo-tts proxy listening on %s (backend: %s)", listenAddr, backendURL)
+	log.Printf("exo-tts proxy listening on %s (backend: %s, voice: clone:exo)", listenAddr, backendURL)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
-}
-
-func loadReference() error {
-	audioBytes, err := os.ReadFile(refAudioPath)
-	if err != nil {
-		return fmt.Errorf("read ref audio %s: %w", refAudioPath, err)
-	}
-	refAudioB64 = base64.StdEncoding.EncodeToString(audioBytes)
-	log.Printf("loaded reference audio: %d bytes -> %d base64 chars", len(audioBytes), len(refAudioB64))
-
-	transcriptBytes, err := os.ReadFile(refTranscriptPath)
-	if err != nil {
-		return fmt.Errorf("read ref transcript %s: %w", refTranscriptPath, err)
-	}
-	refTranscript = strings.TrimSpace(string(transcriptBytes))
-	log.Printf("loaded reference transcript: %q", refTranscript)
-
-	return nil
 }
 
 func handleSpeech(w http.ResponseWriter, r *http.Request) {
@@ -103,11 +71,10 @@ func handleSpeech(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("synthesizing: format=%s text=%q", format, truncate(req.Input, 80))
 
-	backendReq := VoiceCloneRequest{
+	backendReq := BackendRequest{
+		Model:          "tts-1",
+		Voice:          "clone:exo",
 		Input:          req.Input,
-		RefAudio:       refAudioB64,
-		RefText:        refTranscript,
-		Language:       "English",
 		ResponseFormat: format,
 	}
 
@@ -117,7 +84,7 @@ func handleSpeech(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpReq, err := http.NewRequest("POST", backendURL+"/v1/audio/voice-clone", bytes.NewReader(reqJSON))
+	httpReq, err := http.NewRequest("POST", backendURL+"/v1/audio/speech", bytes.NewReader(reqJSON))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -132,7 +99,6 @@ func handleSpeech(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Forward content type and status from backend
 	for k, v := range resp.Header {
 		for _, vv := range v {
 			w.Header().Add(k, vv)
