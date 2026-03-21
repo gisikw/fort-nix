@@ -109,7 +109,7 @@ func handleSpeech(w http.ResponseWriter, r *http.Request) {
 
 	backendReq := BackendRequest{
 		Model:          "tts-1",
-		Voice:          "clone:exo",
+		Voice:          "alloy",
 		Input:          req.Input,
 		ResponseFormat: format,
 		TaskType:       "Base",
