@@ -157,6 +157,11 @@ in
     };
   };
 
+  # Voice clone can take >60s on 1.7B-Base; bump from nginx default
+  services.nginx.virtualHosts."exo-tts.${domain}".locations."/".extraConfig = lib.mkAfter ''
+    proxy_read_timeout 300s;
+  '';
+
   # Exo voice reference — decrypted at activation, read by proxy at startup
   age.secrets.exo-voice-audio = {
     file = ./exo-voice.wav.age;
