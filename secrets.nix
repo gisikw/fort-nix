@@ -49,6 +49,8 @@ in
   "./apps/radicale/password.age".publicKeys = activeKeys;
   "./clusters/bedlam/pii-denylist.age".publicKeys = activeKeys;
   "./common/fort/token-secret.age".publicKeys = activeKeys;
+  "./apps/qwen-tts/exo-voice.wav.age".publicKeys = activeKeys;
+  "./apps/qwen-tts/exo-voice-transcript.age".publicKeys = activeKeys;
   # CI private key - only for admin/dev-sandbox (CI can't decrypt its own key)
   "./clusters/bedlam/ci-age-key.age".publicKeys = primaryKeys;
 }

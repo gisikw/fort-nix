@@ -4,6 +4,13 @@ let
   domain = rootManifest.fortConfig.settings.domain;
   port = 8880;
   voiceDesignPort = 8881;
+  exoTtsPort = 8882;
+
+  exoTtsProxy = import ./proxy {
+    inherit pkgs;
+    refAudioPath = config.age.secrets.exo-voice-audio.path;
+    refTranscriptPath = config.age.secrets.exo-voice-transcript.path;
+  };
 
   voiceDesignScript = pkgs.writeTextFile {
     name = "voice-design-server";
@@ -150,6 +157,29 @@ in
     };
   };
 
+  # Exo voice reference — decrypted at activation, read by proxy at startup
+  age.secrets.exo-voice-audio = {
+    file = ./exo-voice.wav.age;
+    owner = "root";
+  };
+  age.secrets.exo-voice-transcript = {
+    file = ./exo-voice-transcript.age;
+    owner = "root";
+  };
+
+  # Exo TTS proxy — bakes in voice reference, proxies to groxaxo backend
+  systemd.services.exo-tts-proxy = {
+    description = "Exo TTS proxy";
+    after = [ "podman-qwen-tts.service" ];
+    requires = [ "podman-qwen-tts.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      ExecStart = "${exoTtsProxy}/bin/exo-tts-proxy";
+      Restart = "on-failure";
+      RestartSec = "5s";
+    };
+  };
+
   fort.cluster.services = [
     {
       name = "qwen-tts";
@@ -160,6 +190,13 @@ in
         vpnBypass = true;
         groups = [ "admin" ];
       };
+      health.endpoint = "/health";
+    }
+    {
+      name = "exo-tts";
+      port = exoTtsPort;
+      visibility = "local";
+      sso.mode = "none";
       health.endpoint = "/health";
     }
   ];
