@@ -108,7 +108,7 @@ func handleSpeech(w http.ResponseWriter, r *http.Request) {
 	log.Printf("synthesizing: format=%s text=%q", format, truncate(req.Input, 80))
 
 	backendReq := BackendRequest{
-		Model:          "1.7B-Base",
+		Model:          "tts-1",
 		Voice:          "clone:exo",
 		Input:          req.Input,
 		ResponseFormat: format,
