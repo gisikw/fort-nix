@@ -84,7 +84,7 @@ let
 
   # Collect secrets from all overlays
   allSecrets = lib.foldlAttrs (acc: name: ov:
-    acc // (builtins.mapAttrs' (secretName: secretPath: {
+    acc // (lib.mapAttrs' (secretName: secretPath: {
       name = "overlay-${name}-${secretName}";
       value = {
         file = secretPath;

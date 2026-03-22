@@ -631,15 +631,5 @@ in
       visibility = "vpn";
       sso.mode = "none";
     }
-    {
-      name = "ko";
-      subdomain = "ko";
-      port = 19876;
-      visibility = "public";
-      sso = {
-        mode = "gatekeeper";
-        vpnBypass = true;
-      };
-    }
   ];
 }
