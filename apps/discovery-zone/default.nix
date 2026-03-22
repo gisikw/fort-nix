@@ -21,7 +21,7 @@ in
       Restart = "always";
       RestartSec = 5;
 
-      Environment = "PATH=/run/managed-bin:${homeDir}/.local/bin:/run/current-system/sw/bin";
+      Environment = "PATH=/run/overlays/bin:/run/managed-bin:${homeDir}/.local/bin:/run/current-system/sw/bin";
     };
   };
 

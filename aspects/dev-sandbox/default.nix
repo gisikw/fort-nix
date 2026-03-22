@@ -527,7 +527,7 @@ in
     };
     path = devTools ++ [ pkgs.bash ];
     script = ''
-      export PATH="/run/managed-bin:$PATH"
+      export PATH="/run/overlays/bin:/run/managed-bin:$PATH"
       ${homeDir}/Projects/exocortex/scripts/daily-briefing/run.sh
     '';
   };
@@ -556,7 +556,7 @@ in
     path = devTools ++ [ pkgs.bash pkgs.ffmpeg ];
     script = ''
       . /etc/set-environment
-      export PATH="/run/managed-bin:${homeDir}/.local/bin:$PATH"
+      export PATH="/run/overlays/bin:/run/managed-bin:${homeDir}/.local/bin:$PATH"
       exec ${homeDir}/Projects/cranium/cranium
     '';
   };
@@ -586,7 +586,7 @@ in
       set -a
       . /var/lib/fort/dev-sandbox/env
       set +a
-      export PATH="/run/managed-bin:$PATH"
+      export PATH="/run/overlays/bin:/run/managed-bin:$PATH"
       exec ${ccd}/bin/ccd serve
     '';
   };

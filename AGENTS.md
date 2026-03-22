@@ -35,8 +35,9 @@ clusters/<cluster>/
   hosts/<name>/manifest.nix  # Host config: roles, apps, aspects
   devices/<uuid>/            # Auto-generated device bindings
 pkgs/<name>/default.nix      # Custom derivations for external projects
-apps/<name>/default.nix      # App modules
+apps/<name>/default.nix      # App modules (NixOS-managed services)
 aspects/<name>/default.nix   # Aspect modules
+common/fort/overlays.nix     # Overlay system (runtime-deployed services)
 roles/<name>.nix             # Role definitions (sets of apps + aspects)
 device-profiles/<type>/      # Hardware base images (beelink, linode, etc.)
 ```
@@ -70,6 +71,105 @@ Then add it to a host's `manifest.nix`:
 After deploying a new app with a subdomain, DNS is updated automatically via the control plane (`dns-headscale` and `dns-coredns` capabilities). The consumer needs trigger on deploy, so DNS should be available shortly after the host activates.
 
 Use restart **without** delay unless the service would kill the response (nginx, fort-provider, tailscale).
+
+### Overlays (Runtime-Deployed Services)
+
+For services built from project repos (knockout, headjack, litmus), use **overlays** instead of apps. Overlays let the service definition travel with the binary — fort-nix only declares subscriptions and host-side config.
+
+**When to use overlays vs apps:**
+- **Apps** (`apps/<name>/default.nix`): NixOS-managed services. Service definition lives in fort-nix. Changes require a fort-nix deploy.
+- **Overlays**: Service definition lives in the project repo as `overlay.nix`. CI builds the binary, pushes to Attic, registers with the overlay registry. The overlay manager on the host polls, activates, health-checks, and can roll back.
+
+**Adding an overlay — project repo side:**
+
+1. Create `overlay.nix` in the project root:
+
+```nix
+# overlay.nix
+{ port, storePath, ... }:
+{
+  services.myapp = {
+    exec = "${storePath}/bin/myapp serve --port ${port}";
+    user = "dev";
+    group = "users";
+    workingDirectory = "/home/dev/Projects/myapp";
+    after = [ "network.target" ];
+    restart = "on-failure";
+    restartSec = 5;
+  };
+
+  bins = [ "${storePath}/bin/myapp" ];
+
+  health = {
+    type = "tcp";
+    endpoint = "127.0.0.1:${port}";
+    interval = 2;
+    grace = 5;
+    stabilize = 10;
+  };
+}
+```
+
+2. Copy `overlay.nix` into the build output in `flake.nix`:
+
+```nix
+postInstall = ''
+  cp ${./overlay.nix} $out/overlay.nix
+'';
+```
+
+3. Update CI workflow (`.forgejo/workflows/deploy.yml`) to register with the overlay registry:
+
+```yaml
+- name: Register Overlay
+  run: |
+    STORE_PATH=$(readlink -f ./result)
+    curl -sf -X POST https://overlay-registry.gisi.network/infra/myapp \
+      -d "{\"storePath\":\"$STORE_PATH\"}"
+
+- name: Trigger Refresh
+  run: |
+    fort ratched refresh '{"overlay": "myapp"}'
+```
+
+**Adding an overlay — fort-nix side:**
+
+Add the subscription to the host's `manifest.nix`:
+
+```nix
+overlays = {
+  myapp = {
+    package = "infra/myapp";
+    config.port = "8080";       # Passed to overlay.nix as arguments
+    expose = {                  # Optional: nginx/SSO exposure
+      port = 8080;
+      visibility = "public";
+      sso = { mode = "gatekeeper"; vpnBypass = true; };
+    };
+  };
+};
+```
+
+**Overlay options:**
+
+| Field | Description |
+|-------|-------------|
+| `package` | Attic package name (e.g., `"infra/knockout"`) |
+| `config` | Key-value pairs passed to `overlay.nix` as function arguments |
+| `secrets` | Age-encrypted files → decrypted paths passed to `overlay.nix` |
+| `expose` | Optional `fort.cluster.services` equivalent (port, visibility, sso) |
+| `enabled` | Boolean, default `true` |
+
+**Health check types:** `tcp`, `http`, `exec`, `none` (default). Failed health checks trigger automatic rollback.
+
+**Operations:**
+```bash
+fort <host> refresh '{"overlay": "myapp"}'  # Trigger immediate check
+```
+
+**Overlay-managed binaries** are symlinked to `/run/overlays/bin/` (in PATH). Systemd units are named `overlay-<name>-<service>.service`.
+
+Working examples: knockout, headjack, litmus (all on ratched).
 
 ### SSO Modes
 
