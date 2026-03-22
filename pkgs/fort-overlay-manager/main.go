@@ -408,7 +408,6 @@ func generateUnits(name string, manifest *OverlayManifest) error {
 	targetName := fmt.Sprintf("overlay-%s.target", name)
 	targetContent := fmt.Sprintf(`[Unit]
 Description=Overlay target for %s
-StopWhenUnneeded=true
 `, name)
 
 	if err := os.WriteFile(filepath.Join(unitDir, targetName), []byte(targetContent), 0644); err != nil {
