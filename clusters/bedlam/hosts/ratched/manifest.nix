@@ -19,11 +19,9 @@ rec {
     "conduit"
     "temporal"
     "cranium"
-    "headjack"
     "cupola"
     "excalidraw"
     "cdn"
-    "litmus"
   ];
 
   overlays = {
@@ -33,6 +31,18 @@ rec {
       expose = {
         subdomain = "ko";
         port = 19876;
+        visibility = "public";
+        sso = { mode = "gatekeeper"; vpnBypass = true; };
+      };
+    };
+    headjack = {
+      package = "infra/headjack";
+    };
+    litmus = {
+      package = "infra/litmus";
+      config.port = "8700";
+      expose = {
+        port = 8700;
         visibility = "public";
         sso = { mode = "gatekeeper"; vpnBypass = true; };
       };
@@ -59,8 +69,6 @@ rec {
         runtimePackages = [
           { repo = "infra/bz"; }
           { repo = "infra/unum"; }
-          { repo = "infra/litmus"; restartServices = [ "litmus" ]; }
-          { repo = "infra/headjack"; restartServices = [ "headjack" ]; }
         ];
       };
 
