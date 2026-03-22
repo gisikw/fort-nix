@@ -100,6 +100,13 @@ in
           cluster
           ;
       })
+      (import ../fort/overlays.nix {
+        inherit
+          rootManifest
+          hostManifest
+          cluster
+          ;
+      })
     ]
     ++ appModules
     ++ aspectModules;

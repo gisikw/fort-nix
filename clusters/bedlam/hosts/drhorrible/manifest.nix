@@ -7,6 +7,7 @@ rec {
   apps = [
     "fort-tokens"
     "homepage"
+    "overlay-registry"
     "pocket-id"
   ];
 
