@@ -192,9 +192,10 @@ in
       };
     }
 
-    # Add /run/overlays/bin to PATH
+    # Add /run/overlays/bin to PATH (mkAfter ensures this runs after
+    # runtime-packages.nix, so overlays take precedence over managed-bin)
     {
-      environment.extraInit = ''
+      environment.extraInit = lib.mkAfter ''
         export PATH="/run/overlays/bin:$PATH"
       '';
     }
