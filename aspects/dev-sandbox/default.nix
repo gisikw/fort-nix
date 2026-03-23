@@ -615,6 +615,7 @@ in
   programs.git = {
     enable = true;
     config = {
+      init.defaultBranch = "main";
       credential."https://git.${domain}" = {
         helper = "/etc/fort-git-credential-helper";
       };
