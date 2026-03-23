@@ -414,6 +414,21 @@ EOF
     '';
   };
 
+  # PostgreSQL for CI test runs (runner jobs need createdb access)
+  services.postgresql = {
+    enable = true;
+    authentication = lib.mkForce ''
+      local all all trust
+      host all all 127.0.0.1/32 trust
+      host all all ::1/128 trust
+    '';
+    ensureUsers = [{
+      name = "postgres";
+      ensureClauses.superuser = true;
+      ensureClauses.createdb = true;
+    }];
+  };
+
   # Actions runner daemon
   systemd.services.forgejo-runner = {
     description = "Forgejo Actions runner";
