@@ -42,6 +42,7 @@ in
   "./apps/attic/attic-server-token.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/agent-key.age".publicKeys = activeKeys;
   "./clusters/bedlam/hosts/ratched/ssh-key.age".publicKeys = activeKeys;
+  "./clusters/bedlam/hosts/ratched/cranium-env.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/oauth-client-id.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/oauth-client-secret.age".publicKeys = activeKeys;
   "./aspects/dev-sandbox/env.age".publicKeys = activeKeys;

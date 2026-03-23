@@ -47,6 +47,27 @@ rec {
         sso = { mode = "gatekeeper"; vpnBypass = true; };
       };
     };
+    cranium = {
+      package = "infra/cranium";
+      config = {
+        port = "4100";
+      };
+      secrets = {
+        env = ./cranium-env.age;
+      };
+      expose = {
+        port = 4100;
+        visibility = "public";
+        sso = { mode = "token"; vpnBypass = true; };
+      };
+      # health = {
+      #   type = "http";
+      #   endpoint = "http://127.0.0.1:4100/health";
+      #   interval = 5;
+      #   grace = 10;
+      #   stabilize = 15;
+      # };
+    };
   };
 
   aspects = [
