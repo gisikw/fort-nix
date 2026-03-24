@@ -18,7 +18,6 @@ rec {
     "apple-dist"
     "conduit"
     "temporal"
-    "cranium"
     "cupola"
     "excalidraw"
     "cdn"
