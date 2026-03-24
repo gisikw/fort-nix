@@ -59,6 +59,11 @@ in
         };
         age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
+        # zram swap on all hosts — compressed in-memory swap prevents OOM kills
+        # from taking down the entire box (the failure mode that wedges drhorrible/ratched).
+        zramSwap.enable = true;
+        zramSwap.memoryPercent = 25;
+
         users.users.root.openssh.authorizedKeys.keys = rootAuthorizedKeys;
       }
       impermanence.nixosModules.impermanence

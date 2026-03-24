@@ -37,7 +37,7 @@ let
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
   # Default aspects that every host gets
   # mesh + gitops are platform-universal; host-status is NixOS-only (systemd, nginx, /proc)
-  defaultAspects = [ "mesh" "gitops" ] ++ (if platform == "nixos" then [ "host-status" ] else [ ]);
+  defaultAspects = [ "mesh" "gitops" ] ++ (if platform == "nixos" then [ "host-status" "emergency-reboot" ] else [ ]);
   # Deduplicate aspects: host manifest overrides defaults (attrset form wins over string)
   aspectName = a: if builtins.isString a then a else a.name;
   dedup = defaults: extras:
