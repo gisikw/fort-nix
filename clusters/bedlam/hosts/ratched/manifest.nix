@@ -53,7 +53,7 @@ rec {
         port = "4100";
       };
       secrets = {
-        env = ./cranium-env.age;
+        envFile = ./cranium-env.age;
       };
       expose = {
         port = 4100;
