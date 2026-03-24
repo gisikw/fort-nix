@@ -389,12 +389,17 @@ func resolveSecrets(config map[string]string) map[string]string {
 
 func evalOverlay(storePath string, config map[string]string) (*OverlayManifest, error) {
 	config = resolveSecrets(config)
-	// Build the apply expression: f { port = "19876"; storePath = "/nix/store/..."; }
-	args := fmt.Sprintf("storePath = %q;", storePath)
+	// Build the apply expression with config as both top-level args and nested attrset:
+	// f { port = "19876"; storePath = "/nix/store/..."; config = { port = "19876"; }; }
+	// Top-level for backward compat, config attrset for overlays that prefer it.
+	var configInner string
+	topLevel := fmt.Sprintf("storePath = %q;", storePath)
 	for k, v := range config {
-		args += fmt.Sprintf(" %s = %q;", k, v)
+		topLevel += fmt.Sprintf(" %s = %q;", k, v)
+		configInner += fmt.Sprintf(" %s = %q;", k, v)
 	}
-	applyExpr := fmt.Sprintf("f: f { %s }", args)
+	topLevel += fmt.Sprintf(" config = {%s };", configInner)
+	applyExpr := fmt.Sprintf("f: f { %s }", topLevel)
 
 	cmd := exec.Command("nix", "eval", "--json",
 		"--file", filepath.Join(storePath, "overlay.nix"),
