@@ -57,6 +57,7 @@ type ServiceDef struct {
 	After            []string `json:"after"`
 	Restart          string   `json:"restart"`
 	RestartSec       int      `json:"restartSec"`
+	TimeoutStopSec   int      `json:"timeoutStopSec"`
 	Environment      []string `json:"environment"`
 	EnvironmentFile  []string `json:"environmentFile"`
 }
@@ -474,6 +475,9 @@ Restart=%s
 RestartSec=%d
 `, name, svcName, after, targetName, svc.Exec, restart, restartSec)
 
+		if svc.TimeoutStopSec > 0 {
+			content += fmt.Sprintf("TimeoutStopSec=%d\n", svc.TimeoutStopSec)
+		}
 		if svc.User != "" {
 			content += fmt.Sprintf("User=%s\n", svc.User)
 		}
