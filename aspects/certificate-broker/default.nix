@@ -77,14 +77,38 @@ in
   systemd.services.fort-ssl-local-copy = {
     description = "Copy ACME certs to fort/ssl for local nginx";
     after = [ "acme-${domain}.service" ];
+    before = [ "nginx.service" ];
+    wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
+      RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "copy-local-certs" ''
         set -euo pipefail
         mkdir -p /var/lib/fort/ssl/${domain}
-        cp -L /var/lib/acme/${domain}/fullchain.pem /var/lib/fort/ssl/${domain}/
-        cp -L /var/lib/acme/${domain}/key.pem /var/lib/fort/ssl/${domain}/
-        cp -L /var/lib/acme/${domain}/chain.pem /var/lib/fort/ssl/${domain}/
+
+        ssl_dir="/var/lib/fort/ssl/${domain}"
+        acme_dir="/var/lib/acme/${domain}"
+
+        # Try copying from ACME source (persisted across reboots)
+        if [ -f "$acme_dir/fullchain.pem" ] && \
+           ${pkgs.openssl}/bin/openssl x509 -in "$acme_dir/fullchain.pem" -noout 2>/dev/null; then
+          cp -L "$acme_dir/fullchain.pem" "$ssl_dir/"
+          cp -L "$acme_dir/key.pem" "$ssl_dir/"
+          cp -L "$acme_dir/chain.pem" "$ssl_dir/"
+        # Existing ssl certs are valid — leave them alone
+        elif [ -f "$ssl_dir/fullchain.pem" ] && \
+             ${pkgs.openssl}/bin/openssl x509 -in "$ssl_dir/fullchain.pem" -noout 2>/dev/null; then
+          :
+        # Nothing valid — generate self-signed placeholder so nginx can start
+        else
+          ${pkgs.openssl}/bin/openssl req -x509 -newkey ec \
+            -pkeyopt ec_paramgen_curve:prime256v1 \
+            -days 1 -nodes -subj "/CN=${domain}" \
+            -keyout "$ssl_dir/key.pem" \
+            -out "$ssl_dir/fullchain.pem" 2>/dev/null
+          cp "$ssl_dir/fullchain.pem" "$ssl_dir/chain.pem"
+        fi
+
         chown -R root:root /var/lib/fort/ssl
         chmod -R u=rwX,go=rX /var/lib/fort/ssl
         systemctl reload nginx 2>/dev/null || true
