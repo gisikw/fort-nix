@@ -61,6 +61,12 @@ in
     };
   };
 
+  # Proxy /v1/ directly to Kokoro's OpenAI-compatible API
+  services.nginx.virtualHosts."tts.${domain}".locations."/v1/" = {
+    proxyPass = "http://127.0.0.1:${toString containerPort}/v1/";
+    extraConfig = "proxy_read_timeout 120s;";
+  };
+
   fort.cluster.services = [{
     name = "tts";
     port = httpPort;
