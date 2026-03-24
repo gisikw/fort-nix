@@ -58,6 +58,7 @@ type ServiceDef struct {
 	Restart          string   `json:"restart"`
 	RestartSec       int      `json:"restartSec"`
 	Environment      []string `json:"environment"`
+	EnvironmentFile  []string `json:"environmentFile"`
 }
 
 type HealthConfig struct {
@@ -374,7 +375,20 @@ func realiseStorePath(storePath string) error {
 	return cmd.Run()
 }
 
+func resolveSecrets(config map[string]string) map[string]string {
+	resolved := make(map[string]string, len(config))
+	for k, v := range config {
+		if strings.HasPrefix(v, "%SECRET:") && strings.HasSuffix(v, "%") {
+			resolved[k] = v[len("%SECRET:") : len(v)-1]
+		} else {
+			resolved[k] = v
+		}
+	}
+	return resolved
+}
+
 func evalOverlay(storePath string, config map[string]string) (*OverlayManifest, error) {
+	config = resolveSecrets(config)
 	// Build the apply expression: f { port = "19876"; storePath = "/nix/store/..."; }
 	args := fmt.Sprintf("storePath = %q;", storePath)
 	for k, v := range config {
@@ -438,6 +452,9 @@ Description=Overlay target for %s
 		var envLines string
 		for _, env := range svc.Environment {
 			envLines += fmt.Sprintf("Environment=%s\n", env)
+		}
+		for _, envFile := range svc.EnvironmentFile {
+			envLines += fmt.Sprintf("EnvironmentFile=%s\n", envFile)
 		}
 
 		content := fmt.Sprintf(`[Unit]
