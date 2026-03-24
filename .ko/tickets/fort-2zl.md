@@ -1,8 +1,7 @@
 ---
 id: fort-2zl
-status: open
+status: closed
 deps: []
-links: []
 created: 2026-01-01T17:51:24.193238664Z
 type: task
 priority: 2

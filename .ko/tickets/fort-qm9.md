@@ -1,8 +1,7 @@
 ---
 id: fort-qm9
-status: open
+status: closed
 deps: []
-links: []
 created: 2026-01-10T01:13:32.490727227Z
 type: task
 priority: 2

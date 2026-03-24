@@ -1,8 +1,7 @@
 ---
 id: fort-beu
-status: open
+status: closed
 deps: []
-links: []
 created: 2026-01-01T19:51:45.940347811Z
 type: task
 priority: 4

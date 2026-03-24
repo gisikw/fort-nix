@@ -1,8 +1,7 @@
 ---
 id: fort-549
-status: open
+status: closed
 deps: []
-links: []
 created: 2025-12-30T07:38:10.952090605Z
 type: feature
 priority: 3

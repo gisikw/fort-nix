@@ -1,8 +1,7 @@
 ---
 id: fort-ydn
-status: open
+status: closed
 deps: []
-links: []
 created: 2026-01-01T17:53:56.456498928Z
 type: task
 priority: 2
