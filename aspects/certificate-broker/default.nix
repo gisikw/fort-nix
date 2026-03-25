@@ -111,7 +111,11 @@ in
 
         chown -R root:root /var/lib/fort/ssl
         chmod -R u=rwX,go=rX /var/lib/fort/ssl
-        systemctl reload nginx 2>/dev/null || true
+        # Only reload if nginx is already running (avoid deadlock on boot —
+        # this service runs before nginx via Before=, so reload would block)
+        if ${pkgs.systemd}/bin/systemctl is-active --quiet nginx; then
+          ${pkgs.systemd}/bin/systemctl reload nginx || true
+        fi
       '';
     };
   };
