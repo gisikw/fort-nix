@@ -13,6 +13,15 @@ let
   atticCiToken = "${runnerDir}/attic-ci-token";
   atticCacheUrl = "https://cache.${domain}";
 
+  # Handler for attic-token: extract push token for CI cache access
+  atticTokenHandler = pkgs.writeShellScript "ci-runner-attic-token" ''
+    set -euo pipefail
+    payload=$(${pkgs.coreutils}/bin/cat)
+    echo "$payload" | ${pkgs.jq}/bin/jq -r '.pushToken' > ${atticCiToken}
+    chown ${user}:${user} ${atticCiToken}
+    chmod 0400 ${atticCiToken}
+  '';
+
   runnerTokenHandler = pkgs.writeShellScript "ci-runner-token-consumer" ''
     set -euo pipefail
     payload=$(${pkgs.coreutils}/bin/cat)
@@ -106,5 +115,12 @@ YAML
     request = {};
     handler = runnerTokenHandler;
     nag = "5m";
+  };
+
+  # Request attic cache push token from forge
+  fort.host.needs.attic-token.ci-runner = {
+    from = "drhorrible";
+    request = {};
+    handler = atticTokenHandler;
   };
 }
