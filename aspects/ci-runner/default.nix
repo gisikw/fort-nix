@@ -48,6 +48,16 @@ let
   '';
 in
 {
+  # PostgreSQL for CI pipelines that need a database (e.g., cranium)
+  services.postgresql = {
+    enable = true;
+    authentication = ''
+      local all all trust
+      host all all 127.0.0.1/32 trust
+      host all all ::1/128 trust
+    '';
+  };
+
   age.secrets.ci-agent-key = {
     file = ../../apps/forgejo/ci-agent-key.age;
     owner = user;
@@ -98,7 +108,7 @@ YAML
   # Forgejo Actions runner daemon
   systemd.services.ci-runner = {
     description = "Forgejo Actions runner";
-    after = [ "network.target" "ci-runner-config.service" ];
+    after = [ "network.target" "ci-runner-config.service" "postgresql.service" ];
     requires = [ "ci-runner-config.service" ];
     wantedBy = [ "multi-user.target" ];
     path = [ pkgs.forgejo-runner pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.nodejs ];
