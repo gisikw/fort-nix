@@ -10,6 +10,7 @@ rec {
     "mesh"
     "observable"
     "gitops"
+    "ci-runner"
   ];
 
   module =
