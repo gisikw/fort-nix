@@ -3,7 +3,7 @@ package main
 // TTSRequest is the input format for the tts capability
 type TTSRequest struct {
 	Text   string       `json:"text"`            // Text to synthesize
-	Voice  string       `json:"voice,omitempty"` // Voice name (default: af_heart)
+	Voice  string       `json:"voice,omitempty"` // Voice name (default: af_bella)
 	Format string       `json:"format,omitempty"` // Output format: mp3, wav, opus (default: mp3)
 	Output OutputTarget `json:"output"`          // Where to send the result
 }

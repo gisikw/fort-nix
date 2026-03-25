@@ -16,7 +16,7 @@ var (
 	listenAddr = "127.0.0.1:8788"
 )
 
-const defaultVoice = "af_heart"
+const defaultVoice = "af_bella"
 const defaultFormat = "mp3"
 
 var httpClient = &http.Client{
