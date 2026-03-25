@@ -36,6 +36,9 @@ in
   virtualisation.oci-containers.containers.kokoro-tts = {
     image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4";
     ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
+    environment = {
+      DEFAULT_VOICE = "af_bella";
+    };
   };
 
   # Expose tts capability for cluster-wide text-to-speech (RPC, upload-to-host)
