@@ -48,6 +48,13 @@ let
   '';
 in
 {
+  age.secrets.ci-agent-key = {
+    file = ../../apps/forgejo/ci-agent-key.age;
+    owner = user;
+    group = user;
+    mode = "0400";
+  };
+
   users.users.${user} = {
     isSystemUser = true;
     group = user;
@@ -80,6 +87,8 @@ runner:
     - "nixos:host"
   envs:
     PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.age pkgs.curl pkgs.attic-client fortCli ]}"
+    FORT_SSH_KEY: "${config.age.secrets.ci-agent-key.path}"
+    FORT_ORIGIN: "ci"
     ATTIC_TOKEN_FILE: "${atticCiToken}"
     ATTIC_CACHE_URL: "${atticCacheUrl}"
 YAML
