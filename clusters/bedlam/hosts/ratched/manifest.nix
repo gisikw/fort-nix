@@ -18,7 +18,6 @@ rec {
     "apple-dist"
     "conduit"
     "temporal"
-    "cupola"
     "excalidraw"
     "cdn"
   ];
@@ -42,6 +41,20 @@ rec {
       config.port = "8700";
       expose = {
         port = 8700;
+        visibility = "public";
+        sso = { mode = "gatekeeper"; vpnBypass = true; };
+      };
+    };
+    cupola = {
+      package = "infra/cupola";
+      config = {
+        port = "4001";
+      };
+      secrets = {
+        envFile = ./cupola-env.age;
+      };
+      expose = {
+        port = 4001;
         visibility = "public";
         sso = { mode = "gatekeeper"; vpnBypass = true; };
       };
