@@ -3,6 +3,7 @@ args@{
   nixpkgs,
   hostDir,
   agenix,
+  sops-nix,
   # NixOS-specific inputs (optional on darwin)
   disko ? null,
   impermanence ? null,
@@ -108,6 +109,7 @@ let
       self
       nixpkgs
       agenix
+      sops-nix
       hostManifest
       deviceManifest
       deviceProfileManifest

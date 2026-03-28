@@ -6,6 +6,7 @@
     impermanence.follows = "cluster/impermanence";
     deploy-rs.follows = "cluster/deploy-rs";
     agenix.follows = "cluster/agenix";
+    sops-nix.follows = "cluster/sops-nix";
     comin.follows = "cluster/comin";
     nix-darwin.follows = "cluster/nix-darwin";
     home-config.follows = "cluster/home-config";
@@ -19,6 +20,7 @@
       impermanence,
       deploy-rs,
       agenix,
+      sops-nix,
       comin,
       nix-darwin,
       home-config,
@@ -32,6 +34,7 @@
         impermanence
         deploy-rs
         agenix
+        sops-nix
         comin
         nix-darwin
         home-config

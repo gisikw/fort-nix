@@ -7,6 +7,10 @@
     agenix.url = "github:ryantm/agenix";
     nixos-anywhere.url = "github:nix-community/nixos-anywhere";
     deploy-rs.url = "github:serokell/deploy-rs";
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     comin = {
       url = "github:nlewo/comin";
       inputs.nixpkgs.follows = "nixpkgs";

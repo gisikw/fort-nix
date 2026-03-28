@@ -3,6 +3,7 @@
     cluster.url = "path:../..";
     nixpkgs.follows = "cluster/nixpkgs";
     agenix.follows = "cluster/agenix";
+    sops-nix.follows = "cluster/sops-nix";
     nix-darwin.follows = "cluster/nix-darwin";
   };
 
@@ -11,6 +12,7 @@
       self,
       nixpkgs,
       agenix,
+      sops-nix,
       nix-darwin,
       ...
     }:
@@ -19,6 +21,7 @@
         self
         nixpkgs
         agenix
+        sops-nix
         nix-darwin
         ;
       hostDir = ./.;

@@ -6,6 +6,7 @@
     impermanence.follows = "cluster/impermanence";
     deploy-rs.follows = "cluster/deploy-rs";
     agenix.follows = "cluster/agenix";
+    sops-nix.follows = "cluster/sops-nix";
     comin.follows = "cluster/comin";
   };
 
@@ -17,6 +18,7 @@
       impermanence,
       deploy-rs,
       agenix,
+      sops-nix,
       comin,
       ...
     }:
@@ -28,6 +30,7 @@
         impermanence
         deploy-rs
         agenix
+        sops-nix
         comin
         ;
       hostDir = ./.;

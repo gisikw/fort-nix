@@ -11,6 +11,7 @@
   impermanence,
   deploy-rs,
   agenix,
+  sops-nix,
   comin,
   # Shared context from host.nix
   hostManifest,
@@ -58,6 +59,7 @@ in
           ];
         };
         age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
+        sops.age.sshKeyPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
         # zram swap on all hosts — compressed in-memory swap prevents OOM kills
         # from taking down the entire box (the failure mode that wedges drhorrible/ratched).
@@ -72,6 +74,7 @@ in
       deviceProfileManifest.module
       disko.nixosModules.disko
       agenix.nixosModules.age
+      sops-nix.nixosModules.sops
       comin.nixosModules.comin
       (cluster.devicesDir + "/${hostManifest.device}/hardware-configuration.nix")
       {

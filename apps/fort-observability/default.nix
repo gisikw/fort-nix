@@ -29,8 +29,9 @@ in
     ];
   };
 
-  age.secrets.grafana-admin-pass = {
-    file = ./grafana-admin-pass.age;
+  sops.secrets.grafana-admin-pass = {
+    sopsFile = ./secrets.yaml;
+    key = "grafana_admin_pass";
     owner = "grafana";
     group = "grafana";
     mode = "0400";
@@ -45,7 +46,7 @@ in
       };
       security = {
         admin_user = "admin";
-        admin_password = "$__file{${config.age.secrets.grafana-admin-pass.path}}";
+        admin_password = "$__file{${config.sops.secrets.grafana-admin-pass.path}}";
       };
       "auth.proxy" = {
         enabled = true;
