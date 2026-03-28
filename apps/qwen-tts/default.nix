@@ -17,9 +17,9 @@ let
     destination = "/voice-design.py";
   };
 
-  # Optimized backend config — 0.6B model for speed on 16GB VRAM (5060 Ti).
+  # Optimized backend config — 0.6B model on RTX 3090 (24GB VRAM).
   # torch.compile on codebook predictor + TF32 + cuDNN benchmark = ~25-35% speedup.
-  # SDPA attention (flash_attention_2 needs CUDA devel image to compile).
+  # Flash Attention 2 via CUDA devel image for ~15% additional speedup.
   configFile = pkgs.writeText "qwen-tts-config.yaml" ''
     default_model: 0.6B-CustomVoice
     models:
@@ -36,7 +36,7 @@ let
         hf_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
         type: base
     optimization:
-      attention: sdpa
+      attention: flash_attention_2
       compile_mode: max-autotune
       use_compile: true
       use_cuda_graphs: false
@@ -63,8 +63,8 @@ let
         language: Korean
   '';
 
-  # CUDA 12.8 runtime — includes SM 12.0 (Blackwell) kernel support.
-  baseImage = "nvidia/cuda:12.8.1-runtime-ubuntu24.04";
+  # CUDA 12.8 devel — includes headers for Flash Attention 2 compilation.
+  baseImage = "nvidia/cuda:12.8.1-devel-ubuntu24.04";
 in
 {
   virtualisation.oci-containers.containers.qwen-tts = {
@@ -96,8 +96,8 @@ in
         "/venv/bin/pip install --cache-dir /pip-cache torch torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -1"
         # Clone or update the optimized server
         "test -d /app/repo/.git && (cd /app/repo && git pull -q) || git clone -q https://github.com/groxaxo/Qwen3-TTS-Openai-Fastapi.git /app/repo"
-        # Install project with API deps + gradio for voice studio
-        "/venv/bin/pip install --cache-dir /pip-cache -e '/app/repo[api]' gradio 2>&1 | tail -1"
+        # Install project with API deps + gradio for voice studio + Flash Attention 2
+        "/venv/bin/pip install --cache-dir /pip-cache -e '/app/repo[api]' gradio flash-attn --no-build-isolation 2>&1 | tail -1"
         # Start voice design server in background (subshell so & doesn't affect the && chain)
         "(/venv/bin/python /app/voice-design.py &)"
         # Run main TTS server
