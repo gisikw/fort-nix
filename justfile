@@ -547,6 +547,10 @@ _deploy-gitops host addr:
     fi
   done
 
+rekey path="":
+  #!/usr/bin/env bash
+  nix-shell -p sops ssh-to-age jq --run "bash scripts/rekey.sh '{{path}}'"
+
 fmt:
   nix run .#nixfmt -- .
 

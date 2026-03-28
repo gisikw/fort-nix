@@ -1,6 +1,6 @@
 ---
 id: fn-e5a4
-status: in_progress
+status: closed
 deps: []
 created: 2026-03-28T03:54:18Z
 type: task
