@@ -6,10 +6,7 @@
     impermanence.follows = "root/impermanence";
     agenix.follows = "root/agenix";
     deploy-rs.follows = "root/deploy-rs";
-    sops-nix = {
-      url = "github:Mic92/sops-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    sops-nix.follows = "root/sops-nix";
     comin.follows = "root/comin";
     nix-darwin.follows = "root/nix-darwin";
 
