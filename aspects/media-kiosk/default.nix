@@ -184,7 +184,7 @@ let
     export PATH="${pkgs.retroarch-bare}/bin:$PATH"
 
     cd "$WORKDIR"
-    exec /run/overlays/bin/barely-game-console
+    exec ${pkgs.systemd}/bin/systemd-cat -t barely-game-console /run/overlays/bin/barely-game-console
   '';
 
   # Script to find and enable HDMI audio
