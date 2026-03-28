@@ -170,8 +170,8 @@ in
     {
       systemd.services.fort-overlay-manager-check = {
         description = "Fort overlay manager - check for updates";
-        after = [ "network-online.target" "fort-overlay-manager-boot.service" ];
-        wants = [ "network-online.target" ];
+        after = [ "network-online.target" "tailscaled.service" "fort-overlay-manager-boot.service" ];
+        wants = [ "network-online.target" "tailscaled.service" ];
 
         serviceConfig = {
           Type = "oneshot";
