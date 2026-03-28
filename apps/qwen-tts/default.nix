@@ -21,7 +21,7 @@ let
   # torch.compile on codebook predictor + TF32 + cuDNN benchmark = ~25-35% speedup.
   # Flash Attention 2 via CUDA devel image for ~15% additional speedup.
   configFile = pkgs.writeText "qwen-tts-config.yaml" ''
-    default_model: 0.6B-CustomVoice
+    default_model: 1.7B-CustomVoice
     models:
       0.6B-CustomVoice:
         hf_id: Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
