@@ -549,9 +549,10 @@ These capabilities are restricted to the `dev-sandbox` principal for operational
 # Trigger deployment on manual-confirmation hosts (forge/beacon)
 fort drhorrible deploy '{"sha": "5563ac2"}'
 
-# Fetch journal logs for a service
+# Fetch journal logs for a service (by unit or syslog identifier)
 fort joker journal '{"unit": "nginx", "lines": 50}'
 fort joker journal '{"unit": "fort-provider", "since": "5 min ago"}'
+fort doofenshmirtz journal '{"identifier": "barely-game-console"}'
 
 # Systemd operations
 fort joker systemd '{"action": "restart", "unit": "pocket-id"}'
@@ -573,7 +574,7 @@ fort q force-nag '{"pattern": "oidc"}'     # Reset only oidc-* needs
 | Capability | Request | Notes |
 |------------|---------|-------|
 | `deploy` | `{sha}` | Only on gitops hosts; verifies SHA before confirming |
-| `journal` | `{unit, lines?, since?}` | Returns journalctl output |
+| `journal` | `{unit?, identifier?, lines?, since?}` | Returns journalctl output; `unit` uses `-u`, `identifier` uses `-t` (mutually exclusive) |
 | `systemd` | `{action, unit?, delay?, pattern?}` | Actions: `start`, `restart`, `stop`, `failed`, `status`, `list` |
 | `force-nag` | `{pattern?}` | Resets fulfillment state and restarts consumer; pattern filters by substring |
 

@@ -107,22 +107,32 @@ let
       echo '{"needs":${needsListJson}}'
     '';
 
-    # Fetch journalctl output for a unit (debug capability)
+    # Fetch journalctl output for a unit or syslog identifier (debug capability)
     journal = pkgs.writeShellScript "handler-journal" ''
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
+      identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
       lines=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 100')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
 
-      if [ -z "$unit" ]; then
-        echo '{"error": "unit parameter required"}'
+      if [ -z "$unit" ] && [ -z "$identifier" ]; then
+        echo '{"error": "unit or identifier parameter required"}'
+        exit 1
+      fi
+      if [ -n "$unit" ] && [ -n "$identifier" ]; then
+        echo '{"error": "unit and identifier are mutually exclusive"}'
         exit 1
       fi
 
       # Build journalctl command
-      args=("-u" "$unit" "-n" "$lines" "--no-pager" "-o" "short-iso")
+      if [ -n "$unit" ]; then
+        args=("-u" "$unit")
+      else
+        args=("-t" "$identifier")
+      fi
+      args+=("-n" "$lines" "--no-pager" "-o" "short-iso")
       if [ -n "$since" ]; then
         args+=("--since" "$since")
       fi
