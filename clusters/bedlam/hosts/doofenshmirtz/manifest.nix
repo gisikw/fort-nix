@@ -8,6 +8,12 @@ rec {
 
   aspects = [ "mesh" "observable" { name = "gitops"; manualDeploy = true; } "media-kiosk" ];
 
+  overlays = {
+    barely-game-console = {
+      package = "dev/barely-game-console";
+    };
+  };
+
   module =
     { config, ... }:
     {

@@ -6,8 +6,6 @@ let
   homeDir = "/home/${user}";
   jellyfinUrl = "https://jellyfin.${domain}";
 
-  # Custom packages
-  barely-game-console = import ../../pkgs/barely-game-console { inherit pkgs; };
   joypadAutoconfig = pkgs.retroarch-joypad-autoconfig;
 
   # Persistent data paths
@@ -186,7 +184,7 @@ let
     export PATH="${pkgs.retroarch-bare}/bin:$PATH"
 
     cd "$WORKDIR"
-    exec ${barely-game-console}/bin/barely-game-console
+    exec /run/overlays/bin/barely-game-console
   '';
 
   # Script to find and enable HDMI audio
