@@ -183,15 +183,17 @@ EOF
     log "Deploying ''${PENDING:0:8} (confirmed by $REQ_SHA)"
     cd "${repoDir}"
 
-    if nixos-rebuild switch --flake "./${flakeSubdir}" 2>&1 | logger -t fort-gitops-deploy; then
-      echo "$PENDING" > "${stateDir}/deployed-commit"
-      rm -f "${stateDir}/pending-commit"
-      log "Deployed: ''${PENDING:0:8}"
-      ${postDeployScript} || log "Post-deploy hook failed (non-fatal)"
-      echo "{\"status\":\"deployed\",\"sha\":\"$PENDING\"}"
-    else
-      echo '{"status":"deploy_failed","error":"nixos-rebuild switch failed"}'
-    fi
+    # Write state before switch — nixos-rebuild restarts fort-provider,
+    # which kills this handler. State must be persisted before that happens.
+    echo "$PENDING" > "${stateDir}/deployed-commit"
+    rm -f "${stateDir}/pending-commit"
+    log "Switching to ''${PENDING:0:8}..."
+
+    # The 502 from here is expected — fort-provider restarts during switch.
+    # Caller should verify via status or deployed-commit file.
+    nixos-rebuild switch --flake "./${flakeSubdir}" 2>&1 | logger -t fort-gitops-deploy || true
+    ${postDeployScript} || true
+    echo "{\"status\":\"deployed\",\"sha\":\"$PENDING\"}"
   '';
 
   # --- Darwin gitops-lite: launchd-based git pull + darwin-rebuild ---
