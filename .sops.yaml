@@ -171,7 +171,7 @@ creation_rules:
           - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
           - age1yq3ahanz54nk76wm2kc8vqj2g4yp6378ksnegmnvcamxegypcqcszxsk4h # pettigrew
           - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
-          - age19j83dy4k7tydct5lepj3tdjk7falqe0k8s6hpplszlychvc02pqs8r66g4 # raishan
+          - age1gvvsx9u7gdgkfdanddlrz8rrw8v6khkpkq3tv4ahf3vvrys4y39qtxpswp # raishan
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
           - age1jsj034tf5t96r03w30ar36qkenl0d0sy4dkwkl6p84590afp64rqckv9cl # ursula
   - path_regex: aspects/ldap/ldap-admin-pass\.sops$
@@ -217,7 +217,7 @@ creation_rules:
           - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
           - age1yq3ahanz54nk76wm2kc8vqj2g4yp6378ksnegmnvcamxegypcqcszxsk4h # pettigrew
           - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
-          - age19j83dy4k7tydct5lepj3tdjk7falqe0k8s6hpplszlychvc02pqs8r66g4 # raishan
+          - age1gvvsx9u7gdgkfdanddlrz8rrw8v6khkpkq3tv4ahf3vvrys4y39qtxpswp # raishan
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
           - age1jsj034tf5t96r03w30ar36qkenl0d0sy4dkwkl6p84590afp64rqckv9cl # ursula
   - path_regex: clusters/bedlam/github-mirror-token\.sops$
