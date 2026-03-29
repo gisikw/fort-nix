@@ -1,0 +1,196 @@
+# Core box management
+
+# Build the installer ISO and write it to a USB device.
+# Generates a fresh master keypair — this is a cluster constructor.
+#
+# Usage: just build-core /dev/sdX weyr.dev
+build-core device domain:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "Don't run as root — the script will sudo when needed."
+        exit 1
+    fi
+
+    if [ ! -b "{{device}}" ]; then
+        echo "Error: {{device}} is not a block device"
+        exit 1
+    fi
+
+    echo "╔══════════════════════════════════════════════╗"
+    echo "║  Core Box Builder                            ║"
+    echo "║  Domain: {{domain}}                          ║"
+    echo "║  Target: {{device}}                          ║"
+    echo "╚══════════════════════════════════════════════╝"
+    echo ""
+
+    # --- Generate master keypair ---
+    SECRETS=$(mktemp -d)
+    trap 'rm -rf "$SECRETS"' EXIT
+
+    echo "==> Generating master keypair..."
+    ssh-keygen -t ed25519 -f "$SECRETS/master-key" -N "" -C "core@{{domain}}" -q
+    echo "    Public key: $(cat "$SECRETS/master-key.pub")"
+    echo ""
+
+    # --- Collect credentials ---
+    read -sp "Porkbun API key: " PORKBUN_API_KEY; echo
+    read -sp "Porkbun secret key: " PORKBUN_SECRET_KEY; echo
+    cat > "$SECRETS/registrar.env" << REGEOF
+    PORKBUN_API_KEY=$PORKBUN_API_KEY
+    PORKBUN_SECRET_KEY=$PORKBUN_SECRET_KEY
+    REGEOF
+    echo ""
+
+    echo "Paste your primary FIDO2 SSH public key (sk-ssh-ed25519@openssh.com ...):"
+    read -r FIDO2_PRIMARY
+    echo "Paste your backup FIDO2 SSH public key (or press Enter to skip):"
+    read -r FIDO2_BACKUP
+
+    FIDO2_KEYS="$FIDO2_PRIMARY"
+    if [ -n "$FIDO2_BACKUP" ]; then
+        FIDO2_KEYS="$FIDO2_KEYS
+    $FIDO2_BACKUP"
+    fi
+    echo "$FIDO2_KEYS" > "$SECRETS/fido2-keys"
+
+    # --- Write secrets into the core config ---
+    # The ISO build reads from .secrets/ (gitignored, ephemeral)
+    mkdir -p .secrets
+    cp "$SECRETS/master-key" .secrets/
+    cp "$SECRETS/master-key.pub" .secrets/
+    cp "$SECRETS/registrar.env" .secrets/
+    cp "$SECRETS/fido2-keys" .secrets/
+
+    # --- Build ISO ---
+    echo "==> Building installer ISO..."
+    nix build .#iso --impure --show-trace
+
+    ISO=$(find result/iso -name '*.iso' | head -1)
+    if [ -z "$ISO" ]; then
+        echo "Error: no ISO found in build output"
+        exit 1
+    fi
+    echo "    ISO: $ISO ($(du -h "$ISO" | cut -f1))"
+
+    # --- Write to USB ---
+    echo ""
+    echo "This will ERASE {{device}} and write the installer ISO."
+    read -p "Type 'yes' to continue: " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    echo "==> Writing ISO to {{device}}..."
+    sudo dd if="$ISO" of="{{device}}" bs=4M status=progress conv=fsync
+    sync
+
+    # --- Append secrets partition ---
+    # The ISO occupies the first portion of the USB. We add a small
+    # partition after it for secrets that install.sh reads at install time.
+    echo "==> Creating secrets partition..."
+    ISO_SIZE=$(stat -c%s "$ISO")
+    ISO_SECTORS=$((ISO_SIZE / 512 + 1))
+    SECRETS_START=$((ISO_SECTORS + 2048))  # 1MB gap
+
+    sudo parted -s "{{device}}" mkpart primary ext4 "${SECRETS_START}s" "$((SECRETS_START + 65536))s"
+
+    # Find the new partition (usually partition 3 or 4 on hybrid ISOs)
+    sleep 1
+    SECRETS_PART=$(lsblk -rno NAME "{{device}}" | tail -1)
+    SECRETS_PART="/dev/$SECRETS_PART"
+
+    sudo mkfs.ext4 -L CORE-SECRETS "$SECRETS_PART" -q
+    MOUNT=$(mktemp -d)
+    sudo mount "$SECRETS_PART" "$MOUNT"
+    sudo cp .secrets/* "$MOUNT/"
+    sudo chmod 600 "$MOUNT/master-key" "$MOUNT/registrar.env"
+    sudo chmod 644 "$MOUNT/master-key.pub" "$MOUNT/fido2-keys"
+    sudo umount "$MOUNT"
+    rmdir "$MOUNT"
+
+    # --- Clean up local secrets ---
+    rm -rf .secrets
+
+    echo ""
+    echo "╔══════════════════════════════════════════════╗"
+    echo "║  Done.                                       ║"
+    echo "║                                              ║"
+    echo "║  Boot the V1410 from this USB.               ║"
+    echo "║  The installer will:                         ║"
+    echo "║    1. Install NixOS to NVMe                  ║"
+    echo "║    2. Copy secrets to /var/lib/core/          ║"
+    echo "║    3. WIPE this USB                          ║"
+    echo "║                                              ║"
+    echo "║  The master key will exist only on NVMe.     ║"
+    echo "╚══════════════════════════════════════════════╝"
+
+# Backup core state to encrypted USB
+backup-core device:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> Backing up core state..."
+
+    TMPDIR=$(mktemp -d)
+    trap 'rm -rf "$TMPDIR"' EXIT
+
+    # Collect state
+    mkdir -p "$TMPDIR/state"
+    # These commands run ON the core — this recipe is for running from core's console
+    cp -r /var/lib/core/ "$TMPDIR/state/core/"
+    cp -r /var/lib/core-git/fort-nix.git "$TMPDIR/state/fort-nix.git"
+    cp -r /var/lib/headscale/ "$TMPDIR/state/headscale/"
+    cp /var/lib/core-dns/hosts "$TMPDIR/state/dns-hosts"
+
+    # Create encrypted tarball
+    echo "==> Encrypting (you'll be prompted for a passphrase)..."
+    tar -C "$TMPDIR/state" -cf - . | \
+        age -p > "$TMPDIR/core-backup-$(date +%Y%m%d).tar.age"
+
+    # Write to USB
+    sudo dd if=/dev/zero of="{{device}}" bs=4M count=1 status=none
+    sudo mkfs.ext4 -L CORE-BACKUP "{{device}}" -q
+    MOUNT=$(mktemp -d)
+    sudo mount "{{device}}" "$MOUNT"
+    sudo cp "$TMPDIR"/core-backup-*.tar.age "$MOUNT/"
+    sudo umount "$MOUNT"
+    rmdir "$MOUNT"
+
+    echo "==> Backup written to {{device}}"
+
+# Restore core state from encrypted backup USB
+restore-core device:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> Restoring core state..."
+
+    MOUNT=$(mktemp -d)
+    sudo mount "{{device}}" "$MOUNT"
+
+    BACKUP=$(ls "$MOUNT"/core-backup-*.tar.age | head -1)
+    if [ -z "$BACKUP" ]; then
+        echo "No backup found on {{device}}"
+        sudo umount "$MOUNT"
+        exit 1
+    fi
+
+    echo "==> Decrypting $BACKUP..."
+    TMPDIR=$(mktemp -d)
+    age -d "$BACKUP" | tar -C "$TMPDIR" -xf -
+
+    echo "==> Restoring state..."
+    cp -r "$TMPDIR/core/"* /var/lib/core/
+    cp -r "$TMPDIR/fort-nix.git" /var/lib/core-git/fort-nix.git
+    cp -r "$TMPDIR/headscale/"* /var/lib/headscale/
+    cp "$TMPDIR/dns-hosts" /var/lib/core-dns/hosts
+
+    sudo umount "$MOUNT"
+    rm -rf "$TMPDIR" "$MOUNT"
+
+    echo "==> Restore complete. Reboot to activate."
+
+# Check if the flake evaluates
+check:
+    nix flake check --show-trace

@@ -1,0 +1,119 @@
+# fn-e5a4: Validate sops-nix with grafana-admin-pass
+
+## Summary
+
+Migrate `grafana-admin-pass` from agenix to sops-nix as a proof of concept. Both
+secret systems will coexist — agenix continues managing all other secrets, CI rekeying
+pipeline is untouched.
+
+## Key Insight
+
+sops-nix eliminates the need for CI rekeying because secrets are encrypted for device
+keys at creation time (via `.sops.yaml`), not re-encrypted in CI. The release branch
+copies all files from main (release.yml:298-319), so sops-encrypted files pass through
+unchanged.
+
+## Steps
+
+### 1. Add sops-nix flake input
+
+In `flake.nix`, add alongside agenix:
+```nix
+sops-nix = {
+  url = "github:Mic92/sops-nix";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+### 2. Thread sops-nix through to NixOS modules
+
+- `common/host.nix`: Add `sops-nix` parameter, pass through `sharedContext`
+- `common/platforms/nixos.nix`: Import `sops-nix.nixosModules.sops`, configure:
+  ```nix
+  sops.age.sshKeyPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
+  ```
+  This uses the same SSH host key agenix uses (line 60), but sops-nix internally
+  converts it to an age key via ssh-to-age at activation time.
+
+### 3. Convert SSH pubkeys to age format
+
+Use `ssh-to-age` to derive age public keys from:
+- admin principal SSH key → age pubkey (for .sops.yaml)
+- drhorrible device SSH key → age pubkey (for .sops.yaml)
+
+dev-sandbox and ci principals already have age keys.
+
+### 4. Create `.sops.yaml`
+
+Root-level creation rules file. For the POC, one rule:
+
+```yaml
+creation_rules:
+  - path_regex: apps/fort-observability/secrets\.yaml$
+    key_groups:
+      - age:
+          - <admin-age-pubkey>
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m  # dev-sandbox
+          - age13c897rs...  # ci
+          - <drhorrible-device-age-pubkey>
+```
+
+### 5. Create the sops-encrypted secret
+
+1. Decrypt current agenix secret: `age -d -i ~/.config/age/keys.txt apps/fort-observability/grafana-admin-pass.age`
+2. Create `apps/fort-observability/secrets.yaml` with: `grafana_admin_pass: "<value>"`
+3. Encrypt in-place: `sops -e -i apps/fort-observability/secrets.yaml`
+
+### 6. Update `apps/fort-observability/default.nix`
+
+Replace:
+```nix
+age.secrets.grafana-admin-pass = {
+  file = ./grafana-admin-pass.age;
+  owner = "grafana";
+  group = "grafana";
+  mode = "0400";
+};
+```
+
+With:
+```nix
+sops.secrets.grafana-admin-pass = {
+  sopsFile = ./secrets.yaml;
+  key = "grafana_admin_pass";
+  owner = "grafana";
+  group = "grafana";
+  mode = "0400";
+};
+```
+
+And update the consumption (line 48):
+```nix
+admin_password = "$__file{${config.sops.secrets.grafana-admin-pass.path}}";
+```
+
+### 7. Clean up agenix references
+
+- Remove `grafana-admin-pass.age` entry from `secrets.nix`
+- Delete `apps/fort-observability/grafana-admin-pass.age`
+- Keep the .age file in the release branch (CI just won't process it since no host references it)
+
+### 8. Test and deploy
+
+1. `git add` all changed files
+2. `just test drhorrible` — verify flake evaluates clean
+3. Commit, push, `just deploy drhorrible`
+4. Verify grafana starts with the sops-managed secret
+
+## What this validates
+
+- sops-nix and agenix coexist without conflict
+- sops decryption via SSH host key works on our impermanence hosts
+- Sops-encrypted files survive the CI release branch pipeline
+- No CI changes required for sops-managed secrets
+
+## What this does NOT do
+
+- Does not touch the CI rekeying pipeline
+- Does not generate .sops.yaml automatically (that's fn-66f9)
+- Does not migrate any other secrets

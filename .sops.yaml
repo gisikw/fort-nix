@@ -146,6 +146,15 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
+  - path_regex: aspects/dev-sandbox/ssh-key\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
   - path_regex: aspects/egress-vpn/egress-vpn-conf\.sops$
     key_groups:
       - age:

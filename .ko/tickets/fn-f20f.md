@@ -1,6 +1,6 @@
 ---
 id: fn-f20f
-status: in_progress
+status: closed
 deps: []
 created: 2026-03-28T17:01:41Z
 type: task

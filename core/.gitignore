@@ -1,0 +1,4 @@
+# Ephemeral secrets generated during build-core
+# These exist only momentarily between generation and USB write
+.secrets/
+result
