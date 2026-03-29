@@ -4,10 +4,7 @@ rec {
 
   roles = [ ];
 
-  apps = [ 
-    "qwen-tts"
-    # "vllm"
-  ];
+  apps = [ "qwen-tts" "vllm" ];
 
   aspects = [ "observable" "nvidia-gpu" "gitops" ];
 
