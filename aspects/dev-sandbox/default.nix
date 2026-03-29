@@ -289,6 +289,13 @@ in
     mode = "0600";
   };
 
+  # Write matching public key (must stay in sync with ssh-key.sops)
+  system.activationScripts.dev-ssh-pubkey = ''
+    echo "${settings.principals.dev-sandbox.sshKey}" > ${homeDir}/.ssh/id_ed25519.pub
+    chown ${user}:users ${homeDir}/.ssh/id_ed25519.pub
+    chmod 644 ${homeDir}/.ssh/id_ed25519.pub
+  '';
+
   # Radicale password for vdirsyncer (CalDAV sync)
   sops.secrets.radicale-password = {
     sopsFile = ../../apps/radicale/password.sops;

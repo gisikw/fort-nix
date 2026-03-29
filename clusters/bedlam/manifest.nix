@@ -32,7 +32,7 @@ rec {
           description = "Dev sandbox / LLM agents";
           publicKey = "age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m";
           agentKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPntyQRxy6bGXLSQY1/jjHwpNhSP5mpHFc4JKUpRVQCR dev-sandbox-agent";
-          sshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILjnWniCp8wmg2JzxbWDv5MLEZtdMJqqszZ0F3slNoAF dev@ratched.fort";
+          sshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGBsPj4lG8wP2gfgU5akZ05GrMy55syzvI0MEpiNFQ8t dev-sandbox-ssh";
           roles = [ "secrets" ];
         };
         ci = {
