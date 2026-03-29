@@ -4,9 +4,7 @@ let
   domain = rootManifest.fortConfig.settings.domain;
   vllmPort = 8000;
 
-  # cu130-nightly: CUDA 13.0 build with SM 12.0 (Blackwell) support.
-  # No stable release includes SM 12.0 yet. Pin to commit hash for reproducibility.
-  vllmImage = "vllm/vllm-openai:cu130-nightly-e3126cd107460444d7fd9a1445b8d4f4393a06b2";
+  vllmImage = "vllm/vllm-openai:v0.18.0";
 in
 {
   virtualisation.oci-containers.containers.vllm = {
@@ -14,15 +12,13 @@ in
     ports = [ "127.0.0.1:${toString vllmPort}:${toString vllmPort}" ];
 
     environment = {
-      VLLM_DISABLE_COMPILE_CACHE = "1";
       HF_HOME = "/hf";
     };
 
-    # Nightly image is missing soundfile dep needed by mistral_common for audio
     entrypoint = "/bin/bash";
     cmd = [
       "-c"
-      ''pip install soundfile >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --enforce-eager --tensor-parallel-size 1 --max-model-len 8192 --gpu-memory-utilization 0.90 --host 0.0.0.0 --port ${toString vllmPort}''
+      ''pip install soundfile >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --compilation-config '{"cudagraph_mode": "PIECEWISE"}' --tensor-parallel-size 1 --max-model-len 8192 --gpu-memory-utilization 0.55 --host 0.0.0.0 --port ${toString vllmPort}''
     ];
 
     extraOptions = [
