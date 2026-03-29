@@ -103,7 +103,10 @@ EOF
         exit 0  # No token yet, wait for control plane delivery
       fi
       log "Cloning ${repoUrl}"
-      git -c credential.helper=${gitCredHelper} clone --branch main "${repoUrl}" "${repoDir}"
+      if ! git -c credential.helper=${gitCredHelper} clone --branch main "${repoUrl}" "${repoDir}"; then
+        log "Clone failed, will retry"
+        exit 0
+      fi
     fi
 
     cd "${repoDir}"
@@ -285,6 +288,8 @@ else
 
   systemd.services.fort-gitops = {
     description = "Fort GitOps - pull and deploy from git";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${gitopsScript}";
