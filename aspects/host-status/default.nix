@@ -14,7 +14,7 @@ let
   hostname = hostManifest.hostName;
   statusDir = "/var/lib/fort/status";
   dropsDir = "/var/lib/fort/drops";
-  cominStore = "/var/lib/comin/store.json";
+  gitopsCommit = "/var/lib/fort-gitops/deployed-commit";
   deployRsInfo = "/var/lib/fort/deploy-info.json";
 
   # Import the upload handler
@@ -45,18 +45,10 @@ let
     # Failed units count
     failed_units=$(systemctl --failed --no-legend 2>/dev/null | wc -l || echo "0")
 
-    # Deploy info - prefer comin (gitops), fall back to deploy-rs static file
-    if [ -f "${cominStore}" ]; then
-      # GitOps host - parse comin store
-      deploy_info=$(${pkgs.jq}/bin/jq -r '
-        .generations[0] // {} |
-        {
-          commit: (.selected_commit_msg // "unknown" | capture("release: (?<sha>[a-f0-9]+)") | .sha // "unknown"),
-          timestamp: (.selected_commit_msg // "" | capture(" - (?<ts>.+)$") | .ts // null),
-          branch: (.selected_branch_name // "unknown"),
-          source: "comin"
-        }
-      ' "${cominStore}" 2>/dev/null || echo '{"commit":"unknown","branch":"unknown","source":"comin"}')
+    # Deploy info - prefer gitops state, fall back to deploy-rs static file
+    if [ -f "${gitopsCommit}" ]; then
+      commit=$(cat "${gitopsCommit}")
+      deploy_info="{\"commit\":\"$commit\",\"branch\":\"main\",\"source\":\"gitops\"}"
     elif [ -f "${deployRsInfo}" ]; then
       # Non-gitops host - use deploy-rs written file
       deploy_info=$(${pkgs.jq}/bin/jq -c '. + {source: "deploy-rs"}' "${deployRsInfo}" 2>/dev/null || echo '{"commit":"unknown","branch":"unknown","source":"deploy-rs"}')

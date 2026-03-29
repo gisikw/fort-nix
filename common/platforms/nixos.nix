@@ -72,7 +72,6 @@ in
       deviceProfileManifest.module
       disko.nixosModules.disko
       sops-nix.nixosModules.sops
-      comin.nixosModules.comin
       (cluster.devicesDir + "/${hostManifest.device}/hardware-configuration.nix")
       {
         config.fort = {
