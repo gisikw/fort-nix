@@ -2,7 +2,6 @@ args@{
   self,
   nixpkgs,
   hostDir,
-  agenix,
   sops-nix,
   # NixOS-specific inputs (optional on darwin)
   disko ? null,
@@ -108,7 +107,6 @@ let
     inherit
       self
       nixpkgs
-      agenix
       sops-nix
       hostManifest
       deviceManifest

@@ -15,7 +15,7 @@ let
   rebootClient = pkgs.writeShellScriptBin "emergency-reboot" ''
     set -euo pipefail
     HOST="''${1:?Usage: emergency-reboot <host-ip-or-tailscale-name>}"
-    SECRET=$(cat "${config.age.secrets.reboot-secret.path}")
+    SECRET=$(cat "${config.sops.secrets.reboot-secret.path}")
     TS=$(${pkgs.coreutils}/bin/date +%s)
     MAC=$(echo -n "$TS" | ${pkgs.openssl}/bin/openssl dgst -sha256 -hmac "$SECRET" -hex 2>/dev/null | ${pkgs.gawk}/bin/awk '{print $NF}')
     echo "Sending reboot to ''${HOST}:${toString port}..."
@@ -24,8 +24,9 @@ let
   '';
 in
 {
-  age.secrets.reboot-secret = {
-    file = ./reboot-secret.age;
+  sops.secrets.reboot-secret = {
+    sopsFile = ./reboot-secret.sops;
+    format = "binary";
     mode = "0400";
   };
 
@@ -50,7 +51,7 @@ in
       CapabilityBoundingSet = [ "CAP_SYS_BOOT" "CAP_NET_BIND_SERVICE" ];
 
       Environment = [
-        "SECRET_FILE=${config.age.secrets.reboot-secret.path}"
+        "SECRET_FILE=${config.sops.secrets.reboot-secret.path}"
         "LISTEN_ADDR=:${toString port}"
       ];
     };

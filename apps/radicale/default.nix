@@ -4,8 +4,9 @@ let
   domain = rootManifest.fortConfig.settings.domain;
 in
 {
-  age.secrets.radicale-htpasswd = {
-    file = ./htpasswd.age;
+  sops.secrets.radicale-htpasswd = {
+    sopsFile = ./htpasswd.sops;
+    format = "binary";
     owner = "radicale";
     group = "radicale";
   };
@@ -16,7 +17,7 @@ in
       server.hosts = [ "127.0.0.1:5232" ];
       auth = {
         type = "htpasswd";
-        htpasswd_filename = config.age.secrets.radicale-htpasswd.path;
+        htpasswd_filename = config.sops.secrets.radicale-htpasswd.path;
         htpasswd_encryption = "bcrypt";
       };
       storage.filesystem_folder = "/var/lib/radicale/collections";

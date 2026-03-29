@@ -5,13 +5,13 @@
 # darwinConfigurations flake outputs.
 #
 # Darwin hosts are dev machines — no nginx, oauth2-proxy, ACME, control-plane,
-# comin, disko, or impermanence. They get agenix for secrets and the shared
-# app/aspect module composition.
+# comin, disko, or impermanence. They get sops-nix for secrets and the
+# shared app/aspect module composition.
 #
 {
   nix-darwin,
   nixpkgs,
-  agenix,
+  sops-nix,
   # Shared context from host.nix
   hostManifest,
   deviceManifest,
@@ -38,11 +38,8 @@ in
         system.stateVersion = 6;
         system.primaryUser = "admin";
         networking.hostName = hostManifest.hostName;
-        # Use SSH host key as age identity (agenix derives age key from ed25519)
-        # Falls back to explicit age key if present
-        age.identityPaths = [
+        sops.age.sshKeyPaths = [
           "/etc/ssh/ssh_host_ed25519_key"
-          "/var/lib/fort/age-key.txt"
         ];
 
         # Admin user: passwordless sudo (matches NixOS root SSH pattern)
@@ -64,7 +61,7 @@ in
       rootManifest.module
       hostManifest.module
       deviceProfileManifest.module
-      agenix.darwinModules.default
+      sops-nix.darwinModules.sops
       (import ../fort-options.nix ({
         inherit rootManifest cluster;
       }))

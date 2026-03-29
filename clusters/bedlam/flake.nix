@@ -4,7 +4,6 @@
     nixpkgs.follows = "root/nixpkgs";
     disko.follows = "root/disko";
     impermanence.follows = "root/impermanence";
-    agenix.follows = "root/agenix";
     deploy-rs.follows = "root/deploy-rs";
     sops-nix.follows = "root/sops-nix";
     comin.follows = "root/comin";

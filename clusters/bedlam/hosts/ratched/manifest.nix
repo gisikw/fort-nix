@@ -51,7 +51,7 @@ rec {
         port = "4001";
       };
       secrets = {
-        envFile = ./cupola-env.age;
+        envFile = ./cupola-env.sops;
       };
       expose = {
         port = 4001;
@@ -65,7 +65,7 @@ rec {
         port = "4100";
       };
       secrets = {
-        envFile = ./cranium-env.age;
+        envFile = ./cranium-env.sops;
       };
       expose = {
         port = 4100;

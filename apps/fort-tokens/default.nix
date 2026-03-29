@@ -4,8 +4,9 @@ let
   fort-tokens = import ../../pkgs/fort-tokens { inherit pkgs; };
 in
 {
-  age.secrets.fort-token-secret-tokens = {
-    file = ../../common/fort/token-secret.age;
+  sops.secrets.fort-token-secret-tokens = {
+    sopsFile = ../../common/fort/token-secret.sops;
+    format = "binary";
     path = "/var/lib/fort-auth/token-secret";
     mode = "0400";
   };

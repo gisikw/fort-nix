@@ -30,8 +30,8 @@ in
   };
 
   sops.secrets.grafana-admin-pass = {
-    sopsFile = ./secrets.yaml;
-    key = "grafana_admin_pass";
+    sopsFile = ./grafana-admin-pass.sops;
+    format = "binary";
     owner = "grafana";
     group = "grafana";
     mode = "0400";

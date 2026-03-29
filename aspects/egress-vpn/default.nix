@@ -4,13 +4,14 @@ let
   tunnelInterface = "egresstun0";
 in
 {
-  age.secrets.egress-vpn-conf = {
-    file = ./egress-vpn-conf.age;
+  sops.secrets.egress-vpn-conf = {
+    sopsFile = ./egress-vpn-conf.sops;
+    format = "binary";
     mode = "0400";
     owner = "root";
   };
 
-  networking.wg-quick.interfaces.${tunnelInterface}.configFile = config.age.secrets.egress-vpn-conf.path;
+  networking.wg-quick.interfaces.${tunnelInterface}.configFile = config.sops.secrets.egress-vpn-conf.path;
 
   systemd.services.egress-vpn-namespace = {
     after = [ "wg-quick-${tunnelInterface}.service" ];

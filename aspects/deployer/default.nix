@@ -6,8 +6,9 @@ in
 {
   environment.systemPackages = [ pkgs.deploy-rs ];
 
-  age.secrets.deploy-key = {
-    file = ./deployer-key.age;
+  sops.secrets.deploy-key = {
+    sopsFile = ./deployer-key.sops;
+    format = "binary";
     mode = "0400";
     owner = "root";
     path = "/root/.ssh/deployer_ed25519";

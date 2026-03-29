@@ -20,8 +20,9 @@ in
   };
   users.groups.fort-mcp = { };
 
-  age.secrets.fort-mcp-env = {
-    file = ./secrets.env.age;
+  sops.secrets.fort-mcp-env = {
+    sopsFile = ./secrets.env.sops;
+    format = "binary";
     owner = "fort-mcp";
     mode = "0400";
   };
@@ -30,14 +31,14 @@ in
     description = "Fort MCP Server";
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
-    restartTriggers = [ config.age.secrets.fort-mcp-env.file ];
+    restartTriggers = [ config.sops.secrets.fort-mcp-env.sopsFile ];
     path = with pkgs; [
       tailscale
     ];
     serviceConfig = {
       Type = "simple";
       ExecStart = "${rubyEnv}/bin/puma -e production -b tcp://127.0.0.1:9292 ${appDir}/config.ru";
-      EnvironmentFile = config.age.secrets.fort-mcp-env.path;
+      EnvironmentFile = config.sops.secrets.fort-mcp-env.path;
       Restart = "always";
       RestartSec = 5;
       DynamicUser = false;

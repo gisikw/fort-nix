@@ -82,7 +82,7 @@ in
       Restart = "always";
       EnvironmentFile = [ settingsFile ];
 
-      LoadCredential = [ "ldap-admin-pass:${config.age.secrets.ldap-admin-pass.path}" ];
+      LoadCredential = [ "ldap-admin-pass:${config.sops.secrets.ldap-admin-pass.path}" ];
       RuntimeDirectory = "pocket-id";
       RuntimeDirectoryMode = "0700";
 

@@ -10,7 +10,6 @@
   disko,
   impermanence,
   deploy-rs,
-  agenix,
   sops-nix,
   comin,
   # Shared context from host.nix
@@ -58,7 +57,6 @@ in
             "/etc/ssh/ssh_host_rsa_key.pub"
           ];
         };
-        age.identityPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
         sops.age.sshKeyPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
 
         # zram swap on all hosts — compressed in-memory swap prevents OOM kills
@@ -73,7 +71,6 @@ in
       hostManifest.module
       deviceProfileManifest.module
       disko.nixosModules.disko
-      agenix.nixosModules.age
       sops-nix.nixosModules.sops
       comin.nixosModules.comin
       (cluster.devicesDir + "/${hostManifest.device}/hardware-configuration.nix")

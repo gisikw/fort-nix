@@ -67,7 +67,7 @@ let
   overlayConfigs = builtins.mapAttrs (name: ov: {
     package = ov.package;
     config = ov.config // (builtins.mapAttrs (secretName: _:
-      "%SECRET:/run/agenix/overlay-${name}-${secretName}%"
+      "%SECRET:/run/secrets/overlay-${name}-${secretName}%"
     ) ov.secrets);
     enabled = ov.enabled;
   }) normalizedOverlays;
@@ -87,8 +87,9 @@ let
     acc // (lib.mapAttrs' (secretName: secretPath: {
       name = "overlay-${name}-${secretName}";
       value = {
-        file = secretPath;
-        path = "/run/agenix/overlay-${name}-${secretName}";
+        sopsFile = secretPath;
+        format = "binary";
+        path = "/run/secrets/overlay-${name}-${secretName}";
       };
     }) ov.secrets)
   ) {} normalizedOverlays;
@@ -114,7 +115,7 @@ in
 
     # Secrets from overlay declarations
     (lib.mkIf (allSecrets != {}) {
-      age.secrets = allSecrets;
+      sops.secrets = allSecrets;
     })
 
     # Refresh capability for on-demand overlay checks

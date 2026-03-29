@@ -30,15 +30,17 @@ let
   notifyProvider = import ./provider { inherit pkgs; };
 in
 {
-  age.secrets.${mqttPasswordSecretName} = {
-    file = mqttPasswordFile;
+  sops.secrets.${mqttPasswordSecretName} = {
+    sopsFile = mqttPasswordFile;
+    format = "binary";
     owner = "hass";
     mode = "0400";
     group = "mosquitto";
   };
 
-  age.secrets.ha-secrets = {
-    file = ./secrets.yaml.age;
+  sops.secrets.ha-secrets = {
+    sopsFile = ./secrets.yaml.sops;
+    format = "binary";
     owner = "hass";
     path = "/var/lib/hass/secrets.yaml";
   };
@@ -145,7 +147,7 @@ in
         for dashboard in /var/lib/hass/dashboards/*.yaml; do
           [ -f "$dashboard" ] && sed -i "s/$script_name/$ieee/g" "$dashboard"
         done
-      done < <(grep -v -e '^$' -e '^#' ${config.age.secrets.iotManifest.path})
+      done < <(grep -v -e '^$' -e '^#' ${config.sops.secrets.iotManifest.path})
     '';
   };
 

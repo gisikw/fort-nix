@@ -23,11 +23,6 @@
     },
     "cluster": {
       "inputs": {
-        "agenix": [
-          "cluster",
-          "root",
-          "agenix"
-        ],
         "comin": [
           "cluster",
           "root",
@@ -549,10 +544,6 @@
     },
     "root": {
       "inputs": {
-        "agenix": [
-          "cluster",
-          "agenix"
-        ],
         "cluster": "cluster",
         "nix-darwin": [
           "cluster",

@@ -1,8 +1,9 @@
 { credentialsFile ? null, ... }:
 { config, ... }:
 {
-  age.secrets.nm-secrets = {
-    file = if credentialsFile != null then credentialsFile else ./credentials.env.age;
+  sops.secrets.nm-secrets = {
+    sopsFile = if credentialsFile != null then credentialsFile else ./credentials.env.sops;
+    format = "binary";
     owner = "root";
     group = "root";
   };
@@ -19,7 +20,7 @@
   networking.networkmanager.enable = true;
   networking.networkmanager.ensureProfiles = {
     environmentFiles = [
-      config.age.secrets.nm-secrets.path
+      config.sops.secrets.nm-secrets.path
     ];
 
     profiles = {

@@ -14,14 +14,15 @@ let
   platform = deviceProfileManifest.platform or "nixos";
   domain = rootManifest.fortConfig.settings.domain;
 
-  authKeyPath = ./auth-key.age;
+  authKeyPath = ./auth-key.sops;
   hasAuthKey = builtins.pathExists authKeyPath;
 in
 lib.mkMerge ([
-  # Shared: agenix secret (works on both platforms)
+  # Shared: sops secret (works on both platforms)
   (lib.mkIf hasAuthKey {
-    age.secrets.auth-key = {
-      file = ./auth-key.age;
+    sops.secrets.auth-key = {
+      sopsFile = ./auth-key.sops;
+      format = "binary";
       mode = "0400";
     };
   })
@@ -40,7 +41,7 @@ lib.mkMerge ([
         "--accept-dns=true"
         "--accept-routes=true"
       ];
-      authKeyFile = config.age.secrets.auth-key.path;
+      authKeyFile = config.sops.secrets.auth-key.path;
     };
 
     # Expose lan-ip capability for LAN DNS lookups
@@ -74,7 +75,7 @@ lib.mkMerge ([
         exit 0
       fi
 
-      AUTH_KEY=$(cat ${config.age.secrets.auth-key.path})
+      AUTH_KEY=$(cat ${config.sops.secrets.auth-key.path})
       ${pkgs.tailscale}/bin/tailscale up \
         --login-server="https://mesh.${domain}" \
         --hostname="${hostManifest.hostName}" \

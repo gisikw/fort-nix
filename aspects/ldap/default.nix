@@ -11,21 +11,28 @@ in
     group = "lldap";
   };
 
-  age.secrets.ldap-admin-pass = {
-    file = ./ldap-admin-pass.age;
+  sops.secrets.ldap-admin-pass = {
+    sopsFile = ./ldap-admin-pass.sops;
+    format = "binary";
     owner = "lldap";
     group = "lldap";
     mode = "0400";
   };
 
-  age.secrets.ldap-users.file = ./ldap-users.age;
-  age.secrets.ldap-groups.file = ./ldap-groups.age;
+  sops.secrets.ldap-users = {
+    sopsFile = ./ldap-users.sops;
+    format = "binary";
+  };
+  sops.secrets.ldap-groups = {
+    sopsFile = ./ldap-groups.sops;
+    format = "binary";
+  };
 
   services.lldap = {
     enable = true;
     settings = {
       ldap_base_dn = strings.concatMapStringsSep "," (s: "dc=${s}") (strings.splitString "." domain);
-      ldap_user_pass_file = config.age.secrets.ldap-admin-pass.path;
+      ldap_user_pass_file = config.sops.secrets.ldap-admin-pass.path;
       force_ldap_user_pass_reset = "always";
     };
   };
@@ -39,9 +46,9 @@ in
     serviceConfig = {
       Type = "oneshot";
       LoadCredential = [ 
-        "admin-pass:${config.age.secrets.ldap-admin-pass.path}" 
-        "users:${config.age.secrets.ldap-users.path}" 
-        "groups:${config.age.secrets.ldap-groups.path}" 
+        "admin-pass:${config.sops.secrets.ldap-admin-pass.path}" 
+        "users:${config.sops.secrets.ldap-users.path}" 
+        "groups:${config.sops.secrets.ldap-groups.path}" 
       ];
       Environment = [
         "LLDAP_URL=http://localhost:17170"

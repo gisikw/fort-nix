@@ -1,0 +1,22 @@
+{
+	"data": "ENC[AES256_GCM,data:KN9l6YmsUMgKjVraT23ZKoA=,iv:QJbPIoPThR9Wg5kAsFDoO94TkgUOwDx11fpRNlQf0us=,tag:IQvGCFenvOWpqAeOTOycCQ==,type:str]",
+	"sops": {
+		"age": [
+			{
+				"recipient": "age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg",
+				"enc": "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBlak1lanRnZnptWHNYN1pv\nbGZQdzRtWkFjbExXV3h6TTRYMUcyYXBueEJ3ClR2Qmx3RkNpR2ltVkYzY3NLb25F\ndk5vVVhxQkVHZWFuRlA5NURCM21TWFEKLS0tIHhFdEo0TmFKOEZ6RVVHRGlDeThl\naVFZWm5CZzBLRCt4SW04cnd4RElvaVkK+0TTKxcpUoUP8GLPiJ/jF7ntVaGljHuz\nJWXkToLqLuENIVDzjxeYcUh40za1/1yvDooaeywTQEm9zVleyskWEw==\n-----END AGE ENCRYPTED FILE-----\n"
+			},
+			{
+				"recipient": "age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d",
+				"enc": "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBNRzFaamdodVBXUHBJb015\neHpqcUJDVWo4MDBQZ016MW00dFFCdnoxb1J3CmxZUys2ZktFbUlrUFpmMFBQUFdU\nZ0l4R0RUcFN0WGNFeFNnRmNMbWE3S0UKLS0tIFp5d3dlcnlLcUQ5YklvQlR1KzJ1\nVlJGT1l3WGVoNVROY1dBSlMrTzNqb2cKPscoZw+dnovFoLZvL40Zj5VDSAjvT9ME\n7LgmZDt6ia2wayf5zC7b+106NOIylIrBpCSPNodFM454Chjl9F8Bww==\n-----END AGE ENCRYPTED FILE-----\n"
+			},
+			{
+				"recipient": "age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m",
+				"enc": "-----BEGIN AGE ENCRYPTED FILE-----\nYWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA0VUNCV09kamNOUWhOZVBm\nL3BRY2tGTU5YNS82d0lDVzg2NWNzb2pPSjNjCnFhR3VDOERMaUkraDF5NW5lbkRz\nZkU5R3ZvcFk5UjlFRTh0WENtY1VTNEUKLS0tIFZNR3M1N2dUVVR2L2plUkJkaGt3\nNlhvN1Flb2ZSNGFmVEtieWo1d3Q0aTQKkwSEXZ6ZxdOBW4p++KUvJb7sv0/DZR+M\ngU2ffQ4DWPYY10h5y45W6xjQ6zsqcHW5l1Dy4X4HFhuG8OZne0Hl4w==\n-----END AGE ENCRYPTED FILE-----\n"
+			}
+		],
+		"lastmodified": "2026-03-28T22:15:35Z",
+		"mac": "ENC[AES256_GCM,data:VEeEZaOnckPhtqyHvGjXSjVQKmqJgdQvCcoQqMt4TZjAPI5SQktcMSwdGbvXdXpnjFNlIvJNRZ4n5OQA/lOnU8kkTba0m6f3k0fnbfSronbiX246YyyKlRH4yj8r/5p1XtiLlW/hauDbGpqpm2NgLZa5qqE1Q8Bq9YaFgspLZJA=,iv:e0NJJsnVsnEb5UsCmXcVhrHtYFGh/Vw5cDZddd/Xp1c=,tag:JJTwghx9/dhHwEa7MeTzrA==,type:str]",
+		"version": "3.12.1"
+	}
+}

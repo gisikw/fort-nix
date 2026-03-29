@@ -53,7 +53,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/fort-nix";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];  # Explicitly exclude release - CI scans before push
             };
           };
@@ -62,7 +62,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/wicket";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" "release" ];
             };
           };
@@ -71,7 +71,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/bz";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" "release" ];
             };
           };
@@ -80,7 +80,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/dwim";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" "release" ];
             };
           };
@@ -89,7 +89,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/unum";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -98,7 +98,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/tk-build";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -107,7 +107,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/knockout";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -116,7 +116,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/gee";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -125,7 +125,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/nerve";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -134,7 +134,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/rep";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -143,7 +143,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/litmus";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -152,7 +152,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/barely-game-console";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -161,7 +161,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/calendly-ai-rules-skills";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -170,7 +170,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/cranium";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -179,7 +179,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/hearth";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -188,7 +188,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/discovery-zone";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -197,7 +197,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/cranium-v2";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -206,7 +206,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/cupola";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -215,7 +215,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/gloss";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };
@@ -224,7 +224,7 @@ rec {
           mirrors = {
             github = {
               remote = "github.com/gisikw/headjack";
-              tokenFile = ./github-mirror-token.age;
+              tokenFile = ./github-mirror-token.sops;
               branches = [ "main" ];
             };
           };

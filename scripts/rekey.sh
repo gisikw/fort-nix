@@ -8,6 +8,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# sops looks for age keys at ~/.config/sops/age/keys.txt by default;
+# our dev-sandbox key lives at ~/.config/age/keys.txt
+export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-${HOME}/.config/age/keys.txt}"
+
 # Resolve cluster paths
 cluster_name=$(nix eval --raw --impure --expr '(import ./common/cluster-context.nix { }).clusterName')
 hosts_root="./clusters/${cluster_name}/hosts"

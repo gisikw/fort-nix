@@ -38,8 +38,9 @@ let
   '';
 in
 {
-  age.secrets.dns-provider-env = {
-    file = ./dns-provider.env.age;
+  sops.secrets.dns-provider-env = {
+    sopsFile = ./dns-provider.env.sops;
+    format = "binary";
     mode = "0400";
   };
 
@@ -57,7 +58,7 @@ in
         "*.fort.${domain}"
       ];
       dnsProvider = rootManifest.fortConfig.settings.dnsProvider;
-      environmentFile = config.age.secrets.dns-provider-env.path;
+      environmentFile = config.sops.secrets.dns-provider-env.path;
     };
   };
 

@@ -7,7 +7,7 @@ rec {
   apps = [
     {
       name = "homeassistant";
-      mqttPasswordFile = ./mosquitto-homeassistant-password.age;
+      mqttPasswordFile = ./mosquitto-homeassistant-password.sops;
       mqttPasswordSecretName = "mosquitto-homeassistant-password";
       declarative.automations = ./automations.nix;
       declarative.lights = ./lights.nix;
@@ -18,9 +18,9 @@ rec {
     }
     {
       name = "frigate";
-      mqttPasswordFile = ./mosquitto-frigate-password.age;
+      mqttPasswordFile = ./mosquitto-frigate-password.sops;
       mqttPasswordSecretName = "mosquitto-frigate-password";
-      envFile = ./frigate-env.age;
+      envFile = ./frigate-env.sops;
       envSecretName = "frigate-env";
     }
   ];
@@ -29,16 +29,16 @@ rec {
     "mesh"
     {
       name = "zigbee2mqtt";
-      passwordFile = ./mosquitto-zigbee2mqtt-password.age;
+      passwordFile = ./mosquitto-zigbee2mqtt-password.sops;
       mqttSecretName = "mosquitto-zigbee2mqtt-password";
-      iot.manifest = ./iot.manifest.age;
+      iot.manifest = ./iot.manifest.sops;
     }
     {
       name = "zwave-js-ui";
-      passwordFile = ./mosquitto-zwave-js-ui-password.age;
+      passwordFile = ./mosquitto-zwave-js-ui-password.sops;
       mqttSecretName = "mosquitto-zwave-js-ui-password";
-      securityKeysFile = ./zwave-security-keys.json.age;
-      iot.manifest = ./iot.manifest.age;
+      securityKeysFile = ./zwave-security-keys.json.sops;
+      iot.manifest = ./iot.manifest.sops;
     }
     {
       name = "mosquitto";

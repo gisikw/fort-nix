@@ -5,15 +5,17 @@ let
   hostname = "${subdomain}.${domain}";
 in
 {
-  age.secrets.${mqttPasswordSecretName} = {
-    file = mqttPasswordFile;
+  sops.secrets.${mqttPasswordSecretName} = {
+    sopsFile = mqttPasswordFile;
+    format = "binary";
     owner = "root";
     mode = "0400";
     group = "mosquitto";
   };
 
-  age.secrets.${envSecretName} = {
-    file = envFile;
+  sops.secrets.${envSecretName} = {
+    sopsFile = envFile;
+    format = "binary";
     owner = "frigate";
     mode = "0400";
   };
@@ -79,7 +81,7 @@ in
 
   # Inject credentials via environment file
   systemd.services.frigate.serviceConfig.EnvironmentFile =
-    config.age.secrets.${envSecretName}.path;
+    config.sops.secrets.${envSecretName}.path;
 
   # Register with fort for DNS and SSL cert.
   # Fort creates a catch-all location "/" with proxy_pass, but Frigate's NixOS

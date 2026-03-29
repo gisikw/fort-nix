@@ -176,7 +176,7 @@ _bootstrap-darwin target user uuid:
   fi
 
   ssh -o StrictHostKeyChecking=no "$remote" \
-    "if [ -d /var/lib/fort-nix/.git ]; then echo 'Repo already cloned'; else git clone --branch release '${clone_url}' /var/lib/fort-nix; fi"
+    "if [ -d /var/lib/fort-nix/.git ]; then echo 'Repo already cloned'; else git clone --branch main '${clone_url}' /var/lib/fort-nix; fi"
 
   # Grab the host's SSH public key and update the device manifest
   echo "[Fort] Capturing host SSH public key"
@@ -189,7 +189,7 @@ _bootstrap-darwin target user uuid:
   echo "[Fort] Darwin bootstrap complete"
   echo "  Next steps:"
   echo "  1. just assign {{uuid}} <hostname>"
-  echo "  2. Re-key secrets, commit, push to release"
+  echo "  2. Commit and push to main"
   echo "  3. SSH in and run: cd /var/lib/fort-nix && sudo darwin-rebuild switch --flake ./clusters/{{cluster}}/hosts/<hostname>"
 
 _cleanup-device-provisioning uuid target keydir:
@@ -232,7 +232,7 @@ assign device host:
     inputs = {
       cluster.url = "path:../..";
       nixpkgs.follows = "cluster/nixpkgs";
-      agenix.follows = "cluster/agenix";
+      sops-nix.follows = "cluster/sops-nix";
       nix-darwin.follows = "cluster/nix-darwin";
     };
 
@@ -240,7 +240,7 @@ assign device host:
       {
         self,
         nixpkgs,
-        agenix,
+        sops-nix,
         nix-darwin,
         ...
       }:
@@ -248,7 +248,7 @@ assign device host:
         inherit
           self
           nixpkgs
-          agenix
+          sops-nix
           nix-darwin
           ;
         hostDir = ./.;
@@ -264,7 +264,7 @@ assign device host:
       disko.follows = "cluster/disko";
       impermanence.follows = "cluster/impermanence";
       deploy-rs.follows = "cluster/deploy-rs";
-      agenix.follows = "cluster/agenix";
+      sops-nix.follows = "cluster/sops-nix";
       comin.follows = "cluster/comin";
     };
 
@@ -275,7 +275,7 @@ assign device host:
         disko,
         impermanence,
         deploy-rs,
-        agenix,
+        sops-nix,
         comin,
         ...
       }:
@@ -286,7 +286,7 @@ assign device host:
           disko
           impermanence
           deploy-rs
-          agenix
+          sops-nix
           comin
           ;
         hostDir = ./.;
@@ -389,19 +389,11 @@ _verify-deploy-target host addr:
 # Direct deploy via deploy-rs (requires master key)
 _deploy-direct host addr:
   #!/usr/bin/env bash
-  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
-    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
-    exit 1
-  fi
-
   just _verify-deploy-target {{host}} {{addr}}
 
   hosts_root="./hosts"
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
   host_dir="${hosts_root}/{{host}}"
-
-  trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
-  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
 
   # Write deploy info for non-gitops hosts (status endpoint uses this as fallback)
   deploy_commit=$(git rev-parse --short HEAD)
@@ -421,20 +413,12 @@ _deploy-direct-darwin host addr:
   #!/usr/bin/env bash
   set -euo pipefail
 
-  if [[ -n "$(git diff --name-only -- '*.age')" ]]; then
-    echo "[Fort] ERROR: Uncommitted .age file changes detected. Commit or stash before deploying." >&2
-    exit 1
-  fi
-
   just _verify-deploy-target {{host}} {{addr}}
 
-  trap 'git checkout -- $(git diff --name-only -- "*.age" || true)' EXIT
-  KEYED_FOR_DEVICES=1 nix run .#agenix -- -i {{deploy_key}} -r
-
-  # Push to release branch so the remote has latest
+  # Push to main so the remote has latest
   current_branch=$(git rev-parse --abbrev-ref HEAD)
-  echo "[Fort] Pushing ${current_branch} to release"
-  git push origin "${current_branch}:release"
+  echo "[Fort] Pushing ${current_branch} to main"
+  git push origin "${current_branch}:main"
 
   deploy_commit=$(git rev-parse --short HEAD)
   deploy_timestamp=$(date -Iseconds)
@@ -446,7 +430,7 @@ _deploy-direct-darwin host addr:
 
   echo "[Fort] Deploying {{host}} via SSH (git pull + darwin-rebuild)"
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no admin@{{addr}} \
-    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin release && git checkout release && git reset --hard origin/release && sudo darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && sudo mkdir -p /var/lib/fort && echo '${deploy_info}' | sudo tee /var/lib/fort/deploy-info.json > /dev/null && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
+    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin main && git checkout main && git reset --hard origin/main && sudo darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && sudo mkdir -p /var/lib/fort && echo '${deploy_info}' | sudo tee /var/lib/fort/deploy-info.json > /dev/null && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
 
 # GitOps deploy via fort CLI (no master key needed)
 _deploy-gitops host addr:
@@ -571,8 +555,8 @@ ssh host:
   fi
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no "${ssh_user}@{{host}}"
 
-age path:
-  nix run .#agenix -- -i {{deploy_key}} -e {{path}}
+edit-secret path:
+  sops {{path}}
 
 sync-services:
   #!/usr/bin/env bash

@@ -260,8 +260,9 @@ in
   };
 
   # Shared env file for API keys and credentials (readable by dev user)
-  age.secrets.dev-sandbox-env = {
-    file = ./env.age;
+  sops.secrets.dev-sandbox-env = {
+    sopsFile = ./env.sops;
+    format = "binary";
     path = "/var/lib/fort/dev-sandbox/env";
     owner = user;
     group = "users";
@@ -269,8 +270,9 @@ in
   };
 
   # Agent key for fort signing (readable by dev user)
-  age.secrets.dev-sandbox-agent-key = {
-    file = ./agent-key.age;
+  sops.secrets.dev-sandbox-agent-key = {
+    sopsFile = ./agent-key.sops;
+    format = "binary";
     path = agentKeyPath;
     owner = user;
     group = "users";
@@ -278,8 +280,9 @@ in
   };
 
   # Radicale password for vdirsyncer (CalDAV sync)
-  age.secrets.radicale-password = {
-    file = ../../apps/radicale/password.age;
+  sops.secrets.radicale-password = {
+    sopsFile = ../../apps/radicale/password.sops;
+    format = "binary";
     owner = "root";
     group = "root";
     mode = "0600";
@@ -290,7 +293,7 @@ in
   systemd.services.vdirsyncer-config = {
     description = "Generate vdirsyncer config";
     wantedBy = [ "multi-user.target" ];
-    after = [ "agenix.service" ];
+    after = [ "sops-nix.service" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -307,9 +310,9 @@ in
       setfacl -b /var/lib/vdirsyncer
 
       # Read secrets (only root can read these)
-      CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
-      CLIENT_SECRET=$(cat ${config.age.secrets.oauth-client-secret.path} | tr -d '\n')
-      RADICALE_PASSWORD=$(cat ${config.age.secrets.radicale-password.path} | tr -d '\n')
+      CLIENT_ID=$(cat ${config.sops.secrets.oauth-client-id.path} | tr -d '\n')
+      CLIENT_SECRET=$(cat ${config.sops.secrets.oauth-client-secret.path} | tr -d '\n')
+      RADICALE_PASSWORD=$(cat ${config.sops.secrets.radicale-password.path} | tr -d '\n')
 
       # Ensure directories exist
       mkdir -p ${homeDir}/.config/vdirsyncer

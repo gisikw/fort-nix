@@ -51,24 +51,27 @@ let
   atticCacheUrl = "https://cache.${domain}";
 in
 {
-  # Age secrets for mirror tokens (per repo-mirror pair) and runner
-  age.secrets = builtins.listToAttrs (map (m: {
+  # Sops secrets for mirror tokens (per repo-mirror pair) and runner
+  sops.secrets = builtins.listToAttrs (map (m: {
     name = "forge-mirror-${m.repo}-${m.mirror}";
     value = {
-      file = m.tokenFile;
+      sopsFile = m.tokenFile;
+      format = "binary";
       owner = "forgejo";
       group = "forgejo";
       mode = "0400";
     };
   }) allMirrors) // {
     forgejo-runner-secret = {
-      file = ./runner-secret.age;
+      sopsFile = ./runner-secret.sops;
+      format = "binary";
       owner = "forgejo";
       group = "forgejo";
       mode = "0400";
     };
     ci-agent-key = {
-      file = ./ci-agent-key.age;
+      sopsFile = ./ci-agent-key.sops;
+      format = "binary";
       owner = "forgejo";
       group = "forgejo";
       mode = "0400";
@@ -205,7 +208,7 @@ in
       reposJson = builtins.toJSON (lib.mapAttrs (repoName: repoCfg: {
         mirrors = lib.mapAttrs (mirrorName: mirrorCfg: {
           remote = mirrorCfg.remote;
-          tokenPath = config.age.secrets."forge-mirror-${repoName}-${mirrorName}".path;
+          tokenPath = config.sops.secrets."forge-mirror-${repoName}-${mirrorName}".path;
         }) (repoCfg.mirrors or {});
       }) forgeConfig.repos);
     in ''
@@ -314,7 +317,7 @@ in
       done
 
       # Register runner with Forgejo using shared secret
-      RUNNER_SECRET=$(cat ${config.age.secrets.forgejo-runner-secret.path})
+      RUNNER_SECRET=$(cat ${config.sops.secrets.forgejo-runner-secret.path})
       RUNNER_MARKER="${bootstrapDir}/runner-registered"
       if [ ! -f "$RUNNER_MARKER" ]; then
         echo "Registering Actions runner with Forgejo"
@@ -389,8 +392,8 @@ runner:
   labels:
     - "nixos:host"
   envs:
-    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.age pkgs.curl pkgs.attic-client pkgs.postgresql fortCli ]}"
-    FORT_SSH_KEY: "${config.age.secrets.ci-agent-key.path}"
+    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.sops pkgs.curl pkgs.attic-client pkgs.postgresql fortCli ]}"
+    FORT_SSH_KEY: "${config.sops.secrets.ci-agent-key.path}"
     FORT_ORIGIN: "ci"
     ATTIC_TOKEN_FILE: "${atticCiToken}"
     ATTIC_CACHE_URL: "${atticCacheUrl}"
@@ -402,7 +405,7 @@ EOF
         exit 0
       fi
 
-      RUNNER_SECRET=$(cat ${config.age.secrets.forgejo-runner-secret.path})
+      RUNNER_SECRET=$(cat ${config.sops.secrets.forgejo-runner-secret.path})
 
       echo "Creating runner file"
       forgejo-runner create-runner-file \

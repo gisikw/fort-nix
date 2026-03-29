@@ -306,8 +306,9 @@ in
 
     # Token auth secret - distributed to hosts with token-mode services
     (lib.mkIf (tokenServices != []) {
-      age.secrets.fort-token-secret = {
-        file = ./fort/token-secret.age;
+      sops.secrets.fort-token-secret = {
+        sopsFile = ./fort/token-secret.sops;
+        format = "binary";
         path = "/var/lib/fort-auth/token-secret";
         mode = "0440";
         group = "nginx";

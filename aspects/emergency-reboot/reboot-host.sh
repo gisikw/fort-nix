@@ -4,7 +4,7 @@
 set -euo pipefail
 
 HOST="${1:?Usage: reboot-host <host-ip> [secret-file]}"
-SECRET_FILE="${2:-/run/agenix/reboot-secret}"
+SECRET_FILE="${2:-/run/secrets/reboot-secret}"
 PORT=9999
 
 if [ ! -f "$SECRET_FILE" ]; then

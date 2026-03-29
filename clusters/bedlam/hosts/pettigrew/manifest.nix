@@ -8,7 +8,7 @@ rec {
 
   aspects = [
     "observable"
-    { name = "wifi-access"; credentialsFile = ./wifi-credentials.env.age; }
+    { name = "wifi-access"; credentialsFile = ./wifi-credentials.env.sops; }
   ];
 
   module =

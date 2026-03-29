@@ -1,15 +1,17 @@
 { passwordFile, mqttSecretName, iot, ... }:
 { config, pkgs, ... }:
 {
-  age.secrets.${mqttSecretName} = {
-    file = passwordFile;
+  sops.secrets.${mqttSecretName} = {
+    sopsFile = passwordFile;
+    format = "binary";
     owner = "zigbee2mqtt";
     mode = "0440";
     group = "mosquitto";
   };
 
-  age.secrets.iotManifest = {
-    file = iot.manifest;
+  sops.secrets.iotManifest = {
+    sopsFile = iot.manifest;
+    format = "binary";
     owner = "zigbee2mqtt";
     mode = "0440";
     group = "hass";
@@ -18,11 +20,11 @@
   users.users.zigbee2mqtt.extraGroups = [ "dialout" ];
 
   systemd.services.zigbee2mqtt = {
-    serviceConfig.LoadCredential = 
-      "mqtt-password:${config.age.secrets.${mqttSecretName}.path}";
+    serviceConfig.LoadCredential =
+      "mqtt-password:${config.sops.secrets.${mqttSecretName}.path}";
     restartTriggers = [
-      config.age.secrets.${mqttSecretName}.file
-      config.age.secrets.iotManifest.file
+      config.sops.secrets.${mqttSecretName}.sopsFile
+      config.sops.secrets.iotManifest.sopsFile
     ];
   };
 
@@ -31,7 +33,7 @@
     package = pkgs.writeShellScriptBin "zigbee2mqtt" ''
       while IFS=: read ieee script_name friendly_name; do
         ${pkgs.yq-go}/bin/yq -i ".$ieee.friendly_name = \"$friendly_name\"" /var/lib/zigbee2mqtt/devices.yaml
-      done < <(grep -e '^0x' ${config.age.secrets.iotManifest.path})
+      done < <(grep -e '^0x' ${config.sops.secrets.iotManifest.path})
       export ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=$(cat ''${CREDENTIALS_DIRECTORY}/mqtt-password)
       exec ${pkgs.zigbee2mqtt}/bin/zigbee2mqtt "$@"
     '';

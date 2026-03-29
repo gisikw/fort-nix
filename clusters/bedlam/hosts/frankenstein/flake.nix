@@ -5,7 +5,6 @@
     disko.follows = "cluster/disko";
     impermanence.follows = "cluster/impermanence";
     deploy-rs.follows = "cluster/deploy-rs";
-    agenix.follows = "cluster/agenix";
     sops-nix.follows = "cluster/sops-nix";
     comin.follows = "cluster/comin";
   };
@@ -17,7 +16,6 @@
       disko,
       impermanence,
       deploy-rs,
-      agenix,
       sops-nix,
       comin,
       ...
@@ -29,7 +27,6 @@
         disko
         impermanence
         deploy-rs
-        agenix
         sops-nix
         comin
         ;

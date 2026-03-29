@@ -10,7 +10,7 @@
         users = lib.listToAttrs (map (u: {
           name = u.name;
           value = {
-            passwordFile = config.age.secrets.${u.secret}.path;
+            passwordFile = config.sops.secrets.${u.secret}.path;
             acl = [ "readwrite #" ];
           };
         }) users);

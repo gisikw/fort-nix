@@ -58,8 +58,9 @@ in
     '';
   };
 
-  age.secrets.ci-agent-key = {
-    file = ../../apps/forgejo/ci-agent-key.age;
+  sops.secrets.ci-agent-key = {
+    sopsFile = ../../apps/forgejo/ci-agent-key.sops;
+    format = "binary";
     owner = user;
     group = user;
     mode = "0400";
@@ -96,8 +97,8 @@ runner:
   labels:
     - "nixos:host"
   envs:
-    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.age pkgs.curl pkgs.attic-client fortCli ]}"
-    FORT_SSH_KEY: "${config.age.secrets.ci-agent-key.path}"
+    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.sops pkgs.curl pkgs.attic-client fortCli ]}"
+    FORT_SSH_KEY: "${config.sops.secrets.ci-agent-key.path}"
     FORT_ORIGIN: "ci"
     ATTIC_TOKEN_FILE: "${atticCiToken}"
     ATTIC_CACHE_URL: "${atticCacheUrl}"

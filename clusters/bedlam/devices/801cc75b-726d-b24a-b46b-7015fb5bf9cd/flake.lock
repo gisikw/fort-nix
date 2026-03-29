@@ -23,11 +23,6 @@
     },
     "cluster": {
       "inputs": {
-        "agenix": [
-          "cluster",
-          "root",
-          "agenix"
-        ],
         "comin": [
           "cluster",
           "root",

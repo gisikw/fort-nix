@@ -165,12 +165,14 @@ in
   '';
 
   # Exo voice reference — decrypted at activation, assembled into voice profile
-  age.secrets.exo-voice-audio = {
-    file = ./exo-voice.wav.age;
+  sops.secrets.exo-voice-audio = {
+    sopsFile = ./exo-voice.wav.sops;
+    format = "binary";
     owner = "root";
   };
-  age.secrets.exo-voice-transcript = {
-    file = ./exo-voice-transcript.age;
+  sops.secrets.exo-voice-transcript = {
+    sopsFile = ./exo-voice-transcript.sops;
+    format = "binary";
     owner = "root";
   };
 
@@ -185,8 +187,8 @@ in
     };
     script = ''
       mkdir -p /var/lib/qwen-tts/voice-library/profiles/exo
-      cp ${config.age.secrets.exo-voice-audio.path} /var/lib/qwen-tts/voice-library/profiles/exo/reference.wav
-      REF_TEXT=$(cat ${config.age.secrets.exo-voice-transcript.path})
+      cp ${config.sops.secrets.exo-voice-audio.path} /var/lib/qwen-tts/voice-library/profiles/exo/reference.wav
+      REF_TEXT=$(cat ${config.sops.secrets.exo-voice-transcript.path})
       cat > /var/lib/qwen-tts/voice-library/profiles/exo/meta.json <<EOF
       {
         "name": "exo",

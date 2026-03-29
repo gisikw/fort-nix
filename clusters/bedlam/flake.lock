@@ -484,10 +484,6 @@
     },
     "root": {
       "inputs": {
-        "agenix": [
-          "root",
-          "agenix"
-        ],
         "comin": [
           "root",
           "comin"

@@ -124,7 +124,7 @@ EOF
     # Clone if missing
     if [ ! -d "${repoDir}/.git" ]; then
       log "Cloning ${repoUrl} into ${repoDir}"
-      git clone --branch release "${repoUrl}" "${repoDir}"
+      git clone --branch main "${repoUrl}" "${repoDir}"
     fi
 
     cd "${repoDir}"
@@ -135,9 +135,9 @@ EOF
     fi
 
     # Fetch and check for changes
-    git fetch origin release 2>/dev/null
+    git fetch origin main 2>/dev/null
     LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/release)
+    REMOTE=$(git rev-parse origin/main)
 
     if [ "$LOCAL" = "$REMOTE" ]; then
       log "Up to date at $LOCAL"
@@ -145,7 +145,7 @@ EOF
     fi
 
     log "Updating $LOCAL -> $REMOTE"
-    git reset --hard origin/release
+    git reset --hard origin/main
 
     # Rebuild
     log "Running darwin-rebuild switch"
@@ -213,10 +213,10 @@ else
       name = "origin";
       url = repoUrl;
       poller.period = 30;
-      branches.main.name = "release";
+      branches.main.name = "main";
       # Testing branch for safe experimentation (deployed with switch-to-configuration test)
-      # Push to <hostname>-test on main, CI creates release-<hostname>-test
-      branches.testing.name = "release-${hostManifest.hostName}-test";
+      # Push to <hostname>-test, comin picks it up directly (no CI rekeying needed)
+      branches.testing.name = "${hostManifest.hostName}-test";
 
       # Auth via deploy token distributed by forge
       auth.access_token_path = tokenFile;

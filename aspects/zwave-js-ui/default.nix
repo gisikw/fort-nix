@@ -48,22 +48,25 @@ let
   };
 in
 {
-  age.secrets.${mqttSecretName} = {
-    file = passwordFile;
+  sops.secrets.${mqttSecretName} = {
+    sopsFile = passwordFile;
+    format = "binary";
     owner = "root";
     mode = "0400";
     group = "root";
   };
 
-  age.secrets.zwave-security-keys = {
-    file = securityKeysFile;
+  sops.secrets.zwave-security-keys = {
+    sopsFile = securityKeysFile;
+    format = "binary";
     owner = "root";
     mode = "0400";
     group = "root";
   };
 
-  age.secrets.zwave-iot-manifest = {
-    file = iot.manifest;
+  sops.secrets.zwave-iot-manifest = {
+    sopsFile = iot.manifest;
+    format = "binary";
     owner = "root";
     mode = "0400";
     group = "root";
@@ -87,9 +90,9 @@ in
       mkdir -p /var/lib/zwave-js-ui
 
       # Generate settings.json with MQTT password and security keys
-      MQTT_PASSWORD=$(cat ${config.age.secrets.${mqttSecretName}.path})
+      MQTT_PASSWORD=$(cat ${config.sops.secrets.${mqttSecretName}.path})
       ${pkgs.gnused}/bin/sed "s/__MQTT_PASSWORD__/$MQTT_PASSWORD/" ${settingsFile} \
-        | ${pkgs.jq}/bin/jq -s '.[0] * .[1]' - ${config.age.secrets.zwave-security-keys.path} \
+        | ${pkgs.jq}/bin/jq -s '.[0] * .[1]' - ${config.sops.secrets.zwave-security-keys.path} \
         > /var/lib/zwave-js-ui/settings.json
       chmod 644 /var/lib/zwave-js-ui/settings.json
 
@@ -124,7 +127,7 @@ in
           if [ -n "$node_id" ]; then
             NODES_JSON=$(echo "$NODES_JSON" | ${pkgs.jq}/bin/jq --arg hid "$HOME_ID" --arg nid "$node_id" --arg name "$friendly_name" '.[$hid][$nid] = {"name": $name}')
           fi
-        done < ${config.age.secrets.zwave-iot-manifest.path}
+        done < ${config.sops.secrets.zwave-iot-manifest.path}
 
         echo "$NODES_JSON" > /var/lib/zwave-js-ui/nodes.json
         chmod 644 /var/lib/zwave-js-ui/nodes.json
@@ -133,8 +136,8 @@ in
   };
 
   systemd.services.zwave-js-ui.restartTriggers = [
-    config.age.secrets.${mqttSecretName}.file
-    config.age.secrets.zwave-iot-manifest.file
+    config.sops.secrets.${mqttSecretName}.sopsFile
+    config.sops.secrets.zwave-iot-manifest.sopsFile
   ];
 
   fort.cluster.services = [

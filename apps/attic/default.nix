@@ -18,7 +18,7 @@ in
     enable = true;
 
     # Environment file containing ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64
-    environmentFile = config.age.secrets.attic-server-token.path;
+    environmentFile = config.sops.secrets.attic-server-token.path;
 
     settings = {
       listen = "[::]:8080";
@@ -57,7 +57,10 @@ in
   };
 
   # Declare the secret (root-owned, atticd reads via EnvironmentFile)
-  age.secrets.attic-server-token.file = ./attic-server-token.age;
+  sops.secrets.attic-server-token = {
+    sopsFile = ./attic-server-token.sops;
+    format = "binary";
+  };
 
   # Bootstrap script that runs after atticd starts
   systemd.services.atticd.serviceConfig.ExecStartPost = let
@@ -73,7 +76,7 @@ in
 
       # Source credentials (ExecStartPost may not inherit EnvironmentFile)
       set -a
-      source ${config.age.secrets.attic-server-token.path}
+      source ${config.sops.secrets.attic-server-token.path}
       set +a
 
       BOOTSTRAP_DIR="/var/lib/atticd/bootstrap"

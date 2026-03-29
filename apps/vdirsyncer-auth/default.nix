@@ -22,15 +22,17 @@ in
     "d ${dataDir} 0700 dev users"
   ];
 
-  age.secrets.oauth-client-id = {
-    file = ../../aspects/dev-sandbox/oauth-client-id.age;
+  sops.secrets.oauth-client-id = {
+    sopsFile = ../../aspects/dev-sandbox/oauth-client-id.sops;
+    format = "binary";
     owner = "dev";
     group = "users";
     mode = "0400";
   };
 
-  age.secrets.oauth-client-secret = {
-    file = ../../aspects/dev-sandbox/oauth-client-secret.age;
+  sops.secrets.oauth-client-secret = {
+    sopsFile = ../../aspects/dev-sandbox/oauth-client-secret.sops;
+    format = "binary";
     owner = "dev";
     group = "users";
     mode = "0400";
@@ -61,8 +63,8 @@ in
     };
 
     script = ''
-      export OAUTH_CLIENT_ID=$(cat ${config.age.secrets.oauth-client-id.path} | tr -d '\n')
-      export OAUTH_CLIENT_SECRET=$(cat ${config.age.secrets.oauth-client-secret.path} | tr -d '\n')
+      export OAUTH_CLIENT_ID=$(cat ${config.sops.secrets.oauth-client-id.path} | tr -d '\n')
+      export OAUTH_CLIENT_SECRET=$(cat ${config.sops.secrets.oauth-client-secret.path} | tr -d '\n')
       export OAUTH_REDIRECT_URI="https://${subdomain}.${domain}/callback"
       export TOKEN_FILE="${dataDir}/token"
       export PORT="${toString port}"
