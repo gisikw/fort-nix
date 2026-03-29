@@ -14,7 +14,6 @@ rec {
     }
     "vdirsyncer-auth"
     "radicale"
-    "discovery-zone"
     "apple-dist"
     "conduit"
     "temporal"
@@ -79,6 +78,19 @@ rec {
       #   grace = 10;
       #   stabilize = 15;
       # };
+    };
+    discovery-zone = {
+      package = "infra/discovery-zone";
+      config.port = "9878";
+      secrets = {
+        envFile = ./discovery-zone-env.sops;
+      };
+      expose = {
+        subdomain = "dz";
+        port = 9878;
+        visibility = "public";
+        sso = { mode = "oidc"; vpnBypass = true; };
+      };
     };
   };
 
