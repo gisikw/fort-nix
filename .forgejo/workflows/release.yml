@@ -19,7 +19,7 @@ jobs:
           if [ -f "$PII_DENYLIST" ]; then
             export SOPS_AGE_KEY="$CI_AGE_KEY"
 
-            sops -d --input-type binary --output-type binary "$PII_DENYLIST" > /tmp/pii-patterns.txt
+            nix shell nixpkgs#sops -c sops -d --input-type binary --output-type binary "$PII_DENYLIST" > /tmp/pii-patterns.txt
 
             found=0
             while IFS= read -r pattern; do
