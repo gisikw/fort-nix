@@ -19,6 +19,7 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+          - age1dcw3fhvhaz2tj6xqq3fkv43h8j640suhafm86as5mr3fpjm4d55s8u0em3 # joker
   - path_regex: apps/forgejo/runner-secret\.sops$
     key_groups:
       - age:
@@ -46,6 +47,33 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+  - path_regex: apps/homeassistant/secrets\.yaml\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: apps/qwen-tts/exo-voice-transcript\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age1mylhwjfferlu2ulwgugqly6p9lzc3k97lda98zc09hqc73zzfpfqneynff # frankenstein
+  - path_regex: apps/qwen-tts/exo-voice\.wav\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age1mylhwjfferlu2ulwgugqly6p9lzc3k97lda98zc09hqc73zzfpfqneynff # frankenstein
   - path_regex: apps/radicale/htpasswd\.sops$
     key_groups:
       - age:
@@ -118,6 +146,15 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
+  - path_regex: aspects/egress-vpn/egress-vpn-conf\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
   - path_regex: aspects/emergency-reboot/reboot-secret\.sops$
     key_groups:
       - age:
@@ -192,6 +229,78 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+  - path_regex: clusters/bedlam/hosts/minos/frigate-env\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/minos/iot\.manifest\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/minos/mosquitto-frigate-password\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/minos/mosquitto-homeassistant-password\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/minos/mosquitto-zigbee2mqtt-password\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/minos/mosquitto-zwave-js-ui-password\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/minos/zwave-security-keys\.json\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+  - path_regex: clusters/bedlam/hosts/pettigrew/wifi-credentials\.env\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age1yq3ahanz54nk76wm2kc8vqj2g4yp6378ksnegmnvcamxegypcqcszxsk4h # pettigrew
   - path_regex: clusters/bedlam/hosts/ratched/cranium-env\.sops$
     key_groups:
       - age:
