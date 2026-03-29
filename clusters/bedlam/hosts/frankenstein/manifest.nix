@@ -6,7 +6,7 @@ rec {
 
   apps = [ "qwen-tts" "vllm" ];
 
-  aspects = [ "observable" "nvidia-gpu" ];
+  aspects = [ "observable" "nvidia-gpu" "gitops" ];
 
   module =
     { config, ... }:
