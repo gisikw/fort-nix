@@ -18,7 +18,7 @@ in
     entrypoint = "/bin/bash";
     cmd = [
       "-c"
-      ''pip install soundfile librosa >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --tensor-parallel-size 1 --max-model-len 8192 --gpu-memory-utilization 0.70 --host 0.0.0.0 --port ${toString vllmPort}''
+      ''pip install soundfile librosa >/dev/null 2>&1 && exec vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --compilation-config '{"cudagraph_mode":"piecewise"}' --tensor-parallel-size 1 --max-model-len 8192 --gpu-memory-utilization 0.70 --host 0.0.0.0 --port ${toString vllmPort}''
     ];
 
     extraOptions = [
