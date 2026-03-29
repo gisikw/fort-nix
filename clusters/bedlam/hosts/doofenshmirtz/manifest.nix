@@ -6,7 +6,7 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "mesh" "observable" { name = "gitops"; manualDeploy = true; } "media-kiosk" ];
+  aspects = [ "mesh" "observable" { name = "gitops"; manualDeploy = true; } "media-kiosk" "agent-debug" ];
 
   overlays = {
     barely-game-console = {

@@ -279,6 +279,16 @@ in
     mode = "0600";
   };
 
+  # SSH key for dev user (outbound SSH to other hosts)
+  sops.secrets.dev-ssh-key = {
+    sopsFile = ./ssh-key.sops;
+    format = "binary";
+    path = "${homeDir}/.ssh/id_ed25519";
+    owner = user;
+    group = "users";
+    mode = "0600";
+  };
+
   # Radicale password for vdirsyncer (CalDAV sync)
   sops.secrets.radicale-password = {
     sopsFile = ../../apps/radicale/password.sops;
