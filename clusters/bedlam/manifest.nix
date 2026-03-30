@@ -9,6 +9,9 @@ rec {
         ipv4Prefix = "100.101.0.0/16";
         ipv6Prefix = "fd7a:115c:a1e0:8249::/64";
       };
+      lan = {
+        ipv4Prefix = "192.168.1.0/24";
+      };
 
       # Principal-based access control
       # Each principal has a publicKey (SSH or age) and roles determining access:

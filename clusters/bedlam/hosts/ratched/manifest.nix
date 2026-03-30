@@ -55,7 +55,7 @@ rec {
       expose = {
         port = 4001;
         visibility = "public";
-        sso = { mode = "gatekeeper"; vpnBypass = true; };
+        sso = { mode = "gatekeeper"; vpnBypass = true; localBypass = true; };
       };
     };
     cranium = {

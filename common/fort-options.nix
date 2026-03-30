@@ -79,6 +79,12 @@
                         default = false;
                         description = "If true, requests from the VPN bypass authentication entirely.";
                       };
+
+                      localBypass = lib.mkOption {
+                        type = bool;
+                        default = false;
+                        description = "If true, requests from the LAN bypass authentication entirely.";
+                      };
                     };
                   };
                   default = { };

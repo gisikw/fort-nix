@@ -25,6 +25,11 @@ function validate(r) {
     return r.return(200);
   }
 
+  // LAN bypass: skip token check for LAN requests when localBypass is enabled
+  if (r.variables.token_local_bypass === '1' && r.variables.is_local === '1') {
+    return r.return(200);
+  }
+
   var auth = r.headersIn['Authorization'] || '';
   if (!auth.startsWith('Bearer ')) {
     r.return(401, 'missing bearer token');

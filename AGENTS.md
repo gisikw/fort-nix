@@ -186,6 +186,8 @@ Services can use SSO via `fort.cluster.services`:
 
 **VPN Bypass**: Any SSO mode can be combined with `sso.vpnBypass = true` to skip auth for VPN requests while requiring it from the public internet.
 
+**LAN Bypass**: Any SSO mode can be combined with `sso.localBypass = true` to skip auth for requests originating from the LAN (`192.168.1.0/24`). Useful for kiosk dashboards or services that should be freely accessible on the home network. Can be combined with `vpnBypass`.
+
 **Group Restrictions**: Use `sso.groups = [ "admin" ]` to restrict access to specific LDAP groups. Groups are enforced at two levels:
 - **pocket-id**: OIDC client is configured with allowed groups - users outside those groups are rejected at login
 - **oauth2-proxy**: For non-oidc modes, `--allowed-group` flags filter after authentication

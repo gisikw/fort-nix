@@ -8,6 +8,7 @@
 let
   domain = rootManifest.fortConfig.settings.domain;
   vpnIpv4Prefix = rootManifest.fortConfig.settings.vpn.ipv4Prefix;
+  lanIpv4Prefix = rootManifest.fortConfig.settings.lan.ipv4Prefix;
 
   # SSL cert consumer handler - decodes base64 certs and stores them
   sslCertConsumerHandler = pkgs.writeShellScript "ssl-cert-handler" ''
@@ -128,6 +129,12 @@ in
           default 0;
           ${vpnIpv4Prefix} 1;
         }
+
+        geo $is_local {
+          default 0;
+          ${lanIpv4Prefix} 1;
+          127.0.0.0/8 1;
+        }
       '' + lib.optionalString (tokenServices != []) ''
 
         # njs token validator for sso.mode = "token"
@@ -220,6 +227,7 @@ in
               isStatic = svc.staticRoot != null;
               needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token";
               isTokenMode = svc.sso.mode == "token";
+              anyBypass = svc.sso.vpnBypass || svc.sso.localBypass;
               directBackend = lib.optionalString (!isStatic) "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
               authProxySocket = "http://unix:/run/fort-auth/${svc.name}.sock";
             in
@@ -259,9 +267,9 @@ in
                     (lib.optionalString isTokenMode ''
                       auth_request /_fort_validate_token;
                     '')
-                    # Conditional routing: VPN bypasses auth, non-VPN goes through oauth2-proxy
+                    # Conditional routing: bypass auth for trusted networks, otherwise go through oauth2-proxy
                     # When proxyPass is null, NixOS doesn't add recommended headers, so we must add them
-                    (lib.optionalString (svc.sso.vpnBypass && needsAuthProxy) ''
+                    (lib.optionalString (anyBypass && needsAuthProxy) ''
                       proxy_set_header Host $host;
                       proxy_set_header X-Real-IP $remote_addr;
                       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -269,14 +277,23 @@ in
                       proxy_set_header X-Forwarded-Host $host;
                       proxy_set_header X-Forwarded-Server $host;
                       set $backend "${authProxySocket}";
+                    ''
+                    + lib.optionalString (svc.sso.vpnBypass && needsAuthProxy) ''
                       if ($is_vpn = 1) {
                         set $backend "${directBackend}";
                       }
+                    ''
+                    + lib.optionalString (svc.sso.localBypass && needsAuthProxy) ''
+                      if ($is_local = 1) {
+                        set $backend "${directBackend}";
+                      }
+                    ''
+                    + lib.optionalString (anyBypass && needsAuthProxy) ''
                       proxy_pass $backend;
                     '')
                   ]);
-                  # Only set proxyPass when not using vpnBypass conditional routing
-                  proxyPass = if (svc.sso.vpnBypass && needsAuthProxy) then
+                  # Only set proxyPass when not using bypass conditional routing
+                  proxyPass = if (anyBypass && needsAuthProxy) then
                     null
                   else if needsAuthProxy then
                     authProxySocket
@@ -289,6 +306,7 @@ in
                   extraConfig = ''
                     internal;
                     set $token_vpn_bypass ${if svc.sso.vpnBypass then "1" else "0"};
+                    set $token_local_bypass ${if svc.sso.localBypass then "1" else "0"};
                     js_content token_validator.validate;
                   '';
                 };
