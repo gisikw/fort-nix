@@ -36,7 +36,7 @@ Note: The `holdings` endpoint was removed - GC uses the `needs` endpoint instead
 **End-to-End Working (needs → fulfill → capability):**
 | Need | Consumer | Provider | Status |
 |------|----------|----------|--------|
-| git-token.default | gitops hosts | drhorrible | **Working** - RO token for comin |
+| git-token.default | gitops hosts | drhorrible | **Working** - RO token for gitops agent |
 | git-token.dev | dev-sandbox hosts | drhorrible | **Working** - RW token for push |
 
 **Defined But Not Consumed:**

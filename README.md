@@ -26,6 +26,7 @@ Services are exposed through `fort.cluster.services`, which provides centralized
 - **visibility**: `vpn` (mesh-only), `local` (LAN + mesh), or `public` (internet-facing via beacon)
 - **sso**: Optional SSO integration via Pocket ID with modes: `none`, `oidc`, `headers`, `basicauth`, `gatekeeper`, `token`
 - **vpnBypass**: Skip auth for VPN requests while requiring it from the public internet
+- **localBypass**: Skip auth for LAN requests while requiring it from the public internet
 
 Apps declare their exposure in their module — no manual nginx configuration needed. The control plane automatically handles DNS registration (Headscale + CoreDNS), SSL certificate distribution, OIDC client registration, and public proxy setup.
 
@@ -93,19 +94,13 @@ Runs on push to `main`:
 1. **PII scan** — checks for personally identifiable patterns against an encrypted denylist
 2. **Go tests** — validates all control plane provider code
 3. **Flake check** — evaluates root flake, all host flakes, and all device flakes
-4. **Secret re-keying** — re-keys `.age` secrets for target device host keys; tracks content SHAs to minimize unnecessary re-keying
-5. **Release branch** — creates/updates the `release` branch with re-keyed secrets
-6. **GitHub mirror** — pushes `main` to GitHub
+4. **GitHub mirror** — pushes `main` to GitHub
+
+Secrets are re-keyed locally via `just rekey` (sops-based) and committed to `main` directly. There is no separate release branch — hosts pull `main`.
 
 ### Test Branches
 
-For risky changes, push to a `<hostname>-test` branch. CI will:
-
-1. Validate only that host's flake
-2. Re-key secrets only for that host
-3. Create a `release-<hostname>-test` branch
-
-The target host deploys with `switch-to-configuration test` — a reboot reverts to the last known-good config. Merge to `main` to finalize; delete the branch to abandon.
+For risky changes, push to a `<hostname>-test` branch. CI validates that host's flake. The gitops agent on the target host picks up the testing branch and deploys with `switch-to-configuration test` — a reboot reverts to the last known-good config. Merge to `main` to finalize; delete the branch to abandon.
 
 ## Available Apps
 
@@ -170,7 +165,7 @@ The target host deploys with `switch-to-configuration test` — a reboot reverts
 | deployer | deploy-rs SSH key generation for remote deploys |
 | dev-sandbox | Development environment with AI tooling and secret access |
 | egress-vpn | WireGuard namespace routing through external VPN |
-| gitops | Automatic deployment from release branch via comin |
+| gitops | Automatic deployment from main branch via custom GitOps agent |
 | host-status | Control plane endpoint for host health queries |
 | ldap | LLDAP directory service with bootstrapped users/groups |
 | media-kiosk | Kiosk mode display |
@@ -209,7 +204,7 @@ This creates the host flake at `./clusters/<cluster>/hosts/<hostname>`. Edit `ma
 
 #### GitOps (Default)
 
-Push to `main` and wait. CI validates, re-keys secrets, and pushes to `release`. Hosts with the `gitops` aspect pull and deploy automatically (~5 minutes).
+Push to `main` and wait. CI validates the flake and mirrors to GitHub. Hosts with the `gitops` aspect poll `main` and deploy automatically (~5 minutes).
 
 Hero roles (beacon, forge) use manual confirmation — they build automatically but won't switch until explicitly triggered. Other hosts sensitive to unscheduled restarts can also opt into manual confirmation via their gitops aspect config.
 
@@ -234,9 +229,9 @@ Access is managed through **principals** defined in the cluster manifest. Each p
 |------|--------|
 | `root` | SSH as root to all hosts |
 | `dev-sandbox` | SSH as dev user on dev-sandbox hosts |
-| `secrets` | Can decrypt secrets (age key in agenix recipients) |
+| `secrets` | Can decrypt secrets (key included in sops recipients) |
 
-Secrets use **agenix**. On `main`, secrets are keyed for principals with the `secrets` role (dev/testing). CI re-keys them for target device host keys on the `release` branch.
+Secrets use **sops-nix**. Secrets are re-keyed locally via `just rekey` and committed to `main`. Hosts with the `secrets` role in their principal can decrypt at activation time.
 
 ## Commands
 

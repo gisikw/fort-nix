@@ -44,7 +44,7 @@ fort.host.capabilities.oidc-register = {
 
 RBAC is computed automatically from the cluster topology:
 
-1. Host A declares `fort.host.needs.my-capability.foo.providers = ["host-b"]`
+1. Host A declares `fort.host.needs.my-capability.foo.from = "host-b"`
 2. At eval time, `control-plane.nix` adds Host A to `rbac.json` for `my-capability` on Host B
 3. Only Host A can call `/fort/my-capability` on Host B
 

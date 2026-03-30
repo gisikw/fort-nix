@@ -36,7 +36,7 @@
 
 ```nix
 fort.host.needs.the-capability.my-id = {
-  providers = ["target-host"];
+  from = "target-host";
 };
 ```
 

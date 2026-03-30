@@ -39,4 +39,4 @@ git push
 just deploy ratched
 ```
 
-Waits for comin to fetch, build, and activate. Dev environment will have updated dotfiles after completion.
+Waits for the gitops agent to fetch, build, and activate. Dev environment will have updated dotfiles after completion.

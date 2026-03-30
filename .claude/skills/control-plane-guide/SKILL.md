@@ -33,10 +33,10 @@ fort.host.capabilities.my-capability = {
 **Consumer (depending on a capability):**
 ```nix
 fort.host.needs.my-capability.my-id = {
-  providers = ["hostname"];            # Host(s) providing this
+  from = "hostname";                   # Host providing this
   request = { key = "value"; };        # Request payload
-  store = "/var/lib/myapp/response";   # Where to store response
-  restart = ["myapp.service"];         # Services to restart on change
+  handler = ./handlers/my-handler;     # Script invoked with response on stdin
+  nag = "15m";                         # Retry interval when unsatisfied
 };
 ```
 

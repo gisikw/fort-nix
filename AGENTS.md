@@ -204,10 +204,10 @@ For API services that can't use browser-based OIDC. Bearer tokens are HMAC-SHA25
 
 **Components**:
 - `common/fort/token-validator.js` — njs script loaded by nginx, validates HMAC signature + expiry
-- `common/fort/token-secret.age` — shared HMAC secret (agenix), distributed to consuming hosts
+- `common/fort/token-secret.sops` — shared HMAC secret (sops-nix), distributed to consuming hosts
 - `apps/fort-tokens/` — web UI on drhorrible for creating/managing tokens (`tokens.gisi.network`)
 
-**How it works**: `auth_request` delegates to an internal location running `js_content token_validator.validate`. VPN bypass is handled by the njs script checking `$is_vpn` and `$token_vpn_bypass` variables.
+**How it works**: `auth_request` delegates to an internal location running `js_content token_validator.validate`. VPN and LAN bypass are handled by the njs script checking `$is_vpn`/`$token_vpn_bypass` and `$is_local`/`$token_local_bypass` variables.
 
 **Usage from API clients**:
 ```bash
@@ -316,7 +316,7 @@ aspects = [ "mesh" "observable" ];
 
 # With parameters
 aspects = [
-  { name = "zigbee2mqtt"; passwordFile = ./mqtt-password.age; }
+  { name = "zigbee2mqtt"; passwordFile = ./mqtt-password.sops; }
 ];
 ```
 
@@ -350,7 +350,7 @@ fortConfig = {
     mirrors = {
       github = {
         remote = "github.com/user/repo";
-        tokenFile = ./github-mirror-token.age;  # PAT for push access
+        tokenFile = ./github-mirror-token.sops;  # PAT for push access
       };
     };
   };
@@ -422,7 +422,7 @@ principals = {
 |------|--------|
 | `root` | SSH as root to all hosts (key added to root's authorized_keys) |
 | `dev-sandbox` | SSH as dev user on hosts with dev-sandbox aspect |
-| `secrets` | Can decrypt secrets on main branch (key included in agenix recipients) |
+| `secrets` | Can decrypt secrets on main branch (key included in sops recipients) |
 
 **Key types:**
 - SSH keys (`ssh-ed25519 ...`) work for both SSH access and secret decryption
@@ -432,20 +432,23 @@ The consuming code (`host.nix`, `secrets.nix`, `dev-sandbox`) derives the approp
 
 ## Secrets
 
-Uses **agenix**. Secrets are `.age` files decrypted at activation time.
+Uses **sops-nix**. Secrets are `.sops` files decrypted at activation time. Re-key locally with `just rekey`.
 
-Declare secrets in `secrets.nix`. Use in modules:
+Use in modules:
 ```nix
-age.secrets.my-secret.file = ./my-secret.age;
-# Access via: config.age.secrets.my-secret.path
+sops.secrets.my-secret = {
+  sopsFile = ./my-secret.sops;
+  format = "binary";
+};
+# Access via: config.sops.secrets.my-secret.path
 ```
 
 ### Dev Sandbox Decryption
 
-The dev sandbox has an age key at `~/.config/age/keys.txt` that can decrypt secrets on `main` (but not `release`). To test decryption:
+The dev sandbox has an age key at `~/.config/age/keys.txt` that can decrypt secrets on `main`. To test decryption:
 
 ```bash
-nix-shell -p age --run "age -d -i ~/.config/age/keys.txt <secret.age>"
+nix-shell -p sops --run "SOPS_AGE_KEY_FILE=~/.config/age/keys.txt sops -d <secret.sops>"
 ```
 
 ## Testing & Deployment
@@ -483,16 +486,11 @@ git checkout -b <hostname>-test
 git push origin <hostname>-test
 ```
 
-CI will:
-1. Validate only that host's flake
-2. Re-key secrets only for that host
-3. Create `release-<hostname>-test` branch
+CI will validate that host's flake. The gitops agent on the target host picks up the testing branch and deploys with `switch-to-configuration test`. If broken, reboot reverts to the last booted config.
 
-Comin on the target host picks up the testing branch and deploys with `switch-to-configuration test`. If broken, reboot reverts to the last booted config.
+**To finalize**: Merge your changes to `main`. The gitops agent automatically switches back from the testing branch.
 
-**To finalize**: Merge your changes to `main`. Once the `release` branch updates, comin automatically switches back from the testing branch.
-
-**To abandon**: Delete the `<hostname>-test` branch. Comin will revert to `release` on next poll.
+**To abandon**: Delete the `<hostname>-test` branch. The gitops agent will revert to `main` on next poll.
 
 ### Manual-Confirmation Hosts (Forge/Beacon)
 
@@ -520,7 +518,7 @@ ssh -i <key_path> root@<host>.fort.<domain> "journalctl -u <service> -n 50 --no-
 ```
 
 Common issues:
-- **Secret not decrypted**: Check `age.secrets` declaration and `secrets.nix`
+- **Secret not decrypted**: Check `sops.secrets` declaration and sops configuration
 - **Port conflict**: Another service on the same port
 - **Missing state directory**: Check `systemd.tmpfiles.rules` or `StateDirectory`
 
