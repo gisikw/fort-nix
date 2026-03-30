@@ -6,7 +6,6 @@
     impermanence.follows = "cluster/impermanence";
     deploy-rs.follows = "cluster/deploy-rs";
     sops-nix.follows = "cluster/sops-nix";
-    comin.follows = "cluster/comin";
   };
 
   outputs =
@@ -17,7 +16,6 @@
       impermanence,
       deploy-rs,
       sops-nix,
-      comin,
       ...
     }:
     import ../../../../common/host.nix {
@@ -28,7 +26,6 @@
         impermanence
         deploy-rs
         sops-nix
-        comin
         ;
       hostDir = ./.;
     };

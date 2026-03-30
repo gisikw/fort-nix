@@ -6,7 +6,6 @@
     impermanence.follows = "root/impermanence";
     deploy-rs.follows = "root/deploy-rs";
     sops-nix.follows = "root/sops-nix";
-    comin.follows = "root/comin";
     nix-darwin.follows = "root/nix-darwin";
 
     # Cluster-specific inputs

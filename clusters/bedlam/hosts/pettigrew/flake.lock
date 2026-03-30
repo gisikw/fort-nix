@@ -23,11 +23,6 @@
     },
     "cluster": {
       "inputs": {
-        "comin": [
-          "cluster",
-          "root",
-          "comin"
-        ],
         "deploy-rs": [
           "cluster",
           "root",
@@ -545,10 +540,6 @@
     "root": {
       "inputs": {
         "cluster": "cluster",
-        "comin": [
-          "cluster",
-          "comin"
-        ],
         "deploy-rs": [
           "cluster",
           "deploy-rs"

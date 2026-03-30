@@ -327,7 +327,7 @@ in
         echo "Actions runner already registered"
       fi
 
-      # Create read-only deploy token for GitOps (comin)
+      # Create read-only deploy token for GitOps
       DEPLOY_TOKEN_FILE="${bootstrapDir}/deploy-token"
       if [ ! -s "$DEPLOY_TOKEN_FILE" ]; then
         echo "Creating deploy token for GitOps"

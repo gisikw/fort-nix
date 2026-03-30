@@ -11,7 +11,6 @@
   impermanence,
   deploy-rs,
   sops-nix,
-  comin,
   # Shared context from host.nix
   hostManifest,
   deviceManifest,

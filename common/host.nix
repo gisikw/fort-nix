@@ -7,7 +7,6 @@ args@{
   disko ? null,
   impermanence ? null,
   deploy-rs ? null,
-  comin ? null,
   # Darwin-specific inputs (optional on nixos)
   nix-darwin ? null,
   # Cluster-specific inputs (optional)
@@ -37,7 +36,7 @@ let
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
   # Default aspects that every host gets
   # mesh + gitops are platform-universal; host-status is NixOS-only (systemd, nginx, /proc)
-  defaultAspects = [ "mesh" "gitops" ] ++ (if platform == "nixos" then [ "host-status" "emergency-reboot" ] else [ ]);
+  defaultAspects = [ "mesh" "gitops" ] ++ (if platform == "nixos" then [ "host-status" "emergency-reboot" "cleanup-comin" ] else [ ]);
   # Deduplicate aspects: host manifest overrides defaults (attrset form wins over string)
   aspectName = a: if builtins.isString a then a else a.name;
   dedup = defaults: extras:
@@ -123,7 +122,7 @@ let
   platformBuilder =
     if platform == "nixos" then
       import ./platforms/nixos.nix (sharedContext // {
-        inherit disko impermanence deploy-rs comin;
+        inherit disko impermanence deploy-rs;
       })
     else if platform == "darwin" then
       import ./platforms/darwin.nix (sharedContext // {

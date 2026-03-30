@@ -484,10 +484,6 @@
     },
     "root": {
       "inputs": {
-        "comin": [
-          "root",
-          "comin"
-        ],
         "deploy-rs": [
           "root",
           "deploy-rs"

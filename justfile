@@ -265,7 +265,6 @@ assign device host:
       impermanence.follows = "cluster/impermanence";
       deploy-rs.follows = "cluster/deploy-rs";
       sops-nix.follows = "cluster/sops-nix";
-      comin.follows = "cluster/comin";
     };
 
     outputs =
@@ -276,7 +275,6 @@ assign device host:
         impermanence,
         deploy-rs,
         sops-nix,
-        comin,
         ...
       }:
       import ../../../../common/host.nix {
@@ -287,7 +285,6 @@ assign device host:
           impermanence
           deploy-rs
           sops-nix
-          comin
           ;
         hostDir = ./.;
       };
@@ -490,7 +487,7 @@ _deploy-gitops host addr:
           sha_mismatch)
             if [[ "$last_state" != "fetching" ]]; then
               pending=$(echo "$deploy_body" | jq -r '.pending // empty')
-              echo "[Fort] Waiting for comin to fetch... (comin has ${pending:-unknown})"
+              echo "[Fort] Waiting for gitops to fetch... (has ${pending:-unknown})"
               last_state="fetching"
             fi
             ;;
