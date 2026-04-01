@@ -38,6 +38,11 @@ rec {
           sshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGBsPj4lG8wP2gfgU5akZ05GrMy55syzvI0MEpiNFQ8t dev-sandbox-ssh";
           roles = [ "secrets" ];
         };
+        external-access = {
+          description = "External SSH access (jumpbox through raishan)";
+          publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAkWpFxba7eQ4ve5ZiSS2cfQpFBqWQQhDPk75m8zWuga gisikw@K.Gisi-KVW36X1P09";
+          roles = [ "dev-sandbox" ];
+        };
         ci = {
           description = "Forgejo CI - secret re-keying and control plane access";
           publicKey = "age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d";
