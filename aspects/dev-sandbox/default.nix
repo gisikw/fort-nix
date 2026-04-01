@@ -97,6 +97,7 @@ let
     # C/build tools
     gcc
     pkg-config
+    tree-sitter
 
     # Claude/AI tools
     claude-code
