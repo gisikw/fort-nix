@@ -50,10 +50,11 @@ let
     (pkgs.writeShellScriptBin "nvp" ''
       SOCK="/tmp/nvim-pair-$$"
       (
+        while [ ! -S "$SOCK" ]; do sleep 0.1; done
         while true; do
           fd --type f | entr -d -p nvim --server "$SOCK" --remote /_
         done
-      ) &
+      ) &>/dev/null &
       WATCHER=$!
       trap "kill $WATCHER 2>/dev/null; wait $WATCHER 2>/dev/null" EXIT
       nvim --listen "$SOCK" "$@"
