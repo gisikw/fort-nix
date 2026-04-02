@@ -47,6 +47,17 @@ let
 
     # Editors
     neovim
+    (pkgs.writeShellScriptBin "nvp" ''
+      SOCK="/tmp/nvim-pair-$$"
+      (
+        while true; do
+          fd --type f | entr -d -p nvim --server "$SOCK" --remote /_
+        done
+      ) &
+      WATCHER=$!
+      trap "kill $WATCHER 2>/dev/null; wait $WATCHER 2>/dev/null" EXIT
+      nvim --listen "$SOCK" "$@"
+    '')
 
     # Shell/terminal
     tmux
