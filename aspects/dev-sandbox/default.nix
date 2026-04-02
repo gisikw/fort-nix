@@ -104,6 +104,11 @@ let
     rustfmt
     clippy
 
+    # LSP servers (so mason doesn't need npm)
+    typescript-language-server
+    nodePackages.typescript
+    tailwindcss-language-server
+
     # Elixir
     elixir
     erlang
