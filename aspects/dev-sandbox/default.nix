@@ -52,7 +52,7 @@ let
       (
         while [ ! -S "$SOCK" ]; do sleep 0.1; done
         while true; do
-          fd --type f | entr -d -p nvim --server "$SOCK" --remote /_
+          fd --type f | entr -d -p sh -c 'nvim --server "$0" --remote-send "<C-\\><C-n>:edit $1<CR>"' "$SOCK" /_
         done
       ) &>/dev/null &
       WATCHER=$!
