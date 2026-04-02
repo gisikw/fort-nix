@@ -74,6 +74,9 @@ let
     openssl
     age
 
+    # File watching
+    entr
+
     # Nix development
     direnv
     nix-direnv
