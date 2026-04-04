@@ -2,12 +2,16 @@
 { config, pkgs, lib, ... }:
 let
   ollama-vulkan-latest = pkgs.ollama-vulkan.overrideAttrs (old: rec {
-    version = "0.15.6";
+    version = "0.20.0";
     src = old.src.override {
       tag = "v${version}";
-      hash = "sha256-II9ffgkMj2yx7Sek5PuAgRnUIS1Kf1UeK71+DwAgBRE=";
+      hash = "sha256-QQKPXdXlsT+uMGGIyqkVZqk6OTa7VHrwDVmgDdgdKOY=";
     };
-    vendorHash = "sha256-r7bSHOYAB5f3fRz7lKLejx6thPx0dR4UXoXu0XD7kVM=";
+    vendorHash = "sha256-1ndXnef1siLKrC0SyAcZmfN8p9pjcOMvcc/boTwBzGc=";
+    # 0.20.0 added x/imagegen and x/mlxrunner subpackages with tree-sitter
+    # CGo deps whose C sources aren't in the Go vendor directory.
+    # Only build the main binary — MLX/imagegen aren't needed on Vulkan.
+    subPackages = [ "." ];
   });
 
   dashboard = ./dashboard.py;
