@@ -286,10 +286,12 @@ in
             if ! curl -sf -H "Authorization: token $token" \
                  "https://api.github.com/repos/$gh_owner/$gh_repo" > /dev/null 2>&1; then
               echo "Creating GitHub repo: $gh_owner/$gh_repo (private)"
-              curl -sf -X POST -H "Authorization: token $token" \
+              if ! curl -sf -X POST -H "Authorization: token $token" \
                 -H "Content-Type: application/json" \
                 "https://api.github.com/user/repos" \
-                -d "{\"name\": \"$gh_repo\", \"private\": true}" > /dev/null
+                -d "{\"name\": \"$gh_repo\", \"private\": true}" > /dev/null; then
+                echo "Warning: failed to create GitHub repo $gh_owner/$gh_repo (may already exist or token lacks scope)"
+              fi
             fi
           fi
         done
