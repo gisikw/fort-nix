@@ -35,6 +35,9 @@ rec {
     headjack = {
       package = "infra/headjack";
     };
+    muse = {
+      package = "infra/muse";
+    };
     litmus = {
       package = "infra/litmus";
       config.port = "8700";
