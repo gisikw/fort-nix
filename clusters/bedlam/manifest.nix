@@ -238,6 +238,15 @@ rec {
             };
           };
         };
+        "muse" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/muse";
+              tokenFile = ./github-mirror-token.sops;
+              branches = [ "main" ];
+            };
+          };
+        };
         "exocortex" = {};
         "hoard" = {};
       };
