@@ -111,10 +111,6 @@ rec {
     {
       config.fort.host = {
         inherit roles apps aspects;
-        runtimePackages = [
-          { repo = "infra/bz"; }
-          { repo = "infra/unum"; }
-        ];
       };
 
       config.systemd.tmpfiles.rules = [

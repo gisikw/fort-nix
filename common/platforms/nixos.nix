@@ -98,11 +98,6 @@ in
           cluster
           ;
       })
-      (import ../fort/runtime-packages.nix {
-        inherit
-          cluster
-          ;
-      })
       (import ../fort/overlays.nix {
         inherit
           rootManifest
