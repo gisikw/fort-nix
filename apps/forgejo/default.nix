@@ -266,7 +266,6 @@ in
       # Process each repo
       REPOS='${reposJson}'
       for repo_name in $(echo "$REPOS" | jq -r 'keys[]'); do
-        echo "Processing repo: $repo_name"
         # Create repo if not exists
         if ! api "$API_URL/repos/$FORGEJO_ORG/$repo_name" > /dev/null 2>&1; then
           echo "Creating repo: $FORGEJO_ORG/$repo_name"
