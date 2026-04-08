@@ -9,7 +9,7 @@ rec {
   aspects = [ "observable" ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
 
@@ -25,5 +25,22 @@ rec {
         hashedPasswordFile = config.sops.secrets.grimshuk-password.path;
         extraGroups = [ "wheel" "video" "audio" "networkmanager" ];
       };
+
+      # Desktop environment
+      config.services.xserver.enable = true;
+      config.services.displayManager.gdm.enable = true;
+      config.services.desktopManager.gnome.enable = true;
+
+      # Audio
+      config.services.pipewire = {
+        enable = true;
+        alsa.enable = true;
+        pulse.enable = true;
+      };
+
+      # Games
+      config.environment.systemPackages = with pkgs; [
+        superTux
+      ];
     };
 }
