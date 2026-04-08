@@ -247,6 +247,15 @@ rec {
             };
           };
         };
+        "unkork" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/unkork";
+              tokenFile = ./github-mirror-token.sops;
+              branches = [ "main" ];
+            };
+          };
+        };
         "exocortex" = {};
         "hoard" = {};
       };
