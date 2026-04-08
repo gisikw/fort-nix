@@ -8,9 +8,15 @@ rec {
 
   aspects = [ "observable" "nvidia-gpu" "gitops" ];
 
+  overlays = {
+    unkork = {
+      package = "infra/unkork";
+    };
+  };
+
   module =
     { config, ... }:
     {
-      config.fort.host = { inherit roles apps aspects; };
+      config.fort.host = { inherit roles apps aspects overlays; };
     };
 }
