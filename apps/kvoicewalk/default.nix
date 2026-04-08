@@ -37,6 +37,8 @@ in
 
     volumes = [
       "/var/lib/kvoicewalk/uv-cache:/uv-cache:Z"
+      "/var/lib/kvoicewalk/uv-data:/root/.local/share/uv:Z"
+      "/var/lib/kvoicewalk/uv-bin:/root/.local/bin:Z"
       "/var/lib/kvoicewalk/work:/work:Z"
     ];
   };
@@ -44,6 +46,8 @@ in
   systemd.tmpfiles.rules = [
     "d /var/lib/kvoicewalk 0755 root root -"
     "d /var/lib/kvoicewalk/uv-cache 0755 root root -"
+    "d /var/lib/kvoicewalk/uv-data 0755 root root -"
+    "d /var/lib/kvoicewalk/uv-bin 0755 root root -"
     "d /var/lib/kvoicewalk/work 0755 root root -"
   ];
 
