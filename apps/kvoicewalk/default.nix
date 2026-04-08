@@ -17,11 +17,11 @@ in
     cmd = [
       "-c"
       (builtins.concatStringsSep " && " [
-        # System deps
+        # System deps + uv via standalone installer
         "apt-get update -qq"
-        "apt-get install -qq -y python3 python3-pip python3-venv git ffmpeg sox libsndfile1 >/dev/null 2>&1"
-        # Install uv
-        "pip install --cache-dir /uv-cache uv 2>&1 | tail -1"
+        "apt-get install -qq -y python3 python3-pip python3-venv git ffmpeg sox libsndfile1 curl >/dev/null 2>&1"
+        "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        "export PATH=\"$HOME/.local/bin:$PATH\""
         # Clone or update kvoicewalk
         "test -d /work/kvoicewalk/.git && (cd /work/kvoicewalk && git pull -q) || git clone -q https://github.com/BovineOverlord/kvoicewalk-with-GPU-CUDA-and-GUI-queue-system.git /work/kvoicewalk"
         # Ready — keep container alive for exec
