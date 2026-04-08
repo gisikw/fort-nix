@@ -182,6 +182,7 @@ creation_rules:
           - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
           - age1gvvsx9u7gdgkfdanddlrz8rrw8v6khkpkq3tv4ahf3vvrys4y39qtxpswp # raishan
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
+          - age1knl84r3j0kag7rzcyxakwzmgc2estvsu39pd7v0yrtqwxpnrksqqnmzryk # robotnik
           - age1jsj034tf5t96r03w30ar36qkenl0d0sy4dkwkl6p84590afp64rqckv9cl # ursula
   - path_regex: aspects/ldap/ldap-admin-pass\.sops$
     key_groups:
@@ -228,6 +229,7 @@ creation_rules:
           - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
           - age1gvvsx9u7gdgkfdanddlrz8rrw8v6khkpkq3tv4ahf3vvrys4y39qtxpswp # raishan
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
+          - age1knl84r3j0kag7rzcyxakwzmgc2estvsu39pd7v0yrtqwxpnrksqqnmzryk # robotnik
           - age1jsj034tf5t96r03w30ar36qkenl0d0sy4dkwkl6p84590afp64rqckv9cl # ursula
   - path_regex: clusters/bedlam/github-mirror-token\.sops$
     key_groups:
