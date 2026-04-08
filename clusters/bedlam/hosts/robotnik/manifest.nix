@@ -40,7 +40,11 @@ rec {
 
       # Games
       config.environment.systemPackages = with pkgs; [
+        nethack
+        openttd
         superTux
+        tuxpaint
+        wesnoth
       ];
     };
 }
