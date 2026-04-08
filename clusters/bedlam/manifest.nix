@@ -288,6 +288,6 @@ rec {
       config.fort.cluster.settings = fortConfig.settings;
       config.fort.cluster.forge = fortConfig.forge;
 
-      config.environment.systemPackages = [ pkgs.neovim ];
+      config.environment.systemPackages = [ pkgs.neovim pkgs.tmux ];
     };
 }
