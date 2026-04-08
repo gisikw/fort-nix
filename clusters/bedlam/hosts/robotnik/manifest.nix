@@ -12,5 +12,18 @@ rec {
     { config, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
+
+      config.sops.secrets.grimshuk-password = {
+        sopsFile = ./grimshuk-password.sops;
+        format = "binary";
+        neededForUsers = true;
+      };
+
+      config.users.users.grimshuk = {
+        isNormalUser = true;
+        description = "Grimshuk";
+        hashedPasswordFile = config.sops.secrets.grimshuk-password.path;
+        extraGroups = [ "wheel" "video" "audio" "networkmanager" ];
+      };
     };
 }
