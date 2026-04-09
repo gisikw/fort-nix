@@ -33,12 +33,22 @@ let
 
 in
 {
+  # Exo voice — trained via unkork, decrypted at activation
+  sops.secrets.exo-kokoro-voice = {
+    sopsFile = ./exo-voice.pt.sops;
+    format = "binary";
+    path = "/var/lib/kokoro-tts/voices/exo.pt";
+  };
+
   virtualisation.oci-containers.containers.kokoro-tts = {
     image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4";
     ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
     environment = {
-      DEFAULT_VOICE = "af_bella";
+      DEFAULT_VOICE = "exo";
     };
+    volumes = [
+      "/var/lib/kokoro-tts/voices/exo.pt:/app/api/src/voices/v1_0/exo.pt:ro"
+    ];
   };
 
   # Expose tts capability for cluster-wide text-to-speech (RPC, upload-to-host)
