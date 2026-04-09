@@ -38,17 +38,17 @@ in
     sopsFile = ./exo-voice.pt.sops;
     format = "binary";
     mode = "0444";
-    path = "/var/lib/kokoro-tts/voices/exo.pt";
+    path = "/var/lib/kokoro-tts/voices/af_exo.pt";
   };
 
   virtualisation.oci-containers.containers.kokoro-tts = {
     image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4";
     ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
     environment = {
-      DEFAULT_VOICE = "exo";
+      DEFAULT_VOICE = "af_exo";
     };
     volumes = [
-      "/var/lib/kokoro-tts/voices/exo.pt:/app/api/src/voices/v1_0/exo.pt:ro"
+      "/var/lib/kokoro-tts/voices/af_exo.pt:/app/api/src/voices/v1_0/af_exo.pt:ro"
     ];
   };
 
