@@ -37,6 +37,7 @@ in
   sops.secrets.exo-kokoro-voice = {
     sopsFile = ./exo-voice.pt.sops;
     format = "binary";
+    mode = "0444";
     path = "/var/lib/kokoro-tts/voices/exo.pt";
   };
 
