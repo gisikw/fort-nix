@@ -4,7 +4,11 @@ rec {
 
   roles = [ ];
 
-  apps = [ "qwen-tts" "kvoicewalk" ];
+  apps = [
+    "ollama-cuda"
+    "qwen-tts"
+    # "kvoicewalk"  # Voice training workbench — done for now
+  ];
 
   aspects = [ "observable" "nvidia-gpu" "gitops" ];
 
