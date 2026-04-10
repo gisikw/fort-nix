@@ -22,5 +22,6 @@ rec {
     { config, ... }:
     {
       config.fort.host = { inherit roles apps aspects overlays; };
+      config.virtualisation.podman.enable = true;
     };
 }
