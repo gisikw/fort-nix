@@ -1,9 +1,21 @@
 { ... }:
 { config, pkgs, ... }:
+let
+  ollama-cuda-latest = pkgs.ollama-cuda.overrideAttrs (old: rec {
+    version = "0.20.5";
+    src = old.src.override {
+      tag = "v${version}";
+      hash = "sha256-/H4DZ/aRB04lKSke9XsK+vb76pcy940scoTunXO4pf4=";
+    };
+    vendorHash = "sha256-1ndXnef1siLKrC0SyAcZmfN8p9pjcOMvcc/boTwBzGc=";
+    subPackages = [ "." ];
+  });
+in
 {
   services.ollama = {
     enable = true;
     acceleration = "cuda";
+    package = ollama-cuda-latest;
     openFirewall = false;
   };
 
