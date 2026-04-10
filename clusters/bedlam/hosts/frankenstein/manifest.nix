@@ -6,7 +6,7 @@ rec {
 
   apps = [
     "ollama-cuda"
-    "qwen-tts"
+    # "qwen-tts"    # Keeping for now — mood sample generation baseline
     # "kvoicewalk"  # Voice training workbench — done for now
   ];
 
