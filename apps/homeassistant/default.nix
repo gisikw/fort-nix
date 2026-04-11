@@ -155,7 +155,7 @@ in
     {
       name = "homeassistant";
       subdomain = subdomain;
-      visibility = "local";
+      visibility = "vpn";
       port = 8123;
     }
   ];

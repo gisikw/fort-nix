@@ -93,7 +93,7 @@ in
       name = "frigate";
       subdomain = subdomain;
       port = 5001;
-      visibility = "local";
+      visibility = "vpn";
     }
   ];
 

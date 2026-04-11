@@ -9,7 +9,7 @@
       name = "jellyfin";
       subdomain = subdomain;
       port = 8096;
-      visibility = "local";
+      visibility = "vpn";
     }
   ];
 }
