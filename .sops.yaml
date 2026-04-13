@@ -366,5 +366,6 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+          - age1mylhwjfferlu2ulwgugqly6p9lzc3k97lda98zc09hqc73zzfpfqneynff # frankenstein
           - age13g9zncylyhf46r90fd8qkhw6lhnkp43qnmkaxy4rtsw8xsd9xudsd8uhzx # lordhenry
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
