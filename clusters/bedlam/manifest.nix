@@ -202,15 +202,6 @@ rec {
             };
           };
         };
-        "cranium-v2" = {
-          mirrors = {
-            github = {
-              remote = "github.com/gisikw/cranium-v2";
-              tokenFile = ./github-mirror-token.sops;
-              branches = [ "main" ];
-            };
-          };
-        };
         "cupola" = {
           mirrors = {
             github = {
