@@ -573,35 +573,6 @@ in
     '';
   };
 
-  # Matrix-Claude bridge
-  systemd.services.cranium = {
-    description = "Matrix-Claude bridge (cranium)";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "simple";
-      User = user;
-      Group = "users";
-      WorkingDirectory = "${homeDir}/Projects/cranium";
-      Restart = "always";
-      RestartSec = "5s";
-      EnvironmentFile = "/var/lib/fort/dev-sandbox/env";
-    };
-    environment = {
-      HOME = homeDir;
-      FORT_SSH_KEY = agentKeyPath;
-      FORT_ORIGIN = "dev-sandbox";
-      CRANIUM_CONFIG = "${homeDir}/Projects/cranium/cranium.yaml";
-    };
-    path = devTools ++ [ pkgs.bash pkgs.ffmpeg ];
-    script = ''
-      . /etc/set-environment
-      export PATH="/run/overlays/bin:${homeDir}/.local/bin:$PATH"
-      exec ${homeDir}/Projects/cranium/cranium
-    '';
-  };
-
   # Process-isolated CC daemon (ccd)
   # Runs in its own process tree so spawned processes don't trigger
   # the Bash tool output suppression.
