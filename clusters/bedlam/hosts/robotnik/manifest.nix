@@ -111,7 +111,7 @@ rec {
           TOKEN=$(tr -d '\n' < "$CRED_DIR/token")
 
           echo "Downloading Factorio Space Age $VERSION..."
-          TARBALL=$(mktemp --suffix=.tar.xz)
+          TARBALL="$INSTALL_DIR/.download.tar.xz"
           trap 'rm -f "$TARBALL"' EXIT
 
           curl -sfL \
@@ -124,6 +124,7 @@ rec {
           echo "Extracting to $INSTALL_DIR..."
           rm -rf "$INSTALL_DIR/factorio"
           tar xf "$TARBALL" -C "$INSTALL_DIR"
+          rm -f "$TARBALL"
 
           echo "$VERSION" > "$INSTALL_DIR/.version"
           echo "Factorio Space Age $VERSION installed successfully"
