@@ -74,7 +74,7 @@ rec {
 
       # Factorio Space Age — runtime reconciler
       config.systemd.tmpfiles.rules = [
-        "d /var/lib/factorio 0755 root root -"
+        "d /var/lib/factorio 0755 grimshuk users -"
       ];
 
       config.systemd.services.factorio-fetch = {
@@ -125,6 +125,7 @@ rec {
           rm -rf "$INSTALL_DIR/factorio"
           tar xf "$TARBALL" -C "$INSTALL_DIR"
           rm -f "$TARBALL"
+          chown -R grimshuk:users "$INSTALL_DIR"
 
           echo "$VERSION" > "$INSTALL_DIR/.version"
           echo "Factorio Space Age $VERSION installed successfully"
@@ -134,6 +135,15 @@ rec {
       # Games
       config.environment.systemPackages = with pkgs; [
         factorio-wrapper
+        (pkgs.makeDesktopItem {
+          name = "factorio";
+          desktopName = "Factorio";
+          comment = "Factorio Space Age";
+          exec = "factorio";
+          icon = "factorio";
+          terminal = false;
+          categories = [ "Game" ];
+        })
         ghostty
         nethack
         openttd
