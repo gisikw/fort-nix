@@ -133,6 +133,7 @@ rec {
       # Games
       config.environment.systemPackages = with pkgs; [
         factorio-wrapper
+        ghostty
         nethack
         openttd
         superTux
