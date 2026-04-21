@@ -22,6 +22,7 @@ let
   gemini-cli = import ../../pkgs/gemini-cli { inherit pkgs; };
   pi-coding-agent = import ../../pkgs/pi-coding-agent { inherit pkgs; };
   ccd = import ../../pkgs/clauded { inherit pkgs; };
+  slidev = import ../../pkgs/slidev { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
   # Note: chmod 644 so dev user can read it for git credential helper
@@ -103,6 +104,9 @@ let
     cargo
     rustfmt
     clippy
+
+    # Presentations
+    slidev
 
     # LSP servers (so mason doesn't need npm)
     typescript-language-server
