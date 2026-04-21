@@ -104,9 +104,6 @@ let
     rustfmt
     clippy
 
-    # Node.js (slidev, general JS/TS dev)
-    nodejs
-
     # LSP servers (so mason doesn't need npm)
     typescript-language-server
     nodePackages.typescript
