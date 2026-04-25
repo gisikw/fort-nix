@@ -2,10 +2,10 @@
 { config, pkgs, ... }:
 let
   ollama-cuda-latest = pkgs.ollama-cuda.overrideAttrs (old: rec {
-    version = "0.20.6";
+    version = "0.21.2";
     src = old.src.override {
       tag = "v${version}";
-      hash = "sha256-ol+LsKRxOR37Rpwc9/NouwMg0GOpaeh6zmN5quIBgnA=";
+      hash = "sha256-bWZsuJmSPO/Y5BqpyR/MNHVV8YWXAR8Z37YgwgnNBvs=";
     };
     vendorHash = "sha256-1ndXnef1siLKrC0SyAcZmfN8p9pjcOMvcc/boTwBzGc=";
     subPackages = [ "." ];
