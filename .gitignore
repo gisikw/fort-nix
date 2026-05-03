@@ -1,2 +1,6 @@
 .cluster
 result
+
+# Elixir tooling
+.elixir-tools/
+erl_crash.dump
