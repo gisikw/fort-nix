@@ -19,8 +19,15 @@ in
     root = site;
   };
 
+  services.nginx.virtualHosts."www.${domain}" = {
+    forceSSL = true;
+    useACMEHost = domain;
+    globalRedirect = domain;
+  };
+
   security.acme = {
     acceptTerms = true;
     defaults.email = "admin@${rootManifest.fortConfig.settings.domain}";
+    certs.${domain}.extraDomainNames = [ "www.${domain}" ];
   };
 }
