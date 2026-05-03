@@ -12,6 +12,7 @@ rec {
       title = "$ cat /dev/urandom";
       description = "Random thoughts from a random cat";
     }
+    "tiltshift"
   ];
 
   aspects = [
