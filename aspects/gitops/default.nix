@@ -90,6 +90,21 @@ EOF
     fi
   '';
 
+  # Switch wrapper: runs nixos-rebuild switch + post-deploy in an isolated context.
+  # Invoked via systemd-run so it survives fort-provider restarts (fn-6575).
+  switchScript = pkgs.writeShellScript "fort-gitops-switch" ''
+    set -euo pipefail
+    export PATH="${lib.makeBinPath [ pkgs.nix pkgs.coreutils pkgs.util-linux ]}:/run/current-system/sw/bin:$PATH"
+    FLAKE_PATH="$1"
+    cd "${repoDir}"
+    if nixos-rebuild switch --flake "$FLAKE_PATH" 2>&1 | logger -t fort-gitops-switch; then
+      logger -t fort-gitops-switch "Switch complete"
+      ${postDeployScript} || logger -t fort-gitops-switch "Post-deploy hook failed (non-fatal)"
+    else
+      logger -t fort-gitops-switch "Switch failed"
+    fi
+  '';
+
   # --- Main gitops polling script ---
   gitopsScript = pkgs.writeShellScript "fort-gitops" ''
     set -euo pipefail
@@ -139,14 +154,15 @@ EOF
     '' else ''
     # Auto mode: build and switch
     log "Building and switching..."
-    if nixos-rebuild switch --flake "./${flakeSubdir}" 2>&1 | logger -t fort-gitops-build; then
-      echo "$REMOTE" > "${stateDir}/deployed-commit"
-      rm -f "${stateDir}/pending-commit"
-      log "Deployed: ''${REMOTE:0:8}"
-      ${postDeployScript} || log "Post-deploy hook failed (non-fatal)"
-    else
-      log "Build/switch failed for ''${REMOTE:0:8}"
-    fi
+    # Write state before switch — the switch runs in a detached transient unit
+    # that survives service restarts during activation (fn-6575). If switch
+    # fails, the next new commit will trigger a retry.
+    echo "$REMOTE" > "${stateDir}/deployed-commit"
+    rm -f "${stateDir}/pending-commit"
+    systemctl stop fort-gitops-switch 2>/dev/null || true
+    systemd-run --unit=fort-gitops-switch --collect --no-block \
+      ${switchScript} "./${flakeSubdir}"
+    log "Switch dispatched: ''${REMOTE:0:8}"
     ''}
   '';
 
@@ -192,10 +208,11 @@ EOF
     rm -f "${stateDir}/pending-commit"
     log "Switching to ''${PENDING:0:8}..."
 
-    # The 502 from here is expected — fort-provider restarts during switch.
-    # Caller should verify via status or deployed-commit file.
-    nixos-rebuild switch --flake "./${flakeSubdir}" 2>&1 | logger -t fort-gitops-deploy || true
-    ${postDeployScript} || true
+    # Run switch in a detached transient unit so it survives fort-provider
+    # restart during activation (fn-6575). State is already persisted above.
+    systemctl stop fort-gitops-switch 2>/dev/null || true
+    systemd-run --unit=fort-gitops-switch --collect --no-block \
+      ${switchScript} "./${flakeSubdir}"
     echo "{\"status\":\"deployed\",\"sha\":\"$PENDING\"}"
   '';
 
