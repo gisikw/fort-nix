@@ -6,187 +6,6 @@ let
   homeDir = "/home/${user}";
   jellyfinUrl = "https://jellyfin.${domain}";
 
-  joypadAutoconfig = pkgs.retroarch-joypad-autoconfig;
-
-  # Persistent data paths
-  dataDir = "/var/lib/game-console";
-  romsDir = "${dataDir}/roms";
-  artworkDir = "${dataDir}/assets";
-  savesDir = "${dataDir}/saves";
-  savestateDir = "${dataDir}/savestates";
-
-  # Libretro core paths
-  cores = {
-    snes9x = "${pkgs.libretro.snes9x}/lib/retroarch/cores/snes9x_libretro.so";
-    nestopia = "${pkgs.libretro.nestopia}/lib/retroarch/cores/nestopia_libretro.so";
-    genesis-plus-gx = "${pkgs.libretro.genesis-plus-gx}/lib/retroarch/cores/genesis_plus_gx_libretro.so";
-    parallel-n64 = "${pkgs.libretro.parallel-n64}/lib/retroarch/cores/parallel_n64_libretro.so";
-  };
-
-  # Chromium wrapped with kiosk flags (launchable via RFID card)
-  kioskBrowser = pkgs.writeShellScriptBin "kiosk-browser" ''
-    exec ${pkgs.chromium}/bin/chromium \
-      --kiosk \
-      --no-first-run \
-      --disable-translate \
-      --disable-infobars \
-      --disable-suggestions-service \
-      --disable-save-password-bubble \
-      --disable-session-crashed-bubble \
-      --noerrdialogs \
-      --disable-features=TranslateUI \
-      --autoplay-policy=no-user-gesture-required \
-      "${jellyfinUrl}"
-  '';
-
-  # RetroArch config
-  retroarchCfg = pkgs.writeText "retroarch.cfg" ''
-    video_fullscreen = "true"
-    video_driver = "gl"
-    video_vsync = "true"
-    video_threaded = "true"
-    video_hard_sync = "true"
-    video_hard_sync_frames = "1"
-    video_smooth = "false"
-
-    audio_driver = "alsa"
-
-    savefile_directory = "${savesDir}"
-    savestate_directory = "${savestateDir}"
-
-    menu_show_load_content_animation = "false"
-    video_font_enable = "false"
-    menu_enable_widgets = "false"
-    settings_show_onscreen_display = "false"
-    input_overlay_enable = "false"
-
-    joypad_autoconfig_dir = "${joypadAutoconfig}/share/libretro/autoconfig"
-  '';
-
-  # Card mappings — RFID card ID to game config
-  cardMappings = {
-    # SNES
-    "0005593265" = {
-      rom_path = "${romsDir}/snes/Super Mario World (U) [!].zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/super-mario-world.png";
-    };
-    "0006405066" = {
-      rom_path = "${romsDir}/snes/Harvest Moon (U).zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/harvest-moon.png";
-    };
-    "0006970516" = {
-      rom_path = "${romsDir}/snes/Legend of Zelda, The - A Link to the Past (U) [!].zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/zelda-link-to-the-past.png";
-    };
-    "0008241197" = {
-      rom_path = "${romsDir}/snes/Sim City (U) [!].zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/sim-city.png";
-    };
-    "0007917398" = {
-      rom_path = "${romsDir}/snes/Star Fox (U) (V1.2) [!].zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/star-fox.png";
-    };
-    "0007507355" = {
-      rom_path = "${romsDir}/snes/Super Mario RPG - Legend of the Seven Stars (U) [!].zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/super-mario-rpg.png";
-    };
-    "0007763882" = {
-      rom_path = "${romsDir}/snes/Wario's Woods (E).smc";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/warios-woods.png";
-    };
-    "0007486482" = {
-      rom_path = "${romsDir}/snes/Super Metroid (E) [!].zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/super-metroid.png";
-    };
-    "0007505411" = {
-      rom_path = "${romsDir}/snes/Final Fantasy II (USA) (Rev 1).zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/final-fantasy-ii.png";
-    };
-    "0007550190" = {
-      rom_path = "${romsDir}/snes/Donkey Kong Country.zip";
-      emulator = cores.snes9x;
-      artwork = "${artworkDir}/donkey-kong-country.png";
-    };
-
-    # NES
-    "0007315288" = {
-      rom_path = "${romsDir}/nes/Zelda - The Legend of Zelda.zip";
-      emulator = cores.nestopia;
-      artwork = "${artworkDir}/zelda.png";
-    };
-    "0007772848" = {
-      rom_path = "${romsDir}/nes/Zelda 2 - The Adventure of Link (U).zip";
-      emulator = cores.nestopia;
-      artwork = "${artworkDir}/zelda-adventure-of-link.png";
-    };
-    "0007542250" = {
-      rom_path = "${romsDir}/nes/Final Fantasy (U).zip";
-      emulator = cores.nestopia;
-      artwork = "${artworkDir}/final-fantasy.png";
-    };
-
-    # Genesis
-    "0007569065" = {
-      rom_path = "${romsDir}/genesis/Sonic The Hedgehog (USA, Europe).zip";
-      emulator = cores.genesis-plus-gx;
-      artwork = "${artworkDir}/sonic.png";
-    };
-
-    # N64
-    "0007741136" = {
-      rom_path = "${romsDir}/n64/Super Smash Bros. (U) [!].zip";
-      emulator = cores.parallel-n64;
-      artwork = "${artworkDir}/super-smash-bros.png";
-    };
-
-    # Jellyfin (command card)
-    "0007300935" = {
-      command = [ "${kioskBrowser}/bin/kiosk-browser" ];
-      artwork = "${artworkDir}/jellyfin.png";
-    };
-  };
-
-  # Generate config.toml from card mappings
-  configToml = let
-    mkEntry = cardId: info: let
-      lines = lib.optional (info ? rom_path) ''rom_path = "${info.rom_path}"''
-           ++ lib.optional (info ? emulator) ''emulator = "${info.emulator}"''
-           ++ [ ''artwork = "${info.artwork}"'' ]
-           ++ lib.optional (info ? command) ''command = [${lib.concatMapStringsSep ", " (c: ''"${c}"'') info.command}]'';
-    in ''
-      [rfid_cards."${cardId}"]
-      ${lib.concatStringsSep "\n" lines}
-    '';
-  in pkgs.writeText "config.toml" ''
-    [rfid_cards]
-
-    ${lib.concatStringsSep "\n" (lib.mapAttrsToList mkEntry cardMappings)}
-  '';
-
-  # Wrapper: sets up working directory and launches the console app
-  gameConsoleLauncher = pkgs.writeShellScriptBin "game-console" ''
-    WORKDIR=$(mktemp -d)
-    trap "rm -rf $WORKDIR" EXIT
-
-    ln -sf ${configToml} "$WORKDIR/config.toml"
-    ln -sf ${retroarchCfg} "$WORKDIR/retroarch.cfg"
-    ln -sf ${artworkDir} "$WORKDIR/assets"
-
-    export PATH="${pkgs.retroarch-bare}/bin:$PATH"
-
-    cd "$WORKDIR"
-    exec ${pkgs.systemd}/bin/systemd-cat -t barely-game-console /run/overlays/bin/barely-game-console
-  '';
-
   # Script to find and enable HDMI audio
   setupHdmiAudio = pkgs.writeShellScriptBin "setup-hdmi-audio" ''
     for i in $(seq 1 10); do
@@ -218,39 +37,36 @@ let
     echo "No HDMI sink found"
   '';
 
-  # Cage session: game console replaces chromium as the primary UI
+  # Cage session: straight into Jellyfin kiosk browser
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
     (sleep 2 && ${setupHdmiAudio}/bin/setup-hdmi-audio) &
 
     export WLR_OUTPUT_SCALE=2
-    exec ${pkgs.cage}/bin/cage -s -- ${gameConsoleLauncher}/bin/game-console
+    exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
+      --kiosk \
+      --no-first-run \
+      --disable-translate \
+      --disable-infobars \
+      --disable-suggestions-service \
+      --disable-save-password-bubble \
+      --disable-session-crashed-bubble \
+      --noerrdialogs \
+      --disable-features=TranslateUI \
+      --autoplay-policy=no-user-gesture-required \
+      "${jellyfinUrl}"
   '';
 in
 {
-  # Create the kids user with input group for evdev (RFID reader + power button)
   users.users.${user} = {
     isNormalUser = true;
     home = homeDir;
     hashedPassword = "";
-    extraGroups = [ "video" "audio" "render" "input" ];
+    extraGroups = [ "video" "audio" "render" ];
   };
 
-  # Persist home directory
+  # Persist home directory (chromium profile, jellyfin session)
   environment.persistence."/persist/system".directories = [
     { directory = homeDir; user = user; group = "users"; mode = "0700"; }
-  ];
-
-  # Game data directories (ROMs and artwork scp'd manually, saves persist)
-  systemd.tmpfiles.rules = [
-    "d ${dataDir} 0755 ${user} users -"
-    "d ${romsDir} 0755 ${user} users -"
-    "d ${romsDir}/snes 0755 ${user} users -"
-    "d ${romsDir}/nes 0755 ${user} users -"
-    "d ${romsDir}/genesis 0755 ${user} users -"
-    "d ${romsDir}/n64 0755 ${user} users -"
-    "d ${artworkDir} 0755 ${user} users -"
-    "d ${savesDir} 0755 ${user} users -"
-    "d ${savestateDir} 0755 ${user} users -"
   ];
 
   # greetd for auto-login to Cage session
@@ -264,14 +80,12 @@ in
     };
   };
 
-  # GPU and graphics support (Vulkan required for N64 emulation performance)
+  # GPU and graphics (intel media driver for hardware video decoding)
   hardware.graphics = {
     enable = true;
-    enable32Bit = true;
     extraPackages = with pkgs; [
       intel-media-driver
       intel-compute-runtime
-      vulkan-loader
       mesa
     ];
   };
@@ -290,9 +104,6 @@ in
     noto-fonts
     noto-fonts-color-emoji
   ];
-
-  # Repurpose power button as select signal for game console
-  services.logind.settings.Login.HandlePowerKey = "ignore";
 
   # Allow empty password login (for auto-login user)
   security.pam.services.greetd.allowNullPassword = true;
