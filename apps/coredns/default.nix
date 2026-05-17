@@ -134,6 +134,9 @@ in
         cat ${fortHostsPath} ${blocklist} > ${mergedHostsPath}
       '';
     };
+    unitConfig = {
+      StartLimitIntervalSec = 0;
+    };
   };
 
   systemd.paths."merge-coredns-hosts" = {
