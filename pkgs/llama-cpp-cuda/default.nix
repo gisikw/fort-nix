@@ -30,6 +30,13 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
+  # The server embeds a web UI from tools/ui/dist/index.html.
+  # Building it properly requires npm; we only use the API so provide a stub.
+  postPatch = ''
+    mkdir -p tools/ui/dist
+    echo '<html><body><h1>llama-server</h1></body></html>' > tools/ui/dist/index.html
+  '';
+
   cmakeFlags = [
     "-DGGML_NATIVE=OFF"
     "-DGGML_CUDA=ON"
