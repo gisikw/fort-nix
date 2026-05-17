@@ -30,11 +30,17 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
-  # The server embeds a web UI from tools/ui/dist/index.html.
+  # The server embeds a web UI via xxd.cmake (reads tools/ui/dist/index.html).
   # Building it properly requires npm; we only use the API so provide a stub.
+  # postPatch puts it in the source tree, preBuild puts it in the cmake build tree
+  # (xxd.cmake reads from the build tree, not source tree).
   postPatch = ''
     mkdir -p tools/ui/dist
-    echo '<html><body><h1>llama-server</h1></body></html>' > tools/ui/dist/index.html
+    echo '<html><body>llama-server</body></html>' > tools/ui/dist/index.html
+  '';
+  preBuild = ''
+    mkdir -p tools/ui/dist
+    echo '<html><body>llama-server</body></html>' > tools/ui/dist/index.html
   '';
 
   cmakeFlags = [
