@@ -37,9 +37,24 @@ let
     echo "No HDMI sink found"
   '';
 
+  # Wait for Tailscale mesh before launching browser
+  waitForNetwork = pkgs.writeShellScriptBin "wait-for-network" ''
+    echo "Waiting for Tailscale..."
+    for i in $(seq 1 60); do
+      if ${pkgs.tailscale}/bin/tailscale status &>/dev/null; then
+        echo "Tailscale connected"
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "Tailscale timeout — launching anyway"
+  '';
+
   # Cage session: straight into Jellyfin kiosk browser
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
     (sleep 2 && ${setupHdmiAudio}/bin/setup-hdmi-audio) &
+
+    ${waitForNetwork}/bin/wait-for-network
 
     export WLR_OUTPUT_SCALE=2
     exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
