@@ -13,7 +13,6 @@ let
   authDir = "/var/lib/fort-auth/git";
   oidcPath = "/user/oauth2/Pocket%20ID";
   bootstrapDir = "/var/lib/forgejo/bootstrap";
-  runnerDir = "/var/lib/forgejo-runner";
   repoNames = builtins.attrNames forgeConfig.repos;
 
   # Collect all mirrors across all repos as flat list: [{repo, mirror, tokenFile}, ...]
@@ -33,12 +32,6 @@ let
     forgejoPackage = config.services.forgejo.package;
   };
 
-  # Fort CLI for CI to trigger refresh
-  fortCli = import ../../pkgs/fort { inherit pkgs domain; };
-
-  # Attic CI token location (created by attic bootstrap)
-  atticCiToken = "/var/lib/forgejo-runner/attic-ci-token";
-  atticCacheUrl = "https://cache.${domain}";
 in
 {
   # Sops secrets for mirror tokens (per repo-mirror pair) and runner
@@ -59,20 +52,12 @@ in
       group = "forgejo";
       mode = "0400";
     };
-    ci-agent-key = {
-      sopsFile = ./ci-agent-key.sops;
-      format = "binary";
-      owner = "forgejo";
-      group = "forgejo";
-      mode = "0400";
-    };
   };
 
   # Credential directories
   systemd.tmpfiles.rules = [
     "d ${authDir} 0700 forgejo forgejo -"
     "d ${bootstrapDir} 0700 forgejo forgejo -"
-    "d ${runnerDir} 0750 forgejo forgejo -"
   ];
 
   # Auto-redirect to OIDC - skip the login page entirely
@@ -308,17 +293,6 @@ in
         fi
       done
 
-      # Register runner with Forgejo using shared secret
-      RUNNER_SECRET=$(cat ${config.sops.secrets.forgejo-runner-secret.path})
-      RUNNER_MARKER="${bootstrapDir}/runner-registered"
-      if [ ! -f "$RUNNER_MARKER" ]; then
-        echo "Registering Actions runner with Forgejo"
-        forgejo forgejo-cli actions register --secret "$RUNNER_SECRET"
-        touch "$RUNNER_MARKER"
-      else
-        echo "Actions runner already registered"
-      fi
-
       # Create read-only deploy token for GitOps
       DEPLOY_TOKEN_FILE="${bootstrapDir}/deploy-token"
       if [ ! -s "$DEPLOY_TOKEN_FILE" ]; then
@@ -355,97 +329,6 @@ in
     '';
   };
 
-  # Create runner config file using shared secret
-  systemd.services.forgejo-runner-register = {
-    description = "Create Forgejo Actions runner config";
-    after = [ "forgejo-bootstrap.service" ];
-    requires = [ "forgejo-bootstrap.service" ];
-    wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.forgejo-runner ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      User = "forgejo";
-      Group = "forgejo";
-      WorkingDirectory = runnerDir;
-      RemainAfterExit = true;
-    };
-
-    script = ''
-      set -euo pipefail
-
-      # Runner config with labels and PATH for workflow jobs.
-      # PATH must be in config.yml envs (not systemd environment) - jobs don't inherit daemon env.
-      # Required tools: bash/coreutils (shell), nix (flake ops), git (checkout),
-      # nodejs (JS-based actions like actions/checkout), gnutar/gzip (artifacts),
-      # fort (control plane), attic-client (binary cache).
-      cat > "${runnerDir}/config.yml" <<EOF
-runner:
-  labels:
-    - "nixos:host"
-  envs:
-    PATH: "${lib.makeBinPath [ pkgs.bash pkgs.coreutils pkgs.gnused pkgs.nix pkgs.git pkgs.gnutar pkgs.gzip pkgs.nodejs pkgs.jq pkgs.sops pkgs.curl pkgs.attic-client pkgs.postgresql fortCli ]}"
-    FORT_SSH_KEY: "${config.sops.secrets.ci-agent-key.path}"
-    FORT_ORIGIN: "ci"
-    ATTIC_TOKEN_FILE: "${atticCiToken}"
-    ATTIC_CACHE_URL: "${atticCacheUrl}"
-EOF
-
-      RUNNER_FILE="${runnerDir}/.runner"
-      if [ -f "$RUNNER_FILE" ]; then
-        echo "Runner already registered"
-        exit 0
-      fi
-
-      RUNNER_SECRET=$(cat ${config.sops.secrets.forgejo-runner-secret.path})
-
-      echo "Creating runner file"
-      forgejo-runner create-runner-file \
-        --instance "https://git.${domain}" \
-        --secret "$RUNNER_SECRET" \
-        --name "forge-runner"
-
-      echo "Runner registered"
-    '';
-  };
-
-  # PostgreSQL for CI test runs (runner jobs need createdb access)
-  services.postgresql = {
-    enable = true;
-    authentication = lib.mkForce ''
-      local all all trust
-      host all all 127.0.0.1/32 trust
-      host all all ::1/128 trust
-    '';
-    ensureUsers = [{
-      name = "postgres";
-      ensureClauses.superuser = true;
-      ensureClauses.createdb = true;
-    }];
-  };
-
-  # Actions runner daemon
-  systemd.services.forgejo-runner = {
-    description = "Forgejo Actions runner";
-    after = [ "network.target" "forgejo-runner-register.service" ];
-    requires = [ "forgejo-runner-register.service" ];
-    wantedBy = [ "multi-user.target" ];
-    path = [ pkgs.forgejo-runner pkgs.bash pkgs.coreutils pkgs.nix pkgs.git pkgs.nodejs ];
-
-    environment = {
-      HOME = runnerDir;
-    };
-
-    serviceConfig = {
-      Type = "simple";
-      User = "forgejo";
-      Group = "forgejo";
-      WorkingDirectory = runnerDir;
-      ExecStart = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon -c ${runnerDir}/config.yml";
-      Restart = "on-failure";
-      RestartSec = "5s";
-    };
-  };
 
   fort.cluster.services = [
     {
