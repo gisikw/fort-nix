@@ -4,9 +4,9 @@
 # Receives shared context (manifests, modules, inputs) and returns
 # darwinConfigurations flake outputs.
 #
-# Darwin hosts are dev machines — no nginx, oauth2-proxy, ACME, control-plane,
-# disko, or impermanence. They get sops-nix for secrets and the
-# shared app/aspect module composition.
+# Darwin hosts are dev machines — no nginx, oauth2-proxy, ACME,
+# disko, or impermanence. They get sops-nix for secrets, control-plane
+# (with launchd instead of systemd), and the shared app/aspect module composition.
 #
 {
   nix-darwin,
@@ -65,6 +65,10 @@ in
       (import ../fort-options.nix ({
         inherit rootManifest cluster;
       }))
+      (import ../fort/control-plane.nix {
+        inherit rootManifest cluster;
+        platform = "darwin";
+      })
       {
         config.fort = {
           clusterName = cluster.clusterName;

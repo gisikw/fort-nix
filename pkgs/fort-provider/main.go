@@ -18,11 +18,14 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/fcgi"
@@ -127,22 +130,61 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Parse flags for --listen mode (direct HTTPS, used on darwin)
+	listenAddr := flag.String("listen", "", "Listen address for direct HTTPS (e.g., 0.0.0.0:443)")
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate")
+	tlsKey := flag.String("tls-key", "", "Path to TLS private key")
+	flag.Parse()
+
 	handler, err := NewAgentHandler()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize: %v\n", err)
 		os.Exit(1)
 	}
 
-	// For socket activation, stdin is the connected socket
-	listener, err := net.FileListener(os.Stdin)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create listener from stdin: %v\n", err)
-		os.Exit(1)
-	}
+	if *listenAddr != "" {
+		// Direct HTTPS mode (darwin — no nginx/fcgi)
+		if *tlsCert == "" || *tlsKey == "" {
+			fmt.Fprintf(os.Stderr, "--tls-cert and --tls-key required with --listen\n")
+			os.Exit(1)
+		}
 
-	if err := fcgi.Serve(listener, handler); err != nil {
-		fmt.Fprintf(os.Stderr, "fcgi serve error: %v\n", err)
-		os.Exit(1)
+		// Wrap handler to translate HTTP path to FCGI-style SCRIPT_NAME
+		// The fort CLI posts to /fort/<capability>, same as the nginx location
+		mux := http.NewServeMux()
+		mux.Handle("/fort/", handler)
+
+		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to load TLS cert: %v\n", err)
+			os.Exit(1)
+		}
+
+		srv := &http.Server{
+			Addr:    *listenAddr,
+			Handler: mux,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			},
+		}
+
+		log.Printf("fort-provider listening on %s (HTTPS)", *listenAddr)
+		if err := srv.ListenAndServeTLS("", ""); err != nil {
+			fmt.Fprintf(os.Stderr, "https serve error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// FastCGI mode (NixOS — socket-activated via systemd)
+		listener, err := net.FileListener(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create listener from stdin: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := fcgi.Serve(listener, handler); err != nil {
+			fmt.Fprintf(os.Stderr, "fcgi serve error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
