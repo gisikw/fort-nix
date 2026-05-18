@@ -223,7 +223,7 @@ EOF
   darwinGitOpts = "-c credential.helper=${gitCredHelper} -c safe.directory=${darwinRepoDir} -c safe.directory=/private${darwinRepoDir}";
   darwinRebuildScript = pkgs.writeShellScript "fort-gitops-rebuild" ''
     set -euo pipefail
-    export PATH="${lib.makeBinPath [ pkgs.git pkgs.nix pkgs.coreutils ]}:$PATH"
+    export PATH="${lib.makeBinPath [ pkgs.git pkgs.nix pkgs.coreutils ]}:/run/current-system/sw/bin:$PATH"
 
     log() { /usr/bin/logger -t fort-gitops "$@"; echo "$@"; }
 
