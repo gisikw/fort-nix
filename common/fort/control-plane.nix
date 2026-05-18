@@ -64,7 +64,7 @@ let
         base_status=$(${pkgs.coreutils}/bin/cat /var/lib/fort/status/status.json)
       else
         # Fallback: derive uptime from kern.boottime on macOS
-        boot_epoch=$(/usr/sbin/sysctl -n kern.boottime | ${pkgs.gnused}/bin/sed 's/.*sec = \([0-9]*\).*/\1/')
+        boot_epoch=$(/usr/sbin/sysctl -n kern.boottime | ${pkgs.gnused}/bin/sed 's/{ sec = \([0-9]*\).*/\1/')
         now_epoch=$(${pkgs.coreutils}/bin/date +%s)
         uptime_secs=$((now_epoch - boot_epoch))
         base_status=$(${pkgs.jq}/bin/jq -n \
