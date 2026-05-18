@@ -1045,6 +1045,46 @@ let
   hasNeeds = config.fort.host.needs != { };
   hasCapabilities = config.fort.host.capabilities != { };
 
+  # Config installation commands shared across platforms
+  fortConfigInstallScript = ''
+    install -d -m0755 /etc/fort
+    install -d -m0755 /etc/fort/handlers
+    install -Dm0644 ${pkgs.writeText "hosts.json" (builtins.toJSON hostsJson)} /etc/fort/hosts.json
+
+    # Install mandatory handlers
+    install -Dm0755 ${mandatoryHandlers.status} /etc/fort/handlers/status
+    install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort/handlers/manifest
+    install -Dm0755 ${mandatoryHandlers.needs} /etc/fort/handlers/needs
+    install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
+    install -Dm0755 ${mandatoryHandlers.systemd} /etc/fort/handlers/systemd
+    install -Dm0755 ${mandatoryHandlers.force-nag} /etc/fort/handlers/force-nag
+    install -Dm0755 ${mandatoryHandlers.read-file} /etc/fort/handlers/read-file
+    install -Dm0755 ${mandatoryHandlers.refresh} /etc/fort/handlers/refresh
+
+    # Install RBAC and capabilities config (includes mandatory endpoints)
+    install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
+    install -Dm0644 ${pkgs.writeText "capabilities.json" capabilitiesJson} /etc/fort/capabilities.json
+
+    ${lib.optionalString isDarwin ''
+      # Darwin: ensure state directories exist
+      install -d -m0755 /var/lib/fort
+      install -d -m0755 /var/lib/fort/handles
+      install -d -m0755 /var/lib/fort/status
+      install -d -m0700 /var/lib/fort/tls
+
+      # Generate self-signed TLS cert if missing (fort CLI uses curl -sk)
+      if [ ! -f /var/lib/fort/tls/cert.pem ]; then
+        ${pkgs.openssl}/bin/openssl req -x509 -newkey ec \
+          -pkeyopt ec_paramgen_curve:prime256v1 \
+          -keyout /var/lib/fort/tls/key.pem \
+          -out /var/lib/fort/tls/cert.pem \
+          -days 3650 -nodes \
+          -subj "/CN=${hostName}.fort.${domain}" 2>/dev/null
+        chmod 600 /var/lib/fort/tls/key.pem
+      fi
+    ''}
+  '';
+
 in
 {
   options.fort.host = {
@@ -1133,50 +1173,17 @@ in
   };
 
   config = lib.mkMerge [
-    # Shared config file installation - always present on all hosts
-    {
+    # Config file installation (platform-specific activation script format)
+    (if isDarwin then {
+      # nix-darwin: use postActivation.text (only postActivation/preActivation supported)
+      system.activationScripts.postActivation.text = lib.mkAfter fortConfigInstallScript;
+    } else {
+      # NixOS: named activation script with dependency ordering
       system.activationScripts.fortProviderConfig = {
         deps = [ ];
-        text = ''
-          install -d -m0755 /etc/fort
-          install -d -m0755 /etc/fort/handlers
-          install -Dm0644 ${pkgs.writeText "hosts.json" (builtins.toJSON hostsJson)} /etc/fort/hosts.json
-
-          # Install mandatory handlers
-          install -Dm0755 ${mandatoryHandlers.status} /etc/fort/handlers/status
-          install -Dm0755 ${mandatoryHandlers.manifest} /etc/fort/handlers/manifest
-          install -Dm0755 ${mandatoryHandlers.needs} /etc/fort/handlers/needs
-          install -Dm0755 ${mandatoryHandlers.journal} /etc/fort/handlers/journal
-          install -Dm0755 ${mandatoryHandlers.systemd} /etc/fort/handlers/systemd
-          install -Dm0755 ${mandatoryHandlers.force-nag} /etc/fort/handlers/force-nag
-          install -Dm0755 ${mandatoryHandlers.read-file} /etc/fort/handlers/read-file
-          install -Dm0755 ${mandatoryHandlers.refresh} /etc/fort/handlers/refresh
-
-          # Install RBAC and capabilities config (includes mandatory endpoints)
-          install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
-          install -Dm0644 ${pkgs.writeText "capabilities.json" capabilitiesJson} /etc/fort/capabilities.json
-
-          ${lib.optionalString isDarwin ''
-            # Darwin: ensure state directories exist
-            install -d -m0755 /var/lib/fort
-            install -d -m0755 /var/lib/fort/handles
-            install -d -m0755 /var/lib/fort/status
-            install -d -m0700 /var/lib/fort/tls
-
-            # Generate self-signed TLS cert if missing (fort CLI uses curl -sk)
-            if [ ! -f /var/lib/fort/tls/cert.pem ]; then
-              ${pkgs.openssl}/bin/openssl req -x509 -newkey ec \
-                -pkeyopt ec_paramgen_curve:prime256v1 \
-                -keyout /var/lib/fort/tls/key.pem \
-                -out /var/lib/fort/tls/cert.pem \
-                -days 3650 -nodes \
-                -subj "/CN=${hostName}.fort.${domain}" 2>/dev/null
-              chmod 600 /var/lib/fort/tls/key.pem
-            fi
-          ''}
-        '';
+        text = fortConfigInstallScript;
       };
-    }
+    })
 
     # NixOS: systemd services + nginx reverse proxy
     (if (!isDarwin) then {
@@ -1276,15 +1283,19 @@ in
       };
     })
 
-    # Generate needs.json and consumer services if any needs are declared
-    (lib.mkIf hasNeeds {
+    # Generate needs.json if any needs are declared
+    (lib.mkIf hasNeeds (if isDarwin then {
+      system.activationScripts.postActivation.text = lib.mkAfter ''
+        install -Dm0644 ${pkgs.writeText "needs.json" needsJson} /etc/fort/needs.json
+      '';
+    } else {
       system.activationScripts.fortNeedsJson = {
         deps = [ "fortHostManifest" ];
         text = ''
           install -Dm0644 ${pkgs.writeText "needs.json" needsJson} /etc/fort/needs.json
         '';
       };
-    })
+    }))
 
     # Consumer services (platform-specific)
     (lib.mkIf hasNeeds (if !isDarwin then {
@@ -1342,17 +1353,21 @@ in
     }))
 
     # Install user-defined capability handlers (if any)
-    (lib.mkIf hasCapabilities {
+    (lib.mkIf hasCapabilities (let
+      handlerInstallScript = ''
+        # Install user-defined handler scripts
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: cfg: ''
+          install -Dm0755 ${cfg.handler} /etc/fort/handlers/${name}
+        '') config.fort.host.capabilities)}
+      '';
+    in if isDarwin then {
+      system.activationScripts.postActivation.text = lib.mkAfter handlerInstallScript;
+    } else {
       system.activationScripts.fortProviderHandlers = {
         deps = [ "fortProviderConfig" ];
-        text = ''
-          # Install user-defined handler scripts
-          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: cfg: ''
-            install -Dm0755 ${cfg.handler} /etc/fort/handlers/${name}
-          '') config.fort.host.capabilities)}
-        '';
+        text = handlerInstallScript;
       };
-    })
+    }))
 
     # Generate systemd trigger units for capabilities with triggers.systemd
     # For each capability with systemd triggers:
