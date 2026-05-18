@@ -2,7 +2,7 @@
 
 let
   hostnameCmd = if pkgs.stdenv.isDarwin
-    then "/usr/bin/hostname"
+    then "/bin/hostname"
     else "${pkgs.nettools}/bin/hostname";
   script = pkgs.writeShellScript "fort" ''
     set -euo pipefail
