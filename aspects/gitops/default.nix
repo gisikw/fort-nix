@@ -219,6 +219,8 @@ EOF
 
   # --- Darwin gitops: launchd-based git pull + darwin-rebuild ---
   darwinRepoDir = "/var/lib/fort-nix";
+  # macOS resolves /var/lib -> /private/var/lib; git safe.directory needs both
+  darwinGitOpts = "-c credential.helper=${gitCredHelper} -c safe.directory=${darwinRepoDir} -c safe.directory=/private${darwinRepoDir}";
   darwinRebuildScript = pkgs.writeShellScript "fort-gitops-rebuild" ''
     set -euo pipefail
     export PATH="${lib.makeBinPath [ pkgs.git pkgs.nix pkgs.coreutils ]}:$PATH"
@@ -231,25 +233,25 @@ EOF
         exit 0
       fi
       log "Cloning ${repoUrl} into ${darwinRepoDir}"
-      git -c credential.helper=${gitCredHelper} clone --branch main "${repoUrl}" "${darwinRepoDir}"
+      git ${darwinGitOpts} clone --branch main "${repoUrl}" "${darwinRepoDir}"
     fi
 
     cd "${darwinRepoDir}"
 
-    if ! git -c credential.helper=${gitCredHelper} fetch origin main 2>&1; then
+    if ! git ${darwinGitOpts} fetch origin main 2>&1; then
       log "Fetch failed, will retry"
       exit 0
     fi
 
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main)
+    LOCAL=$(git ${darwinGitOpts} rev-parse HEAD)
+    REMOTE=$(git ${darwinGitOpts} rev-parse origin/main)
 
     if [ "$LOCAL" = "$REMOTE" ]; then
       exit 0
     fi
 
     log "Updating $LOCAL -> $REMOTE"
-    git reset --hard origin/main
+    git ${darwinGitOpts} reset --hard origin/main
 
     log "Running darwin-rebuild switch"
     if darwin-rebuild switch --flake "./${flakeSubdir}" 2>&1; then
