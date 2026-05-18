@@ -10,6 +10,7 @@
 { config, lib, pkgs, ... }:
 let
   platform = deviceProfileManifest.platform or "nixos";
+  isDarwin = platform == "darwin";
   domain = rootManifest.fortConfig.settings.domain;
   forgeConfig = rootManifest.fortConfig.forge;
 
@@ -216,7 +217,7 @@ EOF
     echo "{\"status\":\"deployed\",\"sha\":\"$PENDING\"}"
   '';
 
-  # --- Darwin gitops-lite: launchd-based git pull + darwin-rebuild ---
+  # --- Darwin gitops: launchd-based git pull + darwin-rebuild ---
   darwinRepoDir = "/var/lib/fort-nix";
   darwinRebuildScript = pkgs.writeShellScript "fort-gitops-rebuild" ''
     set -euo pipefail
@@ -225,22 +226,25 @@ EOF
     log() { /usr/bin/logger -t fort-gitops "$@"; echo "$@"; }
 
     if [ ! -d "${darwinRepoDir}/.git" ]; then
+      if [ ! -s "${tokenFile}" ]; then
+        log "No token yet, waiting for control plane delivery"
+        exit 0
+      fi
       log "Cloning ${repoUrl} into ${darwinRepoDir}"
-      git clone --branch main "${repoUrl}" "${darwinRepoDir}"
+      git -c credential.helper=${gitCredHelper} clone --branch main "${repoUrl}" "${darwinRepoDir}"
     fi
 
     cd "${darwinRepoDir}"
 
-    if [ -f "${tokenFile}" ]; then
-      git config credential.helper "!f() { echo password=$(cat ${tokenFile}); }; f"
+    if ! git -c credential.helper=${gitCredHelper} fetch origin main 2>&1; then
+      log "Fetch failed, will retry"
+      exit 0
     fi
 
-    git fetch origin main 2>/dev/null
     LOCAL=$(git rev-parse HEAD)
     REMOTE=$(git rev-parse origin/main)
 
     if [ "$LOCAL" = "$REMOTE" ]; then
-      log "Up to date at $LOCAL"
       exit 0
     fi
 
@@ -256,29 +260,8 @@ EOF
     fi
   '';
 in
-if platform == "darwin" then
 {
-  launchd.daemons.fort-gitops = {
-    serviceConfig = {
-      Label = "network.gisi.fort.gitops";
-      ProgramArguments = [ "${darwinRebuildScript}" ];
-      StartInterval = 300;
-      StandardOutPath = "/var/log/fort-gitops.log";
-      StandardErrorPath = "/var/log/fort-gitops.log";
-    };
-  };
-
-  environment.systemPackages = [ pkgs.git ];
-}
-else
-{
-  # Ensure directories exist
-  # Note: credDir is 0755 so dev-sandbox credential helper can read token files
-  systemd.tmpfiles.rules = [
-    "d ${credDir} 0755 root root -"
-    "d ${cacheDir} 0755 root root -"
-    "d ${stateDir} 0755 root root -"
-  ];
+  # --- Shared config: needs + packages (all platforms) ---
 
   # Request RO git token from forge for pulls
   fort.host.needs.git-token.default = {
@@ -293,6 +276,35 @@ else
     request = { };
     handler = atticTokenHandler;
   };
+
+  environment.systemPackages = [ pkgs.git ];
+}
+
+// (if isDarwin then {
+  # Darwin: state directories via activation script (no tmpfiles on macOS)
+  system.activationScripts.preActivation.text = lib.mkAfter ''
+    mkdir -p ${credDir} && chmod 755 ${credDir}
+    mkdir -p ${cacheDir} && chmod 755 ${cacheDir}
+    mkdir -p ${stateDir} && chmod 755 ${stateDir}
+  '';
+
+  launchd.daemons.fort-gitops = {
+    serviceConfig = {
+      Label = "network.gisi.fort.gitops";
+      ProgramArguments = [ "${darwinRebuildScript}" ];
+      StartInterval = 30;
+      StandardOutPath = "/var/log/fort-gitops.log";
+      StandardErrorPath = "/var/log/fort-gitops.log";
+    };
+  };
+} else {
+  # NixOS: state directories via tmpfiles
+  # Note: credDir is 0755 so dev-sandbox credential helper can read token files
+  systemd.tmpfiles.rules = [
+    "d ${credDir} 0755 root root -"
+    "d ${cacheDir} 0755 root root -"
+    "d ${stateDir} 0755 root root -"
+  ];
 
   # Poll every 30s, 30s after boot
   systemd.timers.fort-gitops = {
@@ -320,6 +332,4 @@ else
     description = "Trigger deployment after verifying expected SHA";
     allowed = [ "dev-sandbox" ];
   };
-
-  environment.systemPackages = [ pkgs.git ];
-}
+})
