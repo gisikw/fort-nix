@@ -1045,6 +1045,15 @@ let
   hasNeeds = config.fort.host.needs != { };
   hasCapabilities = config.fort.host.capabilities != { };
 
+  # Host manifest for service discovery (darwin generates this here; NixOS does it in fort.nix)
+  aspectName = a: if builtins.isString a then a else a.name or "unknown";
+  hostManifestJson = pkgs.writeText "host-manifest.json" (builtins.toJSON {
+    apps = config.fort.host.apps or [];
+    aspects = map aspectName (config.fort.host.aspects or []);
+    roles = config.fort.host.roles or [];
+    services = config.fort.cluster.services;
+  });
+
   # Config installation commands shared across platforms
   fortConfigInstallScript = ''
     install -d -m0755 /etc/fort
@@ -1082,6 +1091,9 @@ let
           -subj "/CN=${hostName}.fort.${domain}" 2>/dev/null
         chmod 600 /var/lib/fort/tls/key.pem
       fi
+
+      # Darwin: generate host-manifest.json (NixOS does this in fort.nix)
+      install -Dm0644 ${hostManifestJson} /var/lib/fort/host-manifest.json
     ''}
   '';
 
