@@ -1175,8 +1175,8 @@ in
   config = lib.mkMerge [
     # Config file installation (platform-specific activation script format)
     (if isDarwin then {
-      # nix-darwin: use postActivation.text (only postActivation/preActivation supported)
-      system.activationScripts.postActivation.text = lib.mkAfter fortConfigInstallScript;
+      # nix-darwin: use preActivation (postActivation may conflict with other definitions)
+      system.activationScripts.preActivation.text = lib.mkAfter fortConfigInstallScript;
     } else {
       # NixOS: named activation script with dependency ordering
       system.activationScripts.fortProviderConfig = {
@@ -1285,7 +1285,7 @@ in
 
     # Generate needs.json if any needs are declared
     (lib.mkIf hasNeeds (if isDarwin then {
-      system.activationScripts.postActivation.text = lib.mkAfter ''
+      system.activationScripts.preActivation.text = lib.mkAfter ''
         install -Dm0644 ${pkgs.writeText "needs.json" needsJson} /etc/fort/needs.json
       '';
     } else {
@@ -1361,7 +1361,7 @@ in
         '') config.fort.host.capabilities)}
       '';
     in if isDarwin then {
-      system.activationScripts.postActivation.text = lib.mkAfter handlerInstallScript;
+      system.activationScripts.preActivation.text = lib.mkAfter handlerInstallScript;
     } else {
       system.activationScripts.fortProviderHandlers = {
         deps = [ "fortProviderConfig" ];
