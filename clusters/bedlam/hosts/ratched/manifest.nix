@@ -109,11 +109,20 @@ rec {
   ];
 
   module =
-    { config, pkgs, ... }:
+    { config, pkgs, lib, ... }:
     {
       config.fort.host = {
         inherit roles apps aspects;
       };
+
+      # PostgreSQL for overlays (cranium). Trust auth on localhost — no
+      # password complexity needed on a single-user dev sandbox.
+      config.services.postgresql.enable = true;
+      config.services.postgresql.authentication = lib.mkForce ''
+        local   all             all                                     trust
+        host    all             all             127.0.0.1/32            trust
+        host    all             all             ::1/128                 trust
+      '';
 
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
