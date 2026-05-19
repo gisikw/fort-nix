@@ -30,24 +30,12 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
-  # The server embeds a web UI via xxd.cmake (reads tools/ui/dist/index.html).
-  # Building it properly requires npm; we only use the API so provide a stub.
-  # postPatch puts it in the source tree, preBuild puts it in the cmake build tree
-  # (xxd.cmake reads from the build tree, not source tree).
-  postPatch = ''
-    mkdir -p tools/ui/dist
-    echo '<html><body>llama-server</body></html>' > tools/ui/dist/index.html
-  '';
-  preBuild = ''
-    mkdir -p tools/ui/dist
-    echo '<html><body>llama-server</body></html>' > tools/ui/dist/index.html
-  '';
-
   cmakeFlags = [
     "-DGGML_NATIVE=OFF"
     "-DGGML_CUDA=ON"
     "-DCMAKE_CUDA_ARCHITECTURES=86"
     "-DLLAMA_BUILD_SERVER=ON"
+    "-DLLAMA_BUILD_UI=OFF"
     "-DLLAMA_BUILD_EXAMPLES=OFF"
     "-DLLAMA_BUILD_TESTS=OFF"
     "-DLLAMA_CURL=ON"
