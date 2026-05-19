@@ -4,7 +4,7 @@ rec {
 
   roles = [ ];
 
-  apps = [ "treeline" ];
+  apps = [ ];
 
   aspects = [
     "observable"

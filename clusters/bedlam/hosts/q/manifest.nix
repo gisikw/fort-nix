@@ -12,12 +12,6 @@ rec {
     "sonarr"
     "readarr"
     "qbittorrent"
-    "vikunja"
-    "outline"
-    "super-productivity"
-    "termix"
-    "silverbullet"
-    "upload-gateway"
   ];
 
   aspects = [

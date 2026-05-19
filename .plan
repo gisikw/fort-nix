@@ -1,119 +1,75 @@
-# fn-e5a4: Validate sops-nix with grafana-admin-pass
+# Plan: Add llama.cpp CUDA (llama-server) to Frankenstein
 
-## Summary
+## Context
+- MTP (Multi Token Prediction) just merged into llama.cpp (PR #22673) — ~2x generation speedup
+- nixpkgs llama-cpp is at b6981; latest is b9181 (today) — 2200 builds behind
+- Frankenstein: RTX 3090 (SM 86), soon 2x 3090s
+- Side-by-side with ollama-cuda for now; ollama gets nuked once llama-server is stable
 
-Migrate `grafana-admin-pass` from agenix to sops-nix as a proof of concept. Both
-secret systems will coexist — agenix continues managing all other secrets, CI rekeying
-pipeline is untouched.
+## Files to Create
 
-## Key Insight
+### 1. `pkgs/llama-cpp-cuda/default.nix` — Custom derivation
 
-sops-nix eliminates the need for CI rekeying because secrets are encrypted for device
-keys at creation time (via `.sops.yaml`), not re-encrypted in CI. The release branch
-copies all files from main (release.yml:298-319), so sops-encrypted files pass through
-unchanged.
+Build llama.cpp from source with CUDA support, pinned to a specific tag (b9181).
 
-## Steps
+- Uses `cudaPackages.backendStdenv` for CUDA-compatible GCC
+- Targets SM 86 (Ampere/3090) via `CMAKE_CUDA_ARCHITECTURES`
+- Enables: CUDA, server build, curl (for remote GGUF loading)
+- Disables: examples, tests, native arch detection (reproducibility)
+- Easy to bump: change `version` + `hash`
 
-### 1. Add sops-nix flake input
+### 2. `apps/llama-server/default.nix` — App module
 
-In `flake.nix`, add alongside agenix:
-```nix
-sops-nix = {
-  url = "github:Mic92/sops-nix";
-  inputs.nixpkgs.follows = "nixpkgs";
-};
+Systemd service running `llama-server` with:
+
+- **Port**: 8012 (arbitrary, avoids 11434/ollama)
+- **User/Group**: dedicated `llama-server` user (DynamicUser)
+- **State**: `/var/lib/llama-server/models/` for GGUF storage
+- **Flags**:
+  - `--host 0.0.0.0 --port 8012`
+  - `--model-store /var/lib/llama-server/models` (serves all models in dir)
+  - `--gpu-layers 999` (full GPU offload)
+  - `--ctx-size 32768`
+  - `--flash-attn`
+  - MTP: `--spec-type draft-mtp --spec-draft-n-max 3` (only activates for MTP-capable GGUFs, no-op otherwise)
+- **Exposure**: `llama.gisi.network` with `sso.mode = "token"` + `vpnBypass = true` (matches ollama pattern)
+
+### 3. Update `clusters/bedlam/hosts/frankenstein/manifest.nix`
+
+Add `"llama-server"` to the apps list alongside `"ollama-cuda"`.
+
+## Design Decisions
+
+- **Full custom derivation vs overrideAttrs**: Custom. The nixpkgs derivation is 2200 builds old; cmake flags, deps, and source layout may have changed. A self-contained derivation is more predictable for bleeding-edge tracking.
+- **SM 86 only**: Hardcoded for now. When the second 3090 arrives, tensor parallelism just works (same arch). If you ever get a different-gen GPU, we widen the arch list.
+- **--model-store vs --model**: `--model-store` (multi-model directory serving) is the newer pattern that lets you swap models without restarting. You drop GGUFs in the directory and they become available via the API.
+- **OpenAI-compatible API**: llama-server speaks `/v1/chat/completions`, `/v1/models`, etc. — clients that work with ollama will work here with minimal change.
+- **MTP flags always present**: They're only active when the loaded GGUF has MTP drafts baked in. No harm passing them for non-MTP models.
+
+## Bumping llama.cpp in Future
+
+```bash
+# Update version in pkgs/llama-cpp-cuda/default.nix
+# Then get the new hash:
+nix build .#nixosConfigurations.frankenstein.config.system.build.toplevel 2>&1 | grep "got:"
+# Update hash, rebuild
 ```
 
-### 2. Thread sops-nix through to NixOS modules
+## Testing
 
-- `common/host.nix`: Add `sops-nix` parameter, pass through `sharedContext`
-- `common/platforms/nixos.nix`: Import `sops-nix.nixosModules.sops`, configure:
-  ```nix
-  sops.age.sshKeyPaths = [ "/persist/system/etc/ssh/ssh_host_ed25519_key" ];
-  ```
-  This uses the same SSH host key agenix uses (line 60), but sops-nix internally
-  converts it to an age key via ssh-to-age at activation time.
-
-### 3. Convert SSH pubkeys to age format
-
-Use `ssh-to-age` to derive age public keys from:
-- admin principal SSH key → age pubkey (for .sops.yaml)
-- drhorrible device SSH key → age pubkey (for .sops.yaml)
-
-dev-sandbox and ci principals already have age keys.
-
-### 4. Create `.sops.yaml`
-
-Root-level creation rules file. For the POC, one rule:
-
-```yaml
-creation_rules:
-  - path_regex: apps/fort-observability/secrets\.yaml$
-    key_groups:
-      - age:
-          - <admin-age-pubkey>
-          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m  # dev-sandbox
-          - age13c897rs...  # ci
-          - <drhorrible-device-age-pubkey>
+```bash
+just test frankenstein
 ```
 
-### 5. Create the sops-encrypted secret
+## Post-Deploy: Getting Models
 
-1. Decrypt current agenix secret: `age -d -i ~/.config/age/keys.txt apps/fort-observability/grafana-admin-pass.age`
-2. Create `apps/fort-observability/secrets.yaml` with: `grafana_admin_pass: "<value>"`
-3. Encrypt in-place: `sops -e -i apps/fort-observability/secrets.yaml`
-
-### 6. Update `apps/fort-observability/default.nix`
-
-Replace:
-```nix
-age.secrets.grafana-admin-pass = {
-  file = ./grafana-admin-pass.age;
-  owner = "grafana";
-  group = "grafana";
-  mode = "0400";
-};
+```bash
+# Download a GGUF to the model store:
+curl -L -o /var/lib/llama-server/models/qwen3-30b-a3b-mtp.gguf \
+  "https://huggingface.co/Qwen/Qwen3-30B-A3B-GGUF/resolve/main/qwen3-30b-a3b-q4_k_m.gguf"
 ```
 
-With:
-```nix
-sops.secrets.grafana-admin-pass = {
-  sopsFile = ./secrets.yaml;
-  key = "grafana_admin_pass";
-  owner = "grafana";
-  group = "grafana";
-  mode = "0400";
-};
+Then access via API:
+```bash
+curl -H "Authorization: Bearer <token>" https://llama.gisi.network/v1/models
 ```
-
-And update the consumption (line 48):
-```nix
-admin_password = "$__file{${config.sops.secrets.grafana-admin-pass.path}}";
-```
-
-### 7. Clean up agenix references
-
-- Remove `grafana-admin-pass.age` entry from `secrets.nix`
-- Delete `apps/fort-observability/grafana-admin-pass.age`
-- Keep the .age file in the release branch (CI just won't process it since no host references it)
-
-### 8. Test and deploy
-
-1. `git add` all changed files
-2. `just test drhorrible` — verify flake evaluates clean
-3. Commit, push, `just deploy drhorrible`
-4. Verify grafana starts with the sops-managed secret
-
-## What this validates
-
-- sops-nix and agenix coexist without conflict
-- sops decryption via SSH host key works on our impermanence hosts
-- Sops-encrypted files survive the CI release branch pipeline
-- No CI changes required for sops-managed secrets
-
-## What this does NOT do
-
-- Does not touch the CI rekeying pipeline
-- Does not generate .sops.yaml automatically (that's fn-66f9)
-- Does not migrate any other secrets

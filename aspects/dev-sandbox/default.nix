@@ -166,9 +166,6 @@ let
     # Search
     (import ../../pkgs/qmd { inherit pkgs; })
 
-    # Workflow orchestration
-    temporal-cli
-
     # Media
     ffmpeg
 
@@ -255,7 +252,7 @@ in
   };
 
   # Persist the home directory across reboots (for impermanent systems)
-  # Mode 0710 ensures ACL mask includes execute bit (needed for silverbullet traversal)
+  # Mode 0710 ensures ACL mask includes execute bit
   environment.persistence."/persist/system".directories = [
     { directory = homeDir; user = user; group = "users"; mode = "0710"; }
   ];

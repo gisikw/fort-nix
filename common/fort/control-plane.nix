@@ -734,7 +734,7 @@ let
       type = lib.types.attrsOf lib.types.anything;
       default = { };
       description = "Request payload passed to the capability handler";
-      example = { service = "outline"; };
+      example = { service = "grafana"; };
     };
 
     handler = lib.mkOption {
@@ -1125,9 +1125,9 @@ in
           };
 
           # OIDC registration with handler
-          fort.host.needs.oidc.outline = {
+          fort.host.needs.oidc.grafana = {
             from = "drhorrible";
-            request = { client_name = "outline"; };
+            request = { client_name = "grafana"; };
             nag = "1h";
             handler = ./handlers/oidc-callback.sh;
           };

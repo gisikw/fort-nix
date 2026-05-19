@@ -16,7 +16,6 @@ rec {
     "radicale"
     "apple-dist"
     "conduit"
-    "temporal"
     "excalidraw"
     "cdn"
   ];
