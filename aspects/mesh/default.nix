@@ -57,6 +57,15 @@ lib.mkMerge ([
 ++ lib.optionals (platform == "darwin") [
   {
     services.tailscale.enable = true;
+
+    # Route fort.gisi.network DNS queries through MagicDNS.
+    # macOS tailscale advertises the domain as a search domain but doesn't
+    # configure a resolver for it, so queries fall through to LAN DNS which
+    # returns the public beacon IP instead of tailscale IPs.
+    system.activationScripts.preActivation.text = lib.mkAfter ''
+      mkdir -p /etc/resolver
+      echo "nameserver 100.100.100.100" > /etc/resolver/fort.${domain}
+    '';
   }
 
   # Auto-enroll in mesh on activation (no-op if already connected)

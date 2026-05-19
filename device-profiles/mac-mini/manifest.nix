@@ -20,11 +20,11 @@
       # pmset settings nix-darwin doesn't expose natively
       system.activationScripts.postActivation.text = ''
         # Restart on power failure
-        pmset -a autorestart 1
+        /usr/bin/pmset -a autorestart 1
         # Restart on freeze (kernel watchdog)
-        pmset -a RestartAfterFreeze 1
+        /usr/bin/pmset -a RestartAfterFreeze 1
         # Wake on network access (remote management)
-        pmset -a womp 1
+        /usr/bin/pmset -a womp 1
       '';
     };
 }
