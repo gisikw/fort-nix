@@ -18,7 +18,6 @@ creation_rules:
           - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
-          - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
           - age1dcw3fhvhaz2tj6xqq3fkv43h8j640suhafm86as5mr3fpjm4d55s8u0em3 # joker
   - path_regex: apps/forgejo/runner-secret\.sops$
     key_groups:
@@ -216,6 +215,7 @@ creation_rules:
           - age1dcw3fhvhaz2tj6xqq3fkv43h8j640suhafm86as5mr3fpjm4d55s8u0em3 # joker
           - age13g9zncylyhf46r90fd8qkhw6lhnkp43qnmkaxy4rtsw8xsd9xudsd8uhzx # lordhenry
           - age196fcg4as7cqr48axe0uhwcnnhvk07y73cm0rzt3stm3a7s4edqjsr0fl85 # minos
+          - age1n483rykvn07m60f595khf8rs40csua0398ddrtydymtuwwwwkceqsjl82j # obrien
           - age1yq3ahanz54nk76wm2kc8vqj2g4yp6378ksnegmnvcamxegypcqcszxsk4h # pettigrew
           - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
           - age1gvvsx9u7gdgkfdanddlrz8rrw8v6khkpkq3tv4ahf3vvrys4y39qtxpswp # raishan

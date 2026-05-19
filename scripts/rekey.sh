@@ -69,8 +69,10 @@ for host_dir in "$hosts_root"/*/; do
   host_count=$((host_count + 1))
 
   (
-    # Eval sops.secrets for this host
-    secrets_json=$(nix eval "./${hosts_root}/${host_name}#nixosConfigurations.${host_name}.config.sops.secrets" --json 2>/dev/null || echo "{}")
+    # Eval sops.secrets for this host (try nixos first, then darwin)
+    secrets_json=$(nix eval "./${hosts_root}/${host_name}#nixosConfigurations.${host_name}.config.sops.secrets" --json 2>/dev/null \
+      || nix eval "./${hosts_root}/${host_name}#darwinConfigurations.${host_name}.config.sops.secrets" --json 2>/dev/null \
+      || echo "{}")
 
     # Extract unique sopsFile paths (strip nix store prefix)
     sops_files=$(echo "$secrets_json" | jq -r '
