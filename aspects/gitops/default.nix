@@ -98,11 +98,27 @@ EOF
     export PATH="${lib.makeBinPath [ pkgs.nix pkgs.coreutils pkgs.util-linux ]}:/run/current-system/sw/bin:$PATH"
     FLAKE_PATH="$1"
     cd "${repoDir}"
+
+    # Capture current generation for rollback if switch fails
+    PREV_GEN=$(readlink -f /nix/var/nix/profiles/system)
+
     if nixos-rebuild switch --flake "$FLAKE_PATH" 2>&1 | logger -t fort-gitops-switch; then
       logger -t fort-gitops-switch "Switch complete"
+      rm -f "${stateDir}/switch-failures" "${stateDir}/last-failure-time" "${stateDir}/failing-commit"
       ${postDeployScript} || logger -t fort-gitops-switch "Post-deploy hook failed (non-fatal)"
     else
-      logger -t fort-gitops-switch "Switch failed"
+      logger -t fort-gitops-switch "Switch FAILED — rolling back to previous generation"
+      # Restore profile pointer and re-activate previous generation
+      nix-env -p /nix/var/nix/profiles/system --set "$PREV_GEN" 2>&1 | logger -t fort-gitops-rollback || true
+      $PREV_GEN/bin/switch-to-configuration switch 2>&1 | logger -t fort-gitops-rollback || true
+      # Track failure for exponential backoff
+      FAILURES=$(cat "${stateDir}/switch-failures" 2>/dev/null || echo "0")
+      echo $((FAILURES + 1)) > "${stateDir}/switch-failures"
+      date +%s > "${stateDir}/last-failure-time"
+      # Record which commit failed; clear deployed-commit so gitops retries
+      cp "${stateDir}/deployed-commit" "${stateDir}/failing-commit" 2>/dev/null || true
+      rm -f "${stateDir}/deployed-commit"
+      logger -t fort-gitops-switch "Rolled back. Failure count: $((FAILURES + 1))"
     fi
   '';
 
@@ -154,10 +170,32 @@ EOF
     fi
     '' else ''
     # Auto mode: build and switch
+    # Check exponential backoff from previous failures
+    FAILURES=$(cat "${stateDir}/switch-failures" 2>/dev/null || echo "0")
+    if [ "$FAILURES" -gt 0 ]; then
+      FAILING=$(cat "${stateDir}/failing-commit" 2>/dev/null || echo "")
+      if [ "$REMOTE" != "$FAILING" ]; then
+        log "New commit ''${REMOTE:0:8} (was failing on ''${FAILING:0:8}), resetting backoff"
+        rm -f "${stateDir}/switch-failures" "${stateDir}/last-failure-time" "${stateDir}/failing-commit"
+        FAILURES=0
+      else
+        LAST_FAIL=$(cat "${stateDir}/last-failure-time" 2>/dev/null || echo "0")
+        NOW=$(date +%s)
+        CAPPED=$(( FAILURES > 6 ? 6 : FAILURES ))
+        BACKOFF=$(( 60 * (1 << (CAPPED - 1)) ))
+        ELAPSED=$(( NOW - LAST_FAIL ))
+        if [ "$ELAPSED" -lt "$BACKOFF" ]; then
+          log "Backing off: failure $FAILURES, retry in $(( BACKOFF - ELAPSED ))s"
+          exit 0
+        fi
+        log "Retrying after backoff (failure $FAILURES)"
+      fi
+    fi
+
     log "Building and switching..."
     # Write state before switch — the switch runs in a detached transient unit
     # that survives service restarts during activation (fn-6575). If switch
-    # fails, the next new commit will trigger a retry.
+    # fails, the switch script rolls back and clears deployed-commit for retry.
     echo "$REMOTE" > "${stateDir}/deployed-commit"
     rm -f "${stateDir}/pending-commit"
     systemctl stop fort-gitops-switch 2>/dev/null || true
@@ -321,6 +359,11 @@ in
     description = "Fort GitOps - pull and deploy from git";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
+    # Never stop during activation — switch-to-configuration killing the gitops
+    # process tree mid-switch is the #1 failure mode (interrupted activations
+    # leave services stopped permanently). The timer naturally picks up the new
+    # script on the next tick.
+    stopIfChanged = false;
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${gitopsScript}";
