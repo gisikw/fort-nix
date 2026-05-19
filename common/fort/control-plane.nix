@@ -1217,11 +1217,14 @@ in
       };
 
       # The actual service (activated by socket)
+      # stopIfChanged prevents switch-to-configuration from killing the provider
+      # (and its socket) during deploys. The path watcher (fort-provider-config)
+      # handles restarts when capabilities.json changes.
       systemd.services.fort-provider = {
         description = "Fort Control Plane Provider";
         requires = [ "fort-provider.socket" ];
         after = [ "fort-provider.socket" ];
-        restartTriggers = [ fortProvider ];  # Restart when binary changes
+        stopIfChanged = false;
         path = [ fortCli ];  # For sendCallback to invoke fort CLI
 
         serviceConfig = {
