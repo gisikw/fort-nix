@@ -247,6 +247,15 @@ rec {
             };
           };
         };
+        "lair" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/lair";
+              tokenFile = ./github-mirror-token.sops;
+              branches = [ "main" ];
+            };
+          };
+        };
         "exocortex" = {};
         "hoard" = {};
       };
