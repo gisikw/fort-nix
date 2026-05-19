@@ -5,4 +5,6 @@ result
 .elixir-tools/
 erl_crash.dump
 
-.ko/
+.ko/tickets/
+.ko/builds/
+.ko/agent.*
