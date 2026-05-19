@@ -6,7 +6,7 @@ rec {
 
   apps = [
     "ollama-cuda"
-    # "llama-server"  # temporarily disabled — CUDA build blocking deploy
+    "llama-server"
   ];
 
   aspects = [ "observable" "nvidia-gpu" "gitops" ];
