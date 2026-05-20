@@ -124,7 +124,7 @@ in
         "--model ${modelStore}/${(builtins.head models).file}"
         "--gpu-layers 999"
         "--ctx-size 32768"
-        "--flash-attn"
+        "--flash-attn on"
         "--spec-type draft-mtp"
         "--spec-draft-n-max 3"
       ];
