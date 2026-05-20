@@ -149,6 +149,9 @@ in
     description = "Reconcile GGUF model store for llama-server";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
+    # Don't restart during activation — the 29GB download can't complete
+    # within the switch timeout. Let the timer handle it.
+    restartIfChanged = false;
 
     serviceConfig = {
       Type = "oneshot";
