@@ -30,12 +30,17 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
-  # LLAMA_BUILD_UI=OFF skips the frontend build but the server still needs
-  # index.html.hpp — xxd.cmake fails on the missing file. Provide a stub
-  # in the cmake build directory (where the generate step looks for it).
-  postConfigure = ''
-    mkdir -p tools/ui/dist
-    echo '<html><body>UI not built</body></html>' > tools/ui/dist/index.html
+  # LLAMA_BUILD_UI=OFF skips the frontend build but xxd.cmake still runs
+  # and chokes on the missing dist/index.html. Patch it to handle missing input.
+  postPatch = ''
+    cat > /tmp/xxd-guard << 'EOF'
+if(NOT EXISTS "''${INPUT}")
+  file(WRITE "''${OUTPUT}" "// stub - UI not built\nstatic const unsigned char index_html[] = {0};\nstatic const unsigned int index_html_len = 0;\n")
+  return()
+endif()
+EOF
+    cat /tmp/xxd-guard scripts/xxd.cmake > scripts/xxd.cmake.new
+    mv scripts/xxd.cmake.new scripts/xxd.cmake
   '';
 
   cmakeFlags = [
