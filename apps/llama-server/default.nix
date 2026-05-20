@@ -8,8 +8,8 @@ let
   models = [
     {
       repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
-      file = "Qwen3.6-27B-Q4_K_M.gguf";
-      sha256 = "a7cbd3ecc0e3f9b333edee61ae66bc87ed713c5d49587a8355814722ed329e0f";
+      file = "Qwen3.6-27B-Q8_0.gguf";
+      sha256 = "9408dcb356cc061a05c139e5647cbde0698ff980c6a69f7fc214e9989f86cfa8";
     }
   ];
 
