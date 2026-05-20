@@ -30,12 +30,33 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
-  # LLAMA_BUILD_UI=OFF means dist/index.html is empty. xxd.cmake's
-  # string(LENGTH ${hex_data} ...) crashes on empty unquoted expansion.
-  # Just quote it.
+  # LLAMA_BUILD_UI=OFF skips the npm build, leaving dist/ files missing or
+  # empty. Replace xxd.cmake with a version that handles both cases.
   postPatch = ''
-    substituteInPlace scripts/xxd.cmake \
-      --replace-fail 'string(LENGTH ''${hex_data}' 'string(LENGTH "''${hex_data}"'
+    cat > scripts/xxd.cmake << 'XXDEOF'
+SET(INPUT "" CACHE STRING "Input File")
+SET(OUTPUT "" CACHE STRING "Output File")
+
+get_filename_component(filename "''${INPUT}" NAME)
+string(REGEX REPLACE "\\.|-" "_" name "''${filename}")
+
+if(NOT EXISTS "''${INPUT}")
+  file(WRITE "''${OUTPUT}" "unsigned char ''${name}[] = {0x00};\nunsigned int ''${name}_len = 0;\n")
+  return()
+endif()
+
+file(READ "''${INPUT}" hex_data HEX)
+string(LENGTH "''${hex_data}" hex_len)
+
+if(hex_len EQUAL 0)
+  file(WRITE "''${OUTPUT}" "unsigned char ''${name}[] = {0x00};\nunsigned int ''${name}_len = 0;\n")
+  return()
+endif()
+
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex_sequence "''${hex_data}")
+math(EXPR len "''${hex_len} / 2")
+file(WRITE "''${OUTPUT}" "unsigned char ''${name}[] = {''${hex_sequence}};\nunsigned int ''${name}_len = ''${len};\n")
+XXDEOF
   '';
 
   cmakeFlags = [
