@@ -30,17 +30,12 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
-  # LLAMA_BUILD_UI=OFF skips the frontend build but xxd.cmake still runs
-  # and chokes on the missing dist/index.html. Patch it to handle missing input.
+  # LLAMA_BUILD_UI=OFF means dist/index.html is empty. xxd.cmake's
+  # string(LENGTH ${hex_data} ...) crashes on empty unquoted expansion.
+  # Just quote it.
   postPatch = ''
-    cat > /tmp/xxd-guard << 'EOF'
-if(NOT EXISTS "''${INPUT}")
-  file(WRITE "''${OUTPUT}" "// stub - UI not built\nstatic const unsigned char index_html[] = {0};\nstatic const unsigned int index_html_len = 0;\n")
-  return()
-endif()
-EOF
-    cat /tmp/xxd-guard scripts/xxd.cmake > scripts/xxd.cmake.new
-    mv scripts/xxd.cmake.new scripts/xxd.cmake
+    substituteInPlace scripts/xxd.cmake \
+      --replace-fail 'string(LENGTH ''${hex_data}' 'string(LENGTH "''${hex_data}"'
   '';
 
   cmakeFlags = [
