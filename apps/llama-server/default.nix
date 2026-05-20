@@ -9,7 +9,7 @@ let
     {
       repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
       file = "Qwen3.6-27B-Q4_K_M.gguf";
-      sha256 = "";  # TODO: populate after first download
+      sha256 = "a7cbd3ecc0e3f9b333edee61ae66bc87ed713c5d49587a8355814722ed329e0f";
     }
   ];
 
@@ -121,7 +121,7 @@ in
         "${llama-cpp-cuda}/bin/llama-server"
         "--host 0.0.0.0"
         "--port ${toString port}"
-        "--model-store ${modelStore}"
+        "--model ${modelStore}/${(builtins.head models).file}"
         "--gpu-layers 999"
         "--ctx-size 32768"
         "--flash-attn"
