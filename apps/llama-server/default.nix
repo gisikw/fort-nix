@@ -7,9 +7,9 @@ let
 
   models = [
     {
-      repo = "unsloth/Qwen3.6-27B-GGUF";
+      repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
       file = "Qwen3.6-27B-Q4_K_M.gguf";
-      sha256 = "5ed60d0af4650a854b1755bd392f9aef4872643dc25a254bc68043fa638392a0";
+      sha256 = "";  # TODO: populate after first download
     }
   ];
 
@@ -34,6 +34,10 @@ let
 
       # Already present and valid — skip
       if [ -f "$target" ]; then
+        if [ -z "$expected_sha256" ]; then
+          echo "OK: $file (no hash configured)"
+          continue
+        fi
         actual=$(sha256sum "$target" | cut -d' ' -f1)
         if [ "$actual" = "$expected_sha256" ]; then
           echo "OK: $file"
@@ -46,7 +50,7 @@ let
 
       # If partial download is already the right size, try validating it
       # (handles the curl 416 edge case when resume has nothing left to fetch)
-      if [ -f "$partial" ]; then
+      if [ -f "$partial" ] && [ -n "$expected_sha256" ]; then
         actual=$(sha256sum "$partial" | cut -d' ' -f1)
         if [ "$actual" = "$expected_sha256" ]; then
           mv "$partial" "$target"
@@ -65,13 +69,15 @@ let
         continue
       fi
 
-      # Validate hash
-      actual=$(sha256sum "$partial" | cut -d' ' -f1)
-      if [ "$actual" != "$expected_sha256" ]; then
-        echo "ERROR: Hash mismatch for $file (expected $expected_sha256, got $actual). Deleting corrupt file."
-        rm -f "$partial"
-        failed=$((failed + 1))
-        continue
+      # Validate hash (skip if not configured)
+      if [ -n "$expected_sha256" ]; then
+        actual=$(sha256sum "$partial" | cut -d' ' -f1)
+        if [ "$actual" != "$expected_sha256" ]; then
+          echo "ERROR: Hash mismatch for $file (expected $expected_sha256, got $actual). Deleting corrupt file."
+          rm -f "$partial"
+          failed=$((failed + 1))
+          continue
+        fi
       fi
 
       # Atomic rename
@@ -101,8 +107,10 @@ in
 
   systemd.services.llama-server = {
     description = "llama.cpp inference server (CUDA)";
-    after = [ "network.target" ];
-    wantedBy = [ "multi-user.target" ];
+    after = [ "network.target" "llama-server-models.service" ];
+    # Don't start during activation — model reconciliation starts us
+    # after downloading GGUFs. Prevents crash-loop failing the switch.
+    wantedBy = [ ];
 
     serviceConfig = {
       Type = "simple";
@@ -147,6 +155,8 @@ in
       User = "llama-server";
       Group = "llama-server";
       ExecStart = reconcileScript;
+      # Restart llama-server after successful model download (runs as root)
+      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart llama-server";
     };
   };
 
