@@ -30,6 +30,13 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.curl
   ];
 
+  # LLAMA_BUILD_UI=OFF skips the frontend build but the server still needs
+  # index.html.hpp — xxd.cmake fails on the missing file. Provide a stub.
+  preConfigure = ''
+    mkdir -p tools/ui/dist
+    echo '<html><body>UI not built</body></html>' > tools/ui/dist/index.html
+  '';
+
   cmakeFlags = [
     "-DGGML_NATIVE=OFF"
     "-DGGML_CUDA=ON"
