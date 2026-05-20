@@ -107,7 +107,7 @@ in
 
   systemd.services.llama-server = {
     description = "llama.cpp inference server (CUDA)";
-    after = [ "network.target" "llama-server-models.service" ];
+    after = [ "network.target" ];
     # Don't start during activation — model reconciliation starts us
     # after downloading GGUFs. Prevents crash-loop failing the switch.
     wantedBy = [ ];
@@ -155,8 +155,9 @@ in
       User = "llama-server";
       Group = "llama-server";
       ExecStart = reconcileScript;
-      # Restart llama-server after successful model download (runs as root)
-      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart llama-server";
+      # Restart llama-server after successful model download (runs as root).
+      # --no-block avoids deadlock if llama-server has ordering on this unit.
+      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart --no-block llama-server";
     };
   };
 
