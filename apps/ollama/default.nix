@@ -184,6 +184,7 @@ in
     description = "Ollama model reconciliation";
     after = [ "ollama.service" ];
     requires = [ "ollama.service" ];
+    path = [ pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.curl ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = reconcileScript;
