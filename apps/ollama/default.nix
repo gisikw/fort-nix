@@ -92,7 +92,7 @@ let
       sleep 2
     done
 
-    EXISTING=$(${ollama}/bin/ollama list 2>/dev/null | tail -n +2 | awk '{print $1}')
+    EXISTING=$(${ollama}/bin/ollama list 2>/dev/null | tail -n +2 | ${pkgs.gawk}/bin/awk '{print $1}')
 
     # Phase 1: Pull registry models
     ${lib.concatStringsSep "\n" (map (m: ''
