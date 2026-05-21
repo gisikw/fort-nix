@@ -82,17 +82,20 @@ let
   ggufs = lib.filter (m: m.type == "gguf") normalized;
   creates = lib.filter (m: m.type == "modelfile" || m.type == "gguf") normalized;
 
+  api = "http://127.0.0.1:11434";
+
   reconcileScript = pkgs.writeShellScript "ollama-model-reconcile" ''
     set -euo pipefail
-    export OLLAMA_HOST=http://127.0.0.1:11434
 
-    # Wait for ollama to be ready
+    # Wait for ollama API to be ready
     for i in $(seq 1 60); do
-      ${ollama}/bin/ollama list &>/dev/null && break
+      curl -sf ${api}/api/tags >/dev/null && break
       sleep 2
     done
 
-    EXISTING=$(${ollama}/bin/ollama list 2>/dev/null | tail -n +2 | ${pkgs.gawk}/bin/awk '{print $1}')
+    EXISTING=$(curl -sf ${api}/api/tags | ${pkgs.jq}/bin/jq -r '.models[].name')
+    echo "Existing models:"
+    echo "$EXISTING" | sed 's/^/  /'
 
     # Phase 1: Pull registry models
     ${lib.concatStringsSep "\n" (map (m: ''
@@ -100,7 +103,8 @@ let
         echo "${m.name}: already present"
       else
         echo "${m.name}: pulling..."
-        ${ollama}/bin/ollama pull "${m.name}"
+        curl -sf ${api}/api/pull -d '{"name":"${m.name}","stream":false}' >/dev/null
+        echo "${m.name}: done"
       fi
     '') pulls)}
 
@@ -108,12 +112,12 @@ let
     ${lib.optionalString (ggufs != []) "mkdir -p ${ggufDir}"}
     ${lib.concatStringsSep "\n" (map (m: ''
       GGUF_TARGET="${ggufDir}/${m.name}.gguf"
-      if [ -f "$GGUF_TARGET" ] && [ "$(${pkgs.coreutils}/bin/sha256sum "$GGUF_TARGET" | cut -d' ' -f1)" = "${m.fromGguf.sha256}" ]; then
+      if [ -f "$GGUF_TARGET" ] && [ "$(sha256sum "$GGUF_TARGET" | cut -d' ' -f1)" = "${m.fromGguf.sha256}" ]; then
         echo "${m.name}: GGUF present, hash OK"
       else
         echo "${m.name}: downloading GGUF..."
-        ${pkgs.curl}/bin/curl -L -C - -o "$GGUF_TARGET" "${m.fromGguf.url}"
-        ACTUAL=$(${pkgs.coreutils}/bin/sha256sum "$GGUF_TARGET" | cut -d' ' -f1)
+        curl -L -C - -o "$GGUF_TARGET" "${m.fromGguf.url}"
+        ACTUAL=$(sha256sum "$GGUF_TARGET" | cut -d' ' -f1)
         if [ "$ACTUAL" != "${m.fromGguf.sha256}" ]; then
           echo "${m.name}: HASH MISMATCH! expected ${m.fromGguf.sha256}, got $ACTUAL"
           rm -f "$GGUF_TARGET"
@@ -126,7 +130,11 @@ let
     # Phase 3: Create Modelfile-based models
     ${lib.concatStringsSep "\n" (map (m: ''
       echo "${m.name}: creating from Modelfile..."
-      ${ollama}/bin/ollama create "${m.name}" -f ${m.modelfile}
+      MODELFILE=$(cat ${m.modelfile})
+      curl -sf ${api}/api/create \
+        -d "$(${pkgs.jq}/bin/jq -n --arg name "${m.name}" --arg mf "$MODELFILE" '{name:$name,modelfile:$mf,stream:false}')" \
+        >/dev/null
+      echo "${m.name}: done"
     '') creates)}
 
     echo "Model reconciliation complete"
@@ -184,10 +192,11 @@ in
     description = "Ollama model reconciliation";
     after = [ "ollama.service" ];
     requires = [ "ollama.service" ];
-    path = [ pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.curl ];
+    path = [ pkgs.coreutils pkgs.gnugrep pkgs.curl pkgs.jq ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = reconcileScript;
+      TimeoutSec = "infinity";
     };
     restartIfChanged = false;
   };
