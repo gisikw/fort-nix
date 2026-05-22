@@ -378,7 +378,6 @@ in
   #   fort drhorrible ci '{"action": "runs", "repo": "fort-nix", "status": "failure"}'
   #   fort drhorrible ci '{"action": "log", "repo": "fort-nix", "run": 123}'
   fort.host.capabilities.ci = let
-    curl = "${pkgs.curl}/bin/curl";
     jq = "${pkgs.jq}/bin/jq";
     sqlite3 = "${pkgs.sqlite}/bin/sqlite3";
     zstd = "${pkgs.zstd}/bin/zstd";
@@ -391,10 +390,13 @@ in
       INPUT=$(cat)
       ACTION=$(echo "$INPUT" | ${jq} -r '.action // "runs"')
 
-      TOKEN=$(cat ${bootstrapDir}/admin-token)
-      API="http://localhost:3001/api/v1"
       DB="/var/lib/forgejo/data/forgejo.db"
       LOG_DIR="/var/lib/forgejo/data/actions_log"
+
+      sql() {
+        result=$(${sqlite3} -json "$DB" "$1")
+        if [ -z "$result" ]; then echo "[]"; else echo "$result"; fi
+      }
 
       case "$ACTION" in
         runs)
@@ -403,84 +405,100 @@ in
           HEAD_SHA=$(echo "$INPUT" | ${jq} -r '.head_sha // ""')
           LIMIT=$(echo "$INPUT" | ${jq} -r '.limit // 10')
 
-          if [ -n "$REPO" ]; then
-            REPOS="$REPO"
-          else
-            REPOS=$(${curl} -sf -H "Authorization: token $TOKEN" \
-              "$API/orgs/${org}/repos?limit=50" | ${jq} -r '.[].name')
+          STATUS_FILTER=""
+          if [ -n "$STATUS" ]; then
+            case "$STATUS" in
+              waiting)   STATUS_FILTER="AND r.status = 1" ;;
+              running)   STATUS_FILTER="AND r.status = 2" ;;
+              success)   STATUS_FILTER="AND r.status = 3" ;;
+              failure)   STATUS_FILTER="AND r.status = 4" ;;
+              cancelled) STATUS_FILTER="AND r.status = 5" ;;
+              skipped)   STATUS_FILTER="AND r.status = 6" ;;
+              blocked)   STATUS_FILTER="AND r.status = 7" ;;
+            esac
           fi
 
-          RESULTS="[]"
-          for repo in $REPOS; do
-            URL="$API/repos/${org}/$repo/actions/runs?limit=$LIMIT"
-            [ -n "$STATUS" ] && URL="$URL&status=$STATUS"
-            [ -n "$HEAD_SHA" ] && URL="$URL&head_sha=$HEAD_SHA"
+          REPO_FILTER=""
+          [ -n "$REPO" ] && REPO_FILTER="AND repo.lower_name = lower('$REPO')"
 
-            RUNS=$(${curl} -sf -H "Authorization: token $TOKEN" "$URL" \
-              | ${jq} --arg repo "$repo" '
-                .workflow_runs // [] | map({
-                  id: .id,
-                  repo: $repo,
-                  title: .title,
-                  status: .status,
-                  commit_sha: (.commit_sha // "" | .[:8]),
-                  branch: .prettyref,
-                  workflow: .workflow_id,
-                  event: .event,
-                  created: .created,
-                  url: .html_url
-                })
-              ' 2>/dev/null || echo "[]")
+          SHA_FILTER=""
+          [ -n "$HEAD_SHA" ] && SHA_FILTER="AND r.commit_sha LIKE '$HEAD_SHA%'"
 
-            RESULTS=$(echo "$RESULTS" "$RUNS" | ${jq} -s '.[0] + .[1]')
-          done
-
-          echo "$RESULTS" | ${jq} --argjson limit "$LIMIT" \
-            'sort_by(.created) | reverse | .[:$limit]'
+          sql "
+            SELECT r.id, repo.lower_name as repo, r.title,
+              CASE r.status
+                WHEN 1 THEN 'waiting' WHEN 2 THEN 'running'
+                WHEN 3 THEN 'success' WHEN 4 THEN 'failure'
+                WHEN 5 THEN 'cancelled' WHEN 6 THEN 'skipped'
+                WHEN 7 THEN 'blocked' ELSE 'unknown'
+              END as status,
+              substr(r.commit_sha, 1, 8) as commit_sha,
+              r.ref as branch, r.workflow_id as workflow,
+              r.event, r.created as created
+            FROM action_run r
+            JOIN repository repo ON r.repo_id = repo.id
+            JOIN [user] u ON repo.owner_id = u.id
+            WHERE u.lower_name = '${org}'
+              $REPO_FILTER $STATUS_FILTER $SHA_FILTER
+            ORDER BY r.created DESC LIMIT $LIMIT
+          "
           ;;
 
         log)
-          REPO=$(echo "$INPUT" | ${jq} -r '.repo // ""')
           RUN_ID=$(echo "$INPUT" | ${jq} -r '.run // ""')
           LINES=$(echo "$INPUT" | ${jq} -r '.lines // 200')
 
-          if [ -z "$REPO" ] || [ -z "$RUN_ID" ]; then
-            ${jq} -n '{"error": "log requires repo and run parameters"}'
-            exit 1
+          if [ -z "$RUN_ID" ]; then
+            echo '{"error":"log requires run parameter"}'
+            exit 0
           fi
 
-          TASKS=$(${sqlite3} "$DB" \
-            "SELECT t.id, j.name FROM action_task t JOIN action_run_job j ON t.job_id = j.id WHERE j.run_id = $RUN_ID ORDER BY t.id")
+          # Join through task_id on action_run_job (not job_id on action_task)
+          # Old tasks get GC'd (task_id=0), so LEFT JOIN handles both cases
+          JOBS=$(sql "
+            SELECT j.name as job_name, j.task_id, t.log_filename
+            FROM action_run_job j
+            LEFT JOIN action_task t ON t.id = j.task_id
+            WHERE j.run_id = $RUN_ID
+            ORDER BY j.id
+          ")
 
-          if [ -z "$TASKS" ]; then
-            ${jq} -n '{"error": "no tasks found for this run"}'
-            exit 1
+          JOB_COUNT=$(echo "$JOBS" | ${jq} 'length')
+          if [ "$JOB_COUNT" = "0" ]; then
+            echo '{"error":"no jobs found for this run"}'
+            exit 0
           fi
 
           OUTPUT=""
-          while IFS='|' read -r task_id job_name; do
-            HEX=$(printf '%02x' $((task_id % 256)))
-            LOG_FILE="$LOG_DIR/${org}/$REPO/$HEX/''${task_id}.log.zst"
+          for i in $(seq 0 $((JOB_COUNT - 1))); do
+            job_name=$(echo "$JOBS" | ${jq} -r ".[$i].job_name")
+            task_id=$(echo "$JOBS" | ${jq} -r ".[$i].task_id")
+            log_filename=$(echo "$JOBS" | ${jq} -r ".[$i].log_filename")
 
-            if [ -f "$LOG_FILE" ]; then
-              CONTENT=$(${zstd} -d -c "$LOG_FILE" 2>/dev/null \
-                | ${tail} -n "$LINES" || echo "[unreadable]")
+            if [ "$task_id" = "0" ] || [ "$log_filename" = "null" ]; then
+              CONTENT="[logs expired - task data was garbage collected]"
             else
-              CONTENT="[log not found: $LOG_FILE]"
+              LOG_FILE="$LOG_DIR/$log_filename"
+              if [ -f "$LOG_FILE" ]; then
+                CONTENT=$(${zstd} -d -c "$LOG_FILE" 2>/dev/null \
+                  | ${tail} -n "$LINES" || echo "[decompression failed]")
+              else
+                CONTENT="[log file not found: $log_filename]"
+              fi
             fi
 
-            OUTPUT="$OUTPUT=== Job: $job_name (task $task_id) ===
+            OUTPUT="$OUTPUT=== Job: $job_name ===
 $CONTENT
 
 "
-          done <<< "$TASKS"
+          done
 
           ${jq} -n --arg log "$OUTPUT" '{log: $log}'
           ;;
 
         *)
-          ${jq} -n '{"error": "unknown action. use: runs, log"}'
-          exit 1
+          echo '{"error":"unknown action. use: runs, log"}'
+          exit 0
           ;;
       esac
     '';
