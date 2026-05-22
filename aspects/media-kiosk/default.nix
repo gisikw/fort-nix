@@ -77,7 +77,7 @@ let
       --noerrdialogs \
       --disable-features=TranslateUI \
       --autoplay-policy=no-user-gesture-required \
-      "${jellyfinUrl}"
+      --app="${jellyfinUrl}"
   '';
 in
 {
