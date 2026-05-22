@@ -86,9 +86,8 @@ in
       User = user;
       Group = group;
       WorkingDirectory = dataDir;
-      ExecStart = "${pocket-id}/bin/pocket-id";
       Restart = "always";
-      EnvironmentFile = [ settingsFile "/run/pocket-id/secret-env" ];
+      EnvironmentFile = [ settingsFile ];
 
       LoadCredential = [
         "ldap-admin-pass:${config.sops.secrets.ldap-admin-pass.path}"
@@ -101,10 +100,11 @@ in
         tr -d '\n' < /run/credentials/pocket-id.service/ldap-admin-pass \
           > /run/pocket-id/ldap-admin-pass
         chmod 0400 /run/pocket-id/ldap-admin-pass
+      '';
 
-        KEY=$(tr -d '\n' < /run/credentials/pocket-id.service/secret-key-base)
-        echo "SECRET_KEY_BASE=$KEY" > /run/pocket-id/secret-env
-        chmod 0400 /run/pocket-id/secret-env
+      ExecStart = pkgs.writeShellScript "pocket-id-start" ''
+        export SECRET_KEY_BASE=$(tr -d '\n' < /run/credentials/pocket-id.service/secret-key-base)
+        exec ${pocket-id}/bin/pocket-id
       '';
 
       # Hardening
