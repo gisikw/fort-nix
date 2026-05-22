@@ -60,9 +60,15 @@ in
     "d ${bootstrapDir} 0700 forgejo forgejo -"
   ];
 
-  # Auto-redirect to OIDC - skip the login page entirely
+  # Auto-redirect to OIDC - skip the login page and landing page entirely
   services.nginx.virtualHosts."git.${domain}".locations = {
     "= /user/login".return = "302 ${oidcPath}";
+    "= /".extraConfig = ''
+      if ($cookie_session = "") {
+        return 302 /user/login;
+      }
+      proxy_pass http://127.0.0.1:3001;
+    '';
   };
 
   services.forgejo = {
