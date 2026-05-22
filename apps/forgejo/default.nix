@@ -63,7 +63,6 @@ in
   # Auto-redirect to OIDC - skip the login page and landing page entirely
   services.nginx.virtualHosts."git.${domain}".locations = {
     "= /user/login".return = "302 ${oidcPath}";
-    "= /".return = "302 /user/login";
   };
 
   services.forgejo = {
@@ -75,6 +74,7 @@ in
         DOMAIN = "git.${domain}";
         ROOT_URL = "https://git.${domain}/";
         HTTP_PORT = 3001;
+        LANDING_PAGE = "login";
       };
       service = {
         DISABLE_REGISTRATION = false;
