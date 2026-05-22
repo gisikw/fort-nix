@@ -53,6 +53,14 @@ let
   );
 in
 {
+  sops.secrets.pocket-id-secret-key-base = {
+    sopsFile = ./secret-key-base.sops;
+    format = "binary";
+    owner = user;
+    group = group;
+    mode = "0400";
+  };
+
   environment.systemPackages = [ pocket-id ];
 
   users.users.${user} = {
@@ -80,9 +88,12 @@ in
       WorkingDirectory = dataDir;
       ExecStart = "${pocket-id}/bin/pocket-id";
       Restart = "always";
-      EnvironmentFile = [ settingsFile ];
+      EnvironmentFile = [ settingsFile "/run/pocket-id/secret-env" ];
 
-      LoadCredential = [ "ldap-admin-pass:${config.sops.secrets.ldap-admin-pass.path}" ];
+      LoadCredential = [
+        "ldap-admin-pass:${config.sops.secrets.ldap-admin-pass.path}"
+        "secret-key-base:${config.sops.secrets.pocket-id-secret-key-base.path}"
+      ];
       RuntimeDirectory = "pocket-id";
       RuntimeDirectoryMode = "0700";
 
@@ -90,6 +101,10 @@ in
         tr -d '\n' < /run/credentials/pocket-id.service/ldap-admin-pass \
           > /run/pocket-id/ldap-admin-pass
         chmod 0400 /run/pocket-id/ldap-admin-pass
+
+        KEY=$(tr -d '\n' < /run/credentials/pocket-id.service/secret-key-base)
+        echo "SECRET_KEY_BASE=$KEY" > /run/pocket-id/secret-env
+        chmod 0400 /run/pocket-id/secret-env
       '';
 
       # Hardening
