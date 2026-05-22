@@ -392,18 +392,14 @@ _deploy-direct host addr:
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
   host_dir="${hosts_root}/{{host}}"
 
-  # Write deploy info for non-gitops hosts (status endpoint uses this as fallback)
   deploy_commit=$(git rev-parse --short HEAD)
-  deploy_timestamp=$(date -Iseconds)
-  deploy_branch=$(git rev-parse --abbrev-ref HEAD)
-  deploy_info="{\"commit\":\"${deploy_commit}\",\"timestamp\":\"${deploy_timestamp}\",\"branch\":\"${deploy_branch}\"}"
 
   nix run .#deploy-rs -- -d --hostname {{addr}} --remote-build "${host_dir}#{{host}}"
 
-  # Write deploy info to target host after successful deploy
-  echo "[Fort] Writing deploy info to {{addr}}"
+  # Write deployed commit so the status endpoint picks it up
+  echo "[Fort] Recording deploy commit on {{addr}}"
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no root@{{addr}} \
-    "mkdir -p /var/lib/fort && echo '${deploy_info}' > /var/lib/fort/deploy-info.json"
+    "mkdir -p /var/lib/fort-gitops && echo '${deploy_commit}' > /var/lib/fort-gitops/deployed-commit"
 
 # Direct deploy for darwin hosts (SSH + git pull + darwin-rebuild)
 _deploy-direct-darwin host addr:
@@ -418,16 +414,13 @@ _deploy-direct-darwin host addr:
   git push origin "${current_branch}:main"
 
   deploy_commit=$(git rev-parse --short HEAD)
-  deploy_timestamp=$(date -Iseconds)
-  deploy_branch="${current_branch}"
-  deploy_info="{\"commit\":\"${deploy_commit}\",\"timestamp\":\"${deploy_timestamp}\",\"branch\":\"${deploy_branch}\"}"
 
   hosts_root="./hosts"
   if [[ -n "{{cluster}}" ]]; then hosts_root="./clusters/{{cluster}}/hosts"; fi
 
   echo "[Fort] Deploying {{host}} via SSH (git pull + darwin-rebuild)"
   ssh -i {{deploy_key}} -o StrictHostKeyChecking=no admin@{{addr}} \
-    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin main && git checkout main && git reset --hard origin/main && sudo darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && sudo mkdir -p /var/lib/fort && echo '${deploy_info}' | sudo tee /var/lib/fort/deploy-info.json > /dev/null && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
+    "set -euo pipefail && cd /var/lib/fort-nix && git fetch origin main && git checkout main && git reset --hard origin/main && sudo darwin-rebuild switch --flake ./${hosts_root#./}/{{host}} && sudo mkdir -p /var/lib/fort-gitops && echo '${deploy_commit}' | sudo tee /var/lib/fort-gitops/deployed-commit > /dev/null && echo '[Fort] {{host}} deployed ${deploy_commit} successfully'"
 
 # GitOps deploy via fort CLI (no master key needed)
 _deploy-gitops host addr:

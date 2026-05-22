@@ -15,7 +15,6 @@ let
   statusDir = "/var/lib/fort/status";
   dropsDir = "/var/lib/fort/drops";
   gitopsCommit = "/var/lib/fort-gitops/deployed-commit";
-  deployRsInfo = "/var/lib/fort/deploy-info.json";
 
   # Import the upload handler
   fortUpload = import ../../pkgs/fort-upload { inherit pkgs; };
@@ -45,13 +44,10 @@ let
     # Failed units count
     failed_units=$(systemctl --failed --no-legend 2>/dev/null | wc -l || echo "0")
 
-    # Deploy info - prefer gitops state, fall back to deploy-rs static file
+    # Deploy info from gitops state
     if [ -f "${gitopsCommit}" ]; then
       commit=$(cat "${gitopsCommit}")
       deploy_info="{\"commit\":\"$commit\",\"branch\":\"main\",\"source\":\"gitops\"}"
-    elif [ -f "${deployRsInfo}" ]; then
-      # Non-gitops host - use deploy-rs written file
-      deploy_info=$(${pkgs.jq}/bin/jq -c '. + {source: "deploy-rs"}' "${deployRsInfo}" 2>/dev/null || echo '{"commit":"unknown","branch":"unknown","source":"deploy-rs"}')
     else
       deploy_info='{"commit":"unknown","branch":"unknown","source":"none"}'
     fi
