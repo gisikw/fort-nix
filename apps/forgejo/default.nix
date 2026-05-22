@@ -84,7 +84,6 @@ in
       service = {
         DISABLE_REGISTRATION = false;
         ALLOW_ONLY_EXTERNAL_REGISTRATION = true;
-        REQUIRE_SIGNIN_VIEW = true;
       };
       security = {
         PASSWORD_SIGN_IN_DISABLED = true;
