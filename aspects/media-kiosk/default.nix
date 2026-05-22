@@ -37,17 +37,26 @@ let
     echo "No HDMI sink found"
   '';
 
-  # Wait for Tailscale mesh before launching browser
+  # Wait for Tailscale mesh + DNS resolution before launching browser
   waitForNetwork = pkgs.writeShellScriptBin "wait-for-network" ''
     echo "Waiting for Tailscale..."
     for i in $(seq 1 60); do
       if ${pkgs.tailscale}/bin/tailscale status &>/dev/null; then
         echo "Tailscale connected"
+        break
+      fi
+      sleep 1
+    done
+
+    echo "Waiting for ${jellyfinUrl} to be reachable..."
+    for i in $(seq 1 60); do
+      if ${pkgs.curl}/bin/curl -sf --max-time 3 "${jellyfinUrl}" >/dev/null 2>&1; then
+        echo "Jellyfin reachable"
         exit 0
       fi
       sleep 1
     done
-    echo "Tailscale timeout — launching anyway"
+    echo "Jellyfin timeout — launching anyway"
   '';
 
   # Cage session: straight into Jellyfin kiosk browser
