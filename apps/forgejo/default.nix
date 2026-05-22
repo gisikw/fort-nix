@@ -371,4 +371,121 @@ in
     mode = "async";
     description = "Generate Forgejo Actions runner registration token";
   };
+
+  # CI status and log retrieval for dev-sandbox agents
+  # Usage:
+  #   fort drhorrible ci '{"action": "runs"}'
+  #   fort drhorrible ci '{"action": "runs", "repo": "fort-nix", "status": "failure"}'
+  #   fort drhorrible ci '{"action": "log", "repo": "fort-nix", "run": 123}'
+  fort.host.capabilities.ci = let
+    curl = "${pkgs.curl}/bin/curl";
+    jq = "${pkgs.jq}/bin/jq";
+    sqlite3 = "${pkgs.sqlite}/bin/sqlite3";
+    zstd = "${pkgs.zstd}/bin/zstd";
+    tail = "${pkgs.coreutils}/bin/tail";
+    org = forgeConfig.org;
+  in {
+    handler = pkgs.writeShellScript "ci-handler" ''
+      set -euo pipefail
+
+      INPUT=$(cat)
+      ACTION=$(echo "$INPUT" | ${jq} -r '.action // "runs"')
+
+      TOKEN=$(cat ${bootstrapDir}/admin-token)
+      API="http://localhost:3001/api/v1"
+      DB="/var/lib/forgejo/data/forgejo.db"
+      LOG_DIR="/var/lib/forgejo/data/actions_log"
+
+      case "$ACTION" in
+        runs)
+          REPO=$(echo "$INPUT" | ${jq} -r '.repo // ""')
+          STATUS=$(echo "$INPUT" | ${jq} -r '.status // ""')
+          HEAD_SHA=$(echo "$INPUT" | ${jq} -r '.head_sha // ""')
+          LIMIT=$(echo "$INPUT" | ${jq} -r '.limit // 10')
+
+          if [ -n "$REPO" ]; then
+            REPOS="$REPO"
+          else
+            REPOS=$(${curl} -sf -H "Authorization: token $TOKEN" \
+              "$API/orgs/${org}/repos?limit=50" | ${jq} -r '.[].name')
+          fi
+
+          RESULTS="[]"
+          for repo in $REPOS; do
+            URL="$API/repos/${org}/$repo/actions/runs?limit=$LIMIT"
+            [ -n "$STATUS" ] && URL="$URL&status=$STATUS"
+            [ -n "$HEAD_SHA" ] && URL="$URL&head_sha=$HEAD_SHA"
+
+            RUNS=$(${curl} -sf -H "Authorization: token $TOKEN" "$URL" \
+              | ${jq} --arg repo "$repo" '
+                .workflow_runs // [] | map({
+                  id: .id,
+                  repo: $repo,
+                  title: .title,
+                  status: .status,
+                  commit_sha: (.commit_sha // "" | .[:8]),
+                  branch: .prettyref,
+                  workflow: .workflow_id,
+                  event: .event,
+                  created: .created,
+                  url: .html_url
+                })
+              ' 2>/dev/null || echo "[]")
+
+            RESULTS=$(echo "$RESULTS" "$RUNS" | ${jq} -s '.[0] + .[1]')
+          done
+
+          echo "$RESULTS" | ${jq} --argjson limit "$LIMIT" \
+            'sort_by(.created) | reverse | .[:$limit]'
+          ;;
+
+        log)
+          REPO=$(echo "$INPUT" | ${jq} -r '.repo // ""')
+          RUN_ID=$(echo "$INPUT" | ${jq} -r '.run // ""')
+          LINES=$(echo "$INPUT" | ${jq} -r '.lines // 200')
+
+          if [ -z "$REPO" ] || [ -z "$RUN_ID" ]; then
+            ${jq} -n '{"error": "log requires repo and run parameters"}'
+            exit 1
+          fi
+
+          TASKS=$(${sqlite3} "$DB" \
+            "SELECT t.id, j.name FROM action_task t JOIN action_run_job j ON t.job_id = j.id WHERE j.run_id = $RUN_ID ORDER BY t.id")
+
+          if [ -z "$TASKS" ]; then
+            ${jq} -n '{"error": "no tasks found for this run"}'
+            exit 1
+          fi
+
+          OUTPUT=""
+          while IFS='|' read -r task_id job_name; do
+            HEX=$(printf '%02x' $((task_id % 256)))
+            LOG_FILE="$LOG_DIR/${org}/$REPO/$HEX/''${task_id}.log.zst"
+
+            if [ -f "$LOG_FILE" ]; then
+              CONTENT=$(${zstd} -d -c "$LOG_FILE" 2>/dev/null \
+                | ${tail} -n "$LINES" || echo "[unreadable]")
+            else
+              CONTENT="[log not found: $LOG_FILE]"
+            fi
+
+            OUTPUT="$OUTPUT=== Job: $job_name (task $task_id) ===
+$CONTENT
+
+"
+          done <<< "$TASKS"
+
+          ${jq} -n --arg log "$OUTPUT" '{log: $log}'
+          ;;
+
+        *)
+          ${jq} -n '{"error": "unknown action. use: runs, log"}'
+          exit 1
+          ;;
+      esac
+    '';
+    mode = "rpc";
+    description = "Query Forgejo CI run status and job logs";
+    allowed = [ "dev-sandbox" ];
+  };
 }
