@@ -66,7 +66,7 @@ let
     ${waitForNetwork}/bin/wait-for-network
 
     export QT_QPA_PLATFORM=wayland
-    exec ${pkgs.cage}/bin/cage -s -- ${pkgs.jellyfin-media-player}/bin/jellyfinmediaplayer \
+    exec ${pkgs.cage}/bin/cage -s -- ${pkgs.jellyfin-media-player}/bin/jellyfin-desktop \
       --tv \
       --fullscreen
   '';
