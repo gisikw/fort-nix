@@ -11,10 +11,16 @@ in
     BindReadOnlyPaths = [ "/home/dev/Projects/hoard/cdn" ];
   };
 
-  # CORS headers for assets served cross-origin (fonts, wasm, js)
-  services.nginx.virtualHosts."cdn.${domain}".locations."~* \\.(woff2|wasm|js|json)$".extraConfig = ''
+  # CORS + caching for assets served cross-origin
+  # Fonts and wasm blobs are content-addressed — cache forever
+  services.nginx.virtualHosts."cdn.${domain}".locations."~* \\.(woff2|wasm)$".extraConfig = ''
     add_header Access-Control-Allow-Origin "*";
     add_header Cache-Control "public, max-age=31536000, immutable";
+  '';
+  # JS/JSON may change at the same URL — short TTL, revalidate
+  services.nginx.virtualHosts."cdn.${domain}".locations."~* \\.(js|json)$".extraConfig = ''
+    add_header Access-Control-Allow-Origin "*";
+    add_header Cache-Control "public, max-age=300, must-revalidate";
   '';
 
   fort.cluster.services = [
