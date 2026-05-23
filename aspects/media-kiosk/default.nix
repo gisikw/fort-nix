@@ -59,25 +59,16 @@ let
     echo "Jellyfin timeout — launching anyway"
   '';
 
-  # Cage session: straight into Jellyfin kiosk browser
+  # Cage session: straight into Jellyfin Media Player (TV mode)
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
     (sleep 2 && ${setupHdmiAudio}/bin/setup-hdmi-audio) &
 
     ${waitForNetwork}/bin/wait-for-network
 
-    export WLR_OUTPUT_SCALE=2
-    exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
-      --kiosk \
-      --no-first-run \
-      --disable-translate \
-      --disable-infobars \
-      --disable-suggestions-service \
-      --disable-save-password-bubble \
-      --disable-session-crashed-bubble \
-      --noerrdialogs \
-      --disable-features=TranslateUI \
-      --autoplay-policy=no-user-gesture-required \
-      --app="${jellyfinUrl}"
+    export QT_QPA_PLATFORM=wayland
+    exec ${pkgs.cage}/bin/cage -s -- ${pkgs.jellyfin-media-player}/bin/jellyfinmediaplayer \
+      --tv \
+      --fullscreen
   '';
 in
 {
@@ -85,10 +76,10 @@ in
     isNormalUser = true;
     home = homeDir;
     hashedPassword = "";
-    extraGroups = [ "video" "audio" "render" ];
+    extraGroups = [ "video" "audio" "render" "input" ];
   };
 
-  # Persist home directory (chromium profile, jellyfin session)
+  # Persist home directory (JMP config, jellyfin session)
   environment.persistence."/persist/system".directories = [
     { directory = homeDir; user = user; group = "users"; mode = "0700"; }
   ];
