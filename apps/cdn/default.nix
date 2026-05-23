@@ -11,8 +11,8 @@ in
     BindReadOnlyPaths = [ "/home/dev/Projects/hoard/cdn" ];
   };
 
-  # CORS headers for font files served cross-origin
-  services.nginx.virtualHosts."cdn.${domain}".locations."~* \\.woff2$".extraConfig = ''
+  # CORS headers for assets served cross-origin (fonts, wasm, js)
+  services.nginx.virtualHosts."cdn.${domain}".locations."~* \\.(woff2|wasm|js|json)$".extraConfig = ''
     add_header Access-Control-Allow-Origin "*";
     add_header Cache-Control "public, max-age=31536000, immutable";
   '';
