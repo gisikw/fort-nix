@@ -5,7 +5,6 @@ rec {
   roles = [ ];
 
   apps = [
-    "ollama-cuda"
     "llama-server"
   ];
 
