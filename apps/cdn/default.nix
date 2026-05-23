@@ -21,7 +21,7 @@ in
     # JS/JSON may change at the same URL — short TTL, revalidate
     "~* \\.(js|json)$".extraConfig = ''
       add_header Access-Control-Allow-Origin "*";
-      add_header Cache-Control "public, max-age=300, must-revalidate";
+      add_header Cache-Control "public, max-age=30, must-revalidate";
     '';
   };
 
