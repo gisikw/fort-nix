@@ -15,6 +15,7 @@ rec {
     "mesh"
     "observable"
     "ldap"
+    "backup-client"
     { name = "gitops"; manualDeploy = true; }
   ];
 

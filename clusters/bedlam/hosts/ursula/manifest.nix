@@ -8,12 +8,14 @@ rec {
     "jellyfin"
     "audiobookshelf"
     "calibre-web"
+    "backup-hub"
   ];
 
   aspects = [
     "mesh"
     "observable"
     "gitops"
+    "backup-client"
     {
       name = "zfs";
       extraPools = [ "media" ];

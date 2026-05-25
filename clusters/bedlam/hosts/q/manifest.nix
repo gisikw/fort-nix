@@ -18,6 +18,7 @@ rec {
     "mesh"
     "observable"
     "egress-vpn"
+    "backup-client"
     "gitops"
   ];
 

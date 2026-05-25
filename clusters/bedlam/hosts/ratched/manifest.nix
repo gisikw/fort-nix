@@ -108,6 +108,7 @@ rec {
   aspects = [
     "mesh"
     "observable"
+    "backup-client"
     {
       name = "dev-sandbox";
       accessKeys = [
