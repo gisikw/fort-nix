@@ -146,15 +146,12 @@ For risky changes, push to a `<hostname>-test` branch. CI validates that host's 
 | sillytavern | LLM chat frontend |
 | silverbullet | Markdown-based personal knowledge management |
 | sonarr | TV show collection manager |
-| stt | Speech-to-text HTTP service (Whisper + Vulkan) |
 | super-productivity | Task and time management |
 | temporal | Workflow orchestration server |
 | termix | Terminal-based collaboration tool |
-| tts | Text-to-speech (Kokoro) |
 | upload-gateway | Web UI for uploading files to hosts |
 | vdirsyncer-auth | OAuth adapter for calendar sync |
 | vikunja | Task and project management |
-| whisper | Speech-to-text transcription |
 | zot | OCI container registry |
 
 ## Available Aspects

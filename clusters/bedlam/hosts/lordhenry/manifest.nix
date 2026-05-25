@@ -10,9 +10,6 @@ rec {
     "open-webui"
     "qmd"
     "sillytavern"
-    "stt"
-    "tts"
-    "whisper"
   ];
 
   aspects = [
