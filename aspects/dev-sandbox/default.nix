@@ -571,6 +571,37 @@ in
     '';
   };
 
+  # Weekly ship digest podcast (Sunday 20:00 UTC = 3pm Central CDT / 2pm CST)
+  # Generates weekly digest from daily briefings, then runs podcast pipeline.
+  systemd.timers.ship-digest-podcast = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "Sun *-*-* 20:00:00";
+      Persistent = true;
+    };
+  };
+
+  systemd.services.ship-digest-podcast = {
+    description = "Generate weekly ship digest and podcast";
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      Group = "users";
+      WorkingDirectory = "${homeDir}/Projects/hoard/scripts";
+      TimeoutStartSec = "30min";
+    };
+    environment = {
+      HOME = homeDir;
+      FORT_SSH_KEY = agentKeyPath;
+      FORT_ORIGIN = "dev-sandbox";
+    };
+    path = devTools ++ [ pkgs.bash pkgs.ffmpeg ];
+    script = ''
+      export PATH="/run/overlays/bin:$PATH"
+      ${homeDir}/Projects/hoard/scripts/ship-digest-podcast.sh
+    '';
+  };
+
   # Process-isolated CC daemon (ccd)
   # Runs in its own process tree so spawned processes don't trigger
   # the Bash tool output suppression.
