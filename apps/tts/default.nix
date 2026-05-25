@@ -3,12 +3,6 @@
 
 let
   domain = rootManifest.fortConfig.settings.domain;
-
-  # Go handler for tts capability (RPC-based, uploads result to target host)
-  ttsProvider = import ./provider {
-    inherit pkgs domain;
-  };
-
   containerPort = 8880;
   httpPort = 8788;
 
@@ -50,14 +44,6 @@ in
     volumes = [
       "/var/lib/kokoro-tts/voices/af_exo.pt:/app/api/src/voices/v1_0/af_exo.pt:ro"
     ];
-  };
-
-  # Expose tts capability for cluster-wide text-to-speech (RPC, upload-to-host)
-  fort.host.capabilities.tts = {
-    handler = "${ttsProvider}/bin/tts-provider";
-    mode = "rpc";
-    allowed = [ "dev-sandbox" ];
-    description = "Synthesize speech from text and upload result to target host";
   };
 
   # HTTP endpoint: tts.gisi.network
