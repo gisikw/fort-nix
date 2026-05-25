@@ -2,7 +2,7 @@
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
-  repoUrl = "rest:https://backup.fort.${domain}/";
+  repoUrl = "rest:https://backup.${domain}/";
   passwordPath = config.sops.secrets.restic-password.path;
   hostname = hostManifest.hostName;
 in
