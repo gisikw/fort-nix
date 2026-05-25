@@ -11,6 +11,7 @@ in
     dataDir = "/var/lib/restic-repos";
     appendOnly = true;
     prometheus = true;
+    extraFlags = [ "--no-auth" ];
   };
 
   fort.cluster.services = [
