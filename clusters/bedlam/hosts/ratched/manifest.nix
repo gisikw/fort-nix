@@ -134,6 +134,8 @@ rec {
         host    all             all             ::1/128                 trust
       '';
 
+      config.environment.systemPackages = [ pkgs.inotify-tools ];
+
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
         # notes subdir owned by flatnotes app via dataUser/dataGroup params
