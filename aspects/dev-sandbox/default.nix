@@ -673,5 +673,11 @@ in
       visibility = "vpn";
       sso.mode = "none";
     }
+    {
+      name = "tokenmaxx";
+      port = 8888;
+      visibility = "public";
+      sso.mode = "none";
+    }
   ];
 }
