@@ -632,6 +632,27 @@ in
     '';
   };
 
+  # Tokenmaxx dev server
+  systemd.services.tokenmaxx = {
+    description = "Tokenmaxx idle game dev server";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "simple";
+      User = user;
+      Group = "users";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      WorkingDirectory = "${homeDir}/Projects/tokenmaxx";
+    };
+    environment = {
+      HOME = homeDir;
+    };
+    path = with pkgs; [ go ];
+    script = ''
+      exec go run serve.go
+    '';
+  };
+
   # Git credential helper for Forgejo access
   # Prefers RW dev-token, falls back to RO deploy-token
   environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
@@ -676,7 +697,7 @@ in
     {
       name = "tokenmaxx";
       port = 8888;
-      visibility = "public";
+      visibility = "vpn";
       sso.mode = "none";
     }
   ];
