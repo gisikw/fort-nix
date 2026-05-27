@@ -697,8 +697,8 @@ in
     {
       name = "tokenmaxx";
       port = 8888;
-      visibility = "vpn";
-      sso.mode = "none";
+      visibility = "public";
+      sso = { mode = "gatekeeper"; vpnBypass = true; };
     }
   ];
 }
