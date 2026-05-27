@@ -647,7 +647,7 @@ in
     environment = {
       HOME = homeDir;
     };
-    path = with pkgs; [ go ];
+    path = with pkgs; [ go gcc ];
     script = ''
       exec go run serve.go
     '';
