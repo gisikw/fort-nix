@@ -256,6 +256,15 @@ rec {
             };
           };
         };
+        "tokenmaxx" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/tokenmaxx";
+              tokenFile = ./github-mirror-token.sops;
+              branches = [ "main" ];
+            };
+          };
+        };
         "exocortex" = {};
         "hoard" = {};
       };

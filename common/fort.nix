@@ -125,6 +125,9 @@ in
         real_ip_header X-Real-IP;
         real_ip_recursive on;
 
+        # Disable proxy buffering globally so SSE streams flush immediately
+        proxy_buffering off;
+
         geo $is_vpn {
           default 0;
           ${vpnIpv4Prefix} 1;
