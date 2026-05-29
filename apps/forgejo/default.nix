@@ -337,6 +337,7 @@ in
       subdomain = subdomain;
       port = 3001;
       visibility = "public";
+      maxBodySize = "512m";
       sso = {
         mode = "oidc";
         restart = "forgejo-oidc-setup.service";
