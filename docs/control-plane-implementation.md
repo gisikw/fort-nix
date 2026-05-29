@@ -75,16 +75,16 @@ Note: `service-registry` does a lot:
 5. Consumer state file - no `/var/lib/fort/consumer-state.json`
 
 **Provider Side:**
-1. Async handler mode - all handlers are RPC (single request → single response)
-2. Provider orchestration - no aggregate invocation, no callback dispatch
-3. `cacheResponse` option - not implemented
-4. `triggers` option - no initialize/systemd trigger support
-5. Provider state file - no `/var/lib/fort/provider-state.json`
-6. GC sweep - needs-based GC not yet implemented
+1. ~~Async handler mode~~ - implemented (aggregate invocation with state tracking)
+2. ~~Provider orchestration~~ - implemented (aggregate invocation, callback dispatch)
+3. ~~`cacheResponse` option~~ - implemented (controls whether cached responses are passed to handlers)
+4. ~~`triggers` option~~ - implemented (initialize on boot, systemd unit triggers)
+5. ~~Provider state file~~ - implemented (`/var/lib/fort/provider-state.json`)
+6. ~~GC sweep~~ - implemented (timer-based GC for async capabilities)
 
 **Wire Protocol:**
-1. Callback POST - provider → consumer not implemented
-2. HTTP 202 for async - all responses are synchronous 200
+1. ~~Callback POST~~ - implemented (provider → consumer dispatch on response change)
+2. ~~HTTP 202 for async~~ - implemented (async capabilities return 202)
 
 ## Gap Analysis
 

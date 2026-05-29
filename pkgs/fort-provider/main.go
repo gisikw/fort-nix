@@ -272,15 +272,19 @@ func (h *AgentHandler) initializeCapabilities() {
 		fmt.Fprintf(os.Stderr, "[init] %s: initializing with %d entries\n", capName, len(state))
 
 		// Build aggregate input from all state entries
+		// Only include cached responses if cacheResponse is enabled
 		input := make(AsyncHandlerInput)
 		for key, entry := range state {
-			input[key] = struct {
+			inputEntry := struct {
 				Request  json.RawMessage `json:"request"`
 				Response json.RawMessage `json:"response,omitempty"`
 			}{
-				Request:  entry.Request,
-				Response: entry.Response,
+				Request: entry.Request,
 			}
+			if capConfig.CacheResponse {
+				inputEntry.Response = entry.Response
+			}
+			input[key] = inputEntry
 		}
 
 		inputBytes, err := json.Marshal(input)
@@ -644,16 +648,20 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 
 	// Build aggregate input from all state entries for this capability
 	// Keys are in "origin:needID" format
+	// Only include cached responses if cacheResponse is enabled for this capability
 	state := h.getProviderState(capability)
 	input := make(AsyncHandlerInput)
 	for key, entry := range state {
-		input[key] = struct {
+		inputEntry := struct {
 			Request  json.RawMessage `json:"request"`
 			Response json.RawMessage `json:"response,omitempty"`
 		}{
-			Request:  entry.Request,
-			Response: entry.Response,
+			Request: entry.Request,
 		}
+		if capConfig.CacheResponse {
+			inputEntry.Response = entry.Response
+		}
+		input[key] = inputEntry
 	}
 
 	inputBytes, err := json.Marshal(input)
@@ -1167,7 +1175,8 @@ func runTrigger(capability string, force bool) error {
 	fmt.Fprintf(os.Stderr, "[trigger] %s: processing %d entries\n", capability, len(state))
 
 	// Build aggregate input from all state entries
-	// When force=true, omit cached responses to force handler to recompute
+	// Include cached responses only when cacheResponse is enabled and not forced
+	capConfig := capabilities[capability]
 	input := make(AsyncHandlerInput)
 	for key, entry := range state {
 		inputEntry := struct {
@@ -1176,7 +1185,7 @@ func runTrigger(capability string, force bool) error {
 		}{
 			Request: entry.Request,
 		}
-		if !force {
+		if !force && capConfig.CacheResponse {
 			inputEntry.Response = entry.Response
 		}
 		input[key] = inputEntry
@@ -1540,15 +1549,19 @@ func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[st
 	}
 
 	// Build aggregate input from remaining state entries
+	// Only include cached responses if cacheResponse is enabled
 	input := make(AsyncHandlerInput)
 	for key, entry := range state {
-		input[key] = struct {
+		inputEntry := struct {
 			Request  json.RawMessage `json:"request"`
 			Response json.RawMessage `json:"response,omitempty"`
 		}{
-			Request:  entry.Request,
-			Response: entry.Response,
+			Request: entry.Request,
 		}
+		if capConfig.CacheResponse {
+			inputEntry.Response = entry.Response
+		}
+		input[key] = inputEntry
 	}
 
 	inputBytes, err := json.Marshal(input)
