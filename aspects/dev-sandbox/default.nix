@@ -557,7 +557,7 @@ in
       Type = "oneshot";
       User = user;
       Group = "users";
-      WorkingDirectory = "${homeDir}/Projects/exocortex/scripts/daily-briefing";
+      WorkingDirectory = "${homeDir}/Projects/hoard";
     };
     environment = {
       HOME = homeDir;
@@ -567,7 +567,7 @@ in
     path = devTools ++ [ pkgs.bash ];
     script = ''
       export PATH="/run/overlays/bin:$PATH"
-      ${homeDir}/Projects/exocortex/scripts/daily-briefing/run.sh
+      ${homeDir}/Projects/hoard/scripts/daily-briefing/run.sh
     '';
   };
 
