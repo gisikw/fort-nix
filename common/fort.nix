@@ -128,6 +128,11 @@ in
         # Disable proxy buffering globally so SSE streams flush immediately
         proxy_buffering off;
 
+        # Extend proxy read timeout for long-running SSE streams (LLM inference,
+        # livereload, TTS, transcription). Default 60s kills streams that pause
+        # between chunks during extended thinking or idle periods.
+        proxy_read_timeout 600s;
+
         geo $is_vpn {
           default 0;
           ${vpnIpv4Prefix} 1;
