@@ -18,6 +18,14 @@ rec {
     "conduit"
     "excalidraw"
     "cdn"
+    {
+      name = "sse-probe";
+      mode = "monitor";
+      targets = [
+        "joker=http://joker.fort.gisi.network:9400/events"
+        "raishan=http://raishan.fort.gisi.network:9400/events"
+      ];
+    }
   ];
 
   overlays = {

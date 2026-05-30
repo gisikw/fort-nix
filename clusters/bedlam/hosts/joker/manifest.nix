@@ -4,7 +4,9 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [
+    { name = "sse-probe"; mode = "serve"; }
+  ];
 
   aspects = [
     "mesh"

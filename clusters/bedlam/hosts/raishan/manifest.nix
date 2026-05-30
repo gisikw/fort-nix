@@ -13,6 +13,7 @@ rec {
       description = "Random thoughts from a random cat";
     }
     "tiltshift"
+    { name = "sse-probe"; mode = "serve"; }
   ];
 
   aspects = [
