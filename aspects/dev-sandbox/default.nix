@@ -670,7 +670,7 @@ in
     environment = {
       HOME = homeDir;
     };
-    path = with pkgs; [ just go gcc nodejs ];
+    path = with pkgs; [ bash just go gcc nodejs ];
     script = ''
       exec just dev
     '';
