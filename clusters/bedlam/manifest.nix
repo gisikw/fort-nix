@@ -265,6 +265,15 @@ rec {
             };
           };
         };
+        "maw" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/maw";
+              tokenFile = ./github-mirror-token.sops;
+              branches = [ "main" ];
+            };
+          };
+        };
         "exocortex" = {};
         "hoard" = {};
       };

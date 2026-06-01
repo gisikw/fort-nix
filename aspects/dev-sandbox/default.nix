@@ -653,6 +653,29 @@ in
     '';
   };
 
+  # Maw dev server (Vite frontend + Go backend)
+  systemd.services.maw = {
+    description = "Maw dev server";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "simple";
+      User = user;
+      Group = "users";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      WorkingDirectory = "${homeDir}/Projects/maw";
+      KillMode = "mixed";
+      KillSignal = "SIGTERM";
+    };
+    environment = {
+      HOME = homeDir;
+    };
+    path = with pkgs; [ just go gcc nodejs ];
+    script = ''
+      exec just dev
+    '';
+  };
+
   # Git credential helper for Forgejo access
   # Prefers RW dev-token, falls back to RO deploy-token
   environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
@@ -697,6 +720,12 @@ in
     {
       name = "tokenmaxx";
       port = 8888;
+      visibility = "public";
+      sso = { mode = "gatekeeper"; vpnBypass = true; };
+    }
+    {
+      name = "maw";
+      port = 5173;
       visibility = "public";
       sso = { mode = "gatekeeper"; vpnBypass = true; };
     }
