@@ -50,6 +50,7 @@ in
       inherit port;
       visibility = "vpn";
       sso.mode = "none";
+      maxBodySize = "100m";
     }
   ];
 }
