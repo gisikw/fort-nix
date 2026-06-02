@@ -59,10 +59,4 @@ in
     };
   };
 
-  # Retention policy: prune old snapshots after backup
-  services.restic.backups.system.pruneOpts = [
-    "--keep-daily 7"
-    "--keep-weekly 4"
-    "--keep-monthly 6"
-  ];
 }

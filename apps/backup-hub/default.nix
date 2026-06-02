@@ -44,6 +44,34 @@ in
     mode = "0400";
   };
 
+  # Centralized prune — runs on the hub so clients never contend for locks.
+  # Scheduled after the backup window (clients run at midnight + up to 1h jitter).
+  systemd.timers.restic-prune = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 04:00:00";
+      Persistent = true;
+    };
+  };
+
+  systemd.services.restic-prune = {
+    description = "Restic repository prune";
+    after = [ "restic-rest-server.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+    };
+    path = [ pkgs.restic ];
+    script = ''
+      restic -r "${dataDir}" \
+        --password-file ${config.sops.secrets.restic-password.path} \
+        forget \
+        --keep-daily 7 \
+        --keep-weekly 4 \
+        --keep-monthly 6 \
+        --prune
+    '';
+  };
+
   fort.cluster.services = [
     {
       name = "backup";
