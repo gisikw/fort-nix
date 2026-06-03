@@ -220,10 +220,12 @@ func cmdActivate(cfg Config, name, storePath string) {
 		return
 	}
 
-	// Stop old target if running
-	stopTarget(name)
+	// Stop old services explicitly — systemctl stop on a service is
+	// synchronous (waits for drain + exit), whereas stopping the target
+	// only deactivates a grouping unit and propagates asynchronously.
+	stopServices(name, manifest)
 
-	// Start new target
+	// Start new target (brings up all wanted services)
 	if err := startTarget(name); err != nil {
 		log.Printf("[%s] start failed: %v", name, err)
 		writeState(stateDir, "rolling-back")
@@ -512,6 +514,18 @@ func daemonReload() error {
 
 func stopTarget(name string) {
 	exec.Command("systemctl", "stop", fmt.Sprintf("overlay-%s.target", name)).Run()
+}
+
+func stopServices(name string, manifest *OverlayManifest) {
+	for svcName := range manifest.Services {
+		unit := fmt.Sprintf("overlay-%s-%s.service", name, svcName)
+		log.Printf("[%s] stopping %s", name, unit)
+		if err := exec.Command("systemctl", "stop", unit).Run(); err != nil {
+			log.Printf("[%s] stop %s: %v (may not have been running)", name, unit, err)
+		}
+	}
+	// Also deactivate the target so startTarget sees a clean state
+	stopTarget(name)
 }
 
 func startTarget(name string) error {
