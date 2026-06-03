@@ -125,14 +125,16 @@ in
           set -euo pipefail
           input=$(${pkgs.coreutils}/bin/cat)
           overlay=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.overlay // empty')
+          # Fire-and-forget: background the check so CI doesn't block on
+          # activation (health checks, store fetches, etc.)
           if [ -n "$overlay" ]; then
             echo "Refreshing overlay: $overlay" >&2
-            ${fort-overlay-manager}/bin/fort-overlay-manager check --overlay "$overlay"
+            ${fort-overlay-manager}/bin/fort-overlay-manager check --overlay "$overlay" &
           else
             echo "Refreshing all overlays" >&2
-            ${fort-overlay-manager}/bin/fort-overlay-manager check
+            ${fort-overlay-manager}/bin/fort-overlay-manager check &
           fi
-          echo '{"status":"ok"}'
+          echo '{"status":"accepted"}'
         '';
         mode = "rpc";
         description = "Trigger overlay refresh";
