@@ -400,6 +400,7 @@ in
         after = [ "network.target" "tailscaled.service" ];
         wants = [ "tailscaled.service" ];
         wantedBy = [ "multi-user.target" ];
+        restartTriggers = [ config.sops.secrets.identity-proxy-doc.sopsFile ];
 
         serviceConfig = {
           Type = "simple";
