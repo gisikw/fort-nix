@@ -5,13 +5,6 @@ rec {
   roles = [ ];
 
   apps = [
-    {
-      name = "flatnotes";
-      subdomain = "exocortex";
-      dataDir = "/home/dev/Projects/exocortex/notes";
-      dataUser = "dev";
-      dataGroup = "users";
-    }
     "vdirsyncer-auth"
     "radicale"
     "apple-dist"
@@ -108,7 +101,7 @@ rec {
         subdomain = "dz";
         port = 9878;
         visibility = "public";
-        sso = { mode = "oidc"; vpnBypass = true; };
+        sso = { mode = "identity"; };
       };
     };
   };
@@ -146,7 +139,6 @@ rec {
 
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
-        # notes subdir owned by flatnotes app via dataUser/dataGroup params
       ];
     };
 }

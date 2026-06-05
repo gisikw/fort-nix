@@ -1,6 +1,6 @@
 # Gatekeeper Mode
 
-**Status**: Working examples in `apps/silverbullet/`, `apps/flatnotes/`, `apps/vdirsyncer-auth/`
+**Status**: Working examples in `apps/silverbullet/`, `apps/vdirsyncer-auth/`
 
 Use `gatekeeper` mode when you need a login wall but don't need to pass identity to the backend. Users must authenticate, but the app doesn't receive any user info.
 

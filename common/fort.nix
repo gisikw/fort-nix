@@ -74,11 +74,18 @@ let
     ${pkgs.systemd}/bin/systemctl restart "${restartTarget}" 2>/dev/null || true
   '';
 
-  # Get services that need OIDC registration (sso.mode not in none/token)
-  ssoServices = builtins.filter (svc: svc.sso.mode != "none" && svc.sso.mode != "token") config.fort.cluster.services;
+  # Get services that need OIDC registration (sso.mode not in none/token/identity)
+  ssoServices = builtins.filter (svc: svc.sso.mode != "none" && svc.sso.mode != "token" && svc.sso.mode != "identity") config.fort.cluster.services;
 
   # Get services using bearer token auth
   tokenServices = builtins.filter (svc: svc.sso.mode == "token") config.fort.cluster.services;
+
+  # Get services using identity proxy auth
+  identityServices = builtins.filter (svc: svc.sso.mode == "identity") config.fort.cluster.services;
+  hasIdentityServices = identityServices != [];
+
+  # Identity proxy package
+  identity-proxy = import ../pkgs/identity-proxy { inherit pkgs; };
 
   # njs token validator script path (for nginx js_import)
   tokenValidatorScript = ./fort/token-validator.js;
@@ -153,7 +160,7 @@ in
           envFile = "/var/lib/fort-auth/${svc.name}/oauth2-proxy.env";
           subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
           publicUrl = "https://${subdomain}.${domain}";
-        in lib.optionalAttrs (svc.staticRoot == null && svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token") {
+        in lib.optionalAttrs (svc.staticRoot == null && svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token" && svc.sso.mode != "identity") {
           "oauth2-proxy-${svc.name}" = {
             wantedBy = [ "multi-user.target" ];
 
@@ -231,8 +238,9 @@ in
             let
               subdomain = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
               isStatic = svc.staticRoot != null;
-              needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token";
+              needsAuthProxy = svc.sso.mode != "none" && svc.sso.mode != "oidc" && svc.sso.mode != "token" && svc.sso.mode != "identity";
               isTokenMode = svc.sso.mode == "token";
+              isIdentityMode = svc.sso.mode == "identity";
               anyBypass = svc.sso.vpnBypass || svc.sso.localBypass;
               directBackend = lib.optionalString (!isStatic) "http://${if svc.inEgressNamespace then "10.200.0.2" else "127.0.0.1"}:${toString svc.port}";
               authProxySocket = "http://unix:/run/fort-auth/${svc.name}.sock";
@@ -272,6 +280,17 @@ in
                     # Token mode: nginx auth_request to njs validator
                     (lib.optionalString isTokenMode ''
                       auth_request /_fort_validate_token;
+                    '')
+                    # Identity mode: nginx auth_request to identity-proxy
+                    (lib.optionalString isIdentityMode ''
+                      auth_request /_identity/validate;
+                      auth_request_set $identity_user $upstream_http_x_identity_user;
+                      auth_request_set $identity_email $upstream_http_x_identity_email;
+                      auth_request_set $identity_groups $upstream_http_x_identity_groups;
+                      proxy_set_header X-Forwarded-User $identity_user;
+                      proxy_set_header X-Forwarded-Email $identity_email;
+                      proxy_set_header X-Forwarded-Groups $identity_groups;
+                      error_page 401 = @identity_login;
                     '')
                     # Conditional routing: bypass auth for trusted networks, otherwise go through oauth2-proxy
                     # When proxyPass is null, NixOS doesn't add recommended headers, so we must add them
@@ -316,6 +335,34 @@ in
                     js_content token_validator.validate;
                   '';
                 };
+                # Identity proxy auth_request target
+                locations."= /_identity/validate" = lib.mkIf isIdentityMode {
+                  extraConfig = ''
+                    internal;
+                    proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
+                    proxy_pass_request_body off;
+                    proxy_set_header Content-Length "";
+                    proxy_set_header X-Original-URI $request_uri;
+                    proxy_set_header X-Original-Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Identity-Required-Groups "${lib.concatStringsSep "," svc.sso.groups}";
+                  '';
+                };
+                # Identity proxy login redirect
+                locations."@identity_login" = lib.mkIf isIdentityMode {
+                  extraConfig = ''
+                    return 302 https://$host/_identity/login?rd=$scheme://$host$request_uri;
+                  '';
+                };
+                # Identity proxy endpoints (login, callback)
+                locations."/_identity/" = lib.mkIf isIdentityMode {
+                  extraConfig = ''
+                    proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Original-Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                  '';
+                };
               };
             }
           ) config.fort.cluster.services
@@ -336,6 +383,73 @@ in
         path = "/var/lib/fort-auth/token-secret";
         mode = "0440";
         group = "nginx";
+      };
+    })
+
+    # Identity proxy - one per host for all identity-mode services
+    (lib.mkIf hasIdentityServices {
+      sops.secrets.identity-proxy-doc = {
+        sopsFile = ./fort/identity.toml.sops;
+        format = "binary";
+        mode = "0440";
+        group = "nginx";
+      };
+
+      systemd.services.identity-proxy = {
+        description = "Fort identity proxy";
+        after = [ "network.target" "tailscaled.service" ];
+        wants = [ "tailscaled.service" ];
+        wantedBy = [ "multi-user.target" ];
+
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "${identity-proxy}/bin/identity-proxy";
+          Restart = "on-failure";
+          RestartSec = "2s";
+          Group = "nginx";
+          UMask = "0007";
+          RuntimeDirectory = "identity-proxy";
+          RuntimeDirectoryMode = "0750";
+          StateDirectory = "identity-proxy";
+
+          Environment = [
+            "LISTEN_SOCKET=/run/identity-proxy/identity-proxy.sock"
+            "IDENTITY_DOC=${config.sops.secrets.identity-proxy-doc.path}"
+            "COOKIE_SIGNING_KEY=/var/lib/identity-proxy/cookie-key"
+            "OIDC_CLIENT_ID_FILE=/var/lib/fort-auth/identity-proxy/client-id"
+            "OIDC_CLIENT_SECRET_FILE=/var/lib/fort-auth/identity-proxy/client-secret"
+            "OIDC_ISSUER=https://id.${domain}"
+            "COOKIE_DOMAIN=.${domain}"
+          ];
+
+          ExecStartPre = pkgs.writeShellScript "identity-proxy-init" ''
+            set -euo pipefail
+            mkdir -p /var/lib/identity-proxy
+            if [ ! -s /var/lib/identity-proxy/cookie-key ]; then
+              head -c32 /dev/urandom | base64 > /var/lib/identity-proxy/cookie-key
+              chmod 600 /var/lib/identity-proxy/cookie-key
+            fi
+            # Ensure OIDC credential dir exists with placeholders
+            mkdir -p /var/lib/fort-auth/identity-proxy
+            if [ ! -s /var/lib/fort-auth/identity-proxy/client-id ]; then
+              echo "identity-proxy-pending" > /var/lib/fort-auth/identity-proxy/client-id
+            fi
+            if [ ! -s /var/lib/fort-auth/identity-proxy/client-secret ]; then
+              echo "pending" > /var/lib/fort-auth/identity-proxy/client-secret
+            fi
+          '';
+        };
+      };
+
+      # OIDC registration — one need for the whole identity-proxy on this host
+      fort.host.needs.oidc-register.identity-proxy = {
+        from = "drhorrible";
+        request = {
+          client_name = "identity-proxy-${config.networking.hostName}.${domain}";
+          groups = [];
+        };
+        handler = mkOidcHandler "identity-proxy" "identity-proxy.service";
+        nag = "15m";
       };
     })
 

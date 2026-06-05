@@ -119,7 +119,6 @@ For risky changes, push to a `<hostname>-test` branch. CI validates that host's 
 | cupola | Command center dashboard (Elixir/Phoenix) |
 | discovery-zone | Research findings server |
 | excalidraw | Collaborative whiteboard and diagramming |
-| flatnotes | Markdown note-taking |
 | forgejo | Git hosting with CI/CD and GitHub mirroring |
 | fort-mcp | Model Context Protocol server |
 | fort-observability | Prometheus, Grafana, Loki stack |
