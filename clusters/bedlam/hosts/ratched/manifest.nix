@@ -81,6 +81,15 @@ rec {
       #   stabilize = 15;
       # };
     };
+    lair = {
+      package = "infra/lair";
+      config.port = "4002";
+      expose = {
+        port = 4002;
+        visibility = "public";
+        sso = { mode = "identity"; groups = [ "admin" ]; };
+      };
+    };
     discovery-zone = {
       package = "infra/discovery-zone";
       config.port = "9878";
