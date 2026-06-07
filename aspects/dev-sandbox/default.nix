@@ -727,7 +727,7 @@ in
       name = "maw";
       port = 5173;
       visibility = "public";
-      sso = { mode = "gatekeeper"; vpnBypass = true; };
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }
