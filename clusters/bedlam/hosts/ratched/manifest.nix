@@ -101,7 +101,7 @@ rec {
         subdomain = "dz";
         port = 9878;
         visibility = "public";
-        sso = { mode = "identity"; };
+        sso = { mode = "identity"; groups = [ "admin" ]; };
       };
     };
   };
