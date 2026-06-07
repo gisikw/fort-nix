@@ -16,6 +16,7 @@
       subdomain = subdomain;
       port = 9696;
       inEgressNamespace = true;
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }

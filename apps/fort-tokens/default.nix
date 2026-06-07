@@ -39,7 +39,7 @@ in
     port = 9471;
     visibility = "public";
     sso = {
-      mode = "headers";
+      mode = "identity";
       groups = [ "admin" ];
       restart = "fort-tokens.service";
     };

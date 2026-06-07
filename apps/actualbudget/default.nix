@@ -14,6 +14,7 @@
       name = "actualbudget";
       subdomain = subdomain;
       port = 5006;
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }

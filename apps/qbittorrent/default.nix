@@ -32,6 +32,7 @@
       subdomain = subdomain;
       port = 8080;
       inEgressNamespace = true;
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }

@@ -13,6 +13,7 @@
       port = 8989;
       inEgressNamespace = true;
       health.endpoint = "/ping";
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }

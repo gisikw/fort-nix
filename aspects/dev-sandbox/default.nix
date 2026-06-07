@@ -721,7 +721,7 @@ in
       name = "tokenmaxx";
       port = 8888;
       visibility = "public";
-      sso = { mode = "gatekeeper"; vpnBypass = true; };
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
     {
       name = "maw";

@@ -95,7 +95,7 @@ in
       subdomain = subdomain;
       port = 8188;
       visibility = "vpn";
-      sso.mode = "none";
+      sso = { mode = "identity"; groups = [ "admin" ]; };
       maxBodySize = "100m";
     }
   ];

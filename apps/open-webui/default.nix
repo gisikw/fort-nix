@@ -18,6 +18,7 @@
       name = "ai";
       subdomain = subdomain;
       port = 8080;
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }
