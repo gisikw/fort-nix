@@ -29,7 +29,7 @@ rec {
         subdomain = "ko";
         port = 19876;
         visibility = "public";
-        sso = { mode = "gatekeeper"; vpnBypass = true; };
+        sso = { mode = "identity"; groups = [ "admin" ]; };
       };
     };
     headjack = {
@@ -44,7 +44,7 @@ rec {
       expose = {
         port = 8700;
         visibility = "public";
-        sso = { mode = "gatekeeper"; vpnBypass = true; };
+        sso = { mode = "identity"; groups = [ "admin" ]; };
       };
     };
     cupola = {
@@ -81,15 +81,6 @@ rec {
       #   grace = 10;
       #   stabilize = 15;
       # };
-    };
-    lair = {
-      package = "infra/lair";
-      config.port = "4002";
-      expose = {
-        port = 4002;
-        visibility = "public";
-        sso = { mode = "gatekeeper"; vpnBypass = true; localBypass = true; };
-      };
     };
     discovery-zone = {
       package = "infra/discovery-zone";
