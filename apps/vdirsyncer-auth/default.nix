@@ -77,10 +77,7 @@ in
       name = "vdirsyncer-auth";
       inherit subdomain port;
       visibility = "public";
-      sso = {
-        mode = "gatekeeper";
-        groups = [ "admin" ];
-      };
+      sso = { mode = "identity"; groups = [ "admin" ]; };
     }
   ];
 }

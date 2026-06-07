@@ -188,10 +188,7 @@ EOF
     subdomain = subdomain;
     port = 8080;
     visibility = "public";
-    sso = {
-      mode = "gatekeeper";
-      vpnBypass = true;
-    };
+    sso = { mode = "identity"; groups = [ "admin" ]; };
     health.enabled = false;  # Don't monitor the monitor
   }];
 }

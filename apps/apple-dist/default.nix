@@ -159,11 +159,7 @@ in
       subdomain = "apple";
       port = port;
       visibility = "public";
-      sso = {
-        mode = "gatekeeper";
-        vpnBypass = true;
-        groups = [ "admin" ];
-      };
+      sso = { mode = "identity"; groups = [ "admin" ]; };
       health.enabled = false;
     }
   ];

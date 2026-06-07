@@ -193,7 +193,7 @@ in
       name = "sillytavern";
       subdomain = subdomain;
       port = 8000;
-      sso.mode = "headers";
+      sso = { mode = "identity"; groups = [ "admin" ]; };
       health.endpoint = "/ready";
     }
   ];
