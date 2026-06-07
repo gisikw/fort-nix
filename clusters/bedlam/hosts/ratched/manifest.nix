@@ -9,7 +9,6 @@ rec {
     "radicale"
     "apple-dist"
     "conduit"
-    "excalidraw"
     "cdn"
     {
       name = "sse-probe";
