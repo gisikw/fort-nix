@@ -447,11 +447,18 @@ in
       };
 
       # OIDC registration — one need for the whole identity-proxy on this host
-      fort.host.needs.oidc-register.identity-proxy = {
+      # Callback URLs are computed from all identity-mode service subdomains
+      fort.host.needs.oidc-register.identity-proxy = let
+        identityCallbackURLs = map (svc:
+          let sub = if svc ? subdomain && svc.subdomain != null then svc.subdomain else svc.name;
+          in "https://${sub}.${domain}/_identity/callback"
+        ) identityServices;
+      in {
         from = "drhorrible";
         request = {
           client_name = "identity-proxy-${config.networking.hostName}.${domain}";
           groups = [];
+          callback_urls = identityCallbackURLs;
         };
         handler = mkOidcHandler "identity-proxy" "identity-proxy.service";
         nag = "15m";

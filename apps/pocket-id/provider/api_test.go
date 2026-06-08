@@ -93,7 +93,7 @@ func TestCreateClient(t *testing.T) {
 	defer server.Close()
 
 	api := NewPocketIDAPI(server.URL, "test-key")
-	client, err := api.CreateClient("test-client")
+	client, err := api.CreateClient("test-client", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

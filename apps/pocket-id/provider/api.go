@@ -96,10 +96,13 @@ func (c *PocketIDAPI) GetAllClients() ([]PocketIDClient, error) {
 }
 
 // CreateClient creates a new OIDC client and returns its info
-func (c *PocketIDAPI) CreateClient(name string) (*PocketIDClient, error) {
+func (c *PocketIDAPI) CreateClient(name string, callbackURLs []string) (*PocketIDClient, error) {
+	if callbackURLs == nil {
+		callbackURLs = []string{}
+	}
 	req := CreateClientRequest{
 		Name:                    name,
-		CallbackURLs:            []string{},
+		CallbackURLs:            callbackURLs,
 		LogoutCallbackURLs:      []string{},
 		IsPublic:                false,
 		PKCEEnabled:             false,
@@ -117,6 +120,19 @@ func (c *PocketIDAPI) CreateClient(name string) (*PocketIDClient, error) {
 	}
 
 	return &client, nil
+}
+
+// UpdateClientCallbacks updates the callback URLs for an existing client
+func (c *PocketIDAPI) UpdateClientCallbacks(clientID string, callbackURLs []string) error {
+	if callbackURLs == nil {
+		callbackURLs = []string{}
+	}
+	req := CreateClientRequest{
+		CallbackURLs:       callbackURLs,
+		LogoutCallbackURLs: []string{},
+	}
+	_, err := c.doRequest("PUT", "/api/oidc/clients/"+clientID, req)
+	return err
 }
 
 // DeleteClient removes an OIDC client

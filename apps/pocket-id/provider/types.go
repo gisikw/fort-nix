@@ -22,9 +22,10 @@ type OutputEntry struct {
 
 // OIDCRequest is the request payload from consumers
 type OIDCRequest struct {
-	ClientName string   `json:"client_name"`
-	Groups     []string `json:"groups,omitempty"`
-	FortNeedID string   `json:"_fort_need_id,omitempty"`
+	ClientName   string   `json:"client_name"`
+	Groups       []string `json:"groups,omitempty"`
+	CallbackURLs []string `json:"callback_urls,omitempty"`
+	FortNeedID   string   `json:"_fort_need_id,omitempty"`
 }
 
 // OIDCResponse is the response payload to consumers

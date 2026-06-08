@@ -115,7 +115,7 @@ func processEntries(api *PocketIDAPI, input HandlerInput) (HandlerOutput, error)
 			continue
 		}
 
-		resp := processClient(api, existingClients, req, entry.Response, keptIDs)
+		resp := processClient(api, existingClients, req, entry.Response, keptIDs, req.CallbackURLs)
 		respBytes, _ := json.Marshal(resp)
 		output[key] = OutputEntry{
 			Request:  entry.Request,
@@ -132,7 +132,7 @@ func processEntries(api *PocketIDAPI, input HandlerInput) (HandlerOutput, error)
 }
 
 // processClient handles a single OIDC client request
-func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest, cachedResp json.RawMessage, keptIDs map[string]bool) OIDCResponse {
+func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest, cachedResp json.RawMessage, keptIDs map[string]bool, callbackURLs []string) OIDCResponse {
 	// Resolve group IDs from names
 	groupIDs, err := resolveGroupIDs(api, req.Groups)
 	if err != nil {
@@ -145,9 +145,14 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 		if err := json.Unmarshal(cachedResp, &cached); err == nil && cached.ClientID != "" && cached.ClientSecret != "" {
 			// Verify client still exists
 			if client := FindClientByID(existing, cached.ClientID); client != nil {
-				// Client exists - sync groups and reuse cached credentials
+				// Client exists - sync groups and callback URLs, reuse cached credentials
 				if err := api.SetAllowedGroups(cached.ClientID, groupIDs); err != nil {
 					fmt.Fprintf(os.Stderr, "warning: failed to sync groups for %s: %v\n", req.ClientName, err)
+				}
+				if len(callbackURLs) > 0 {
+					if err := api.UpdateClientCallbacks(cached.ClientID, callbackURLs); err != nil {
+						fmt.Fprintf(os.Stderr, "warning: failed to sync callback URLs for %s: %v\n", req.ClientName, err)
+					}
 				}
 				keptIDs[cached.ClientID] = true
 				return cached
@@ -161,6 +166,11 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 		if err := api.SetAllowedGroups(client.ID, groupIDs); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to sync groups for %s: %v\n", req.ClientName, err)
 		}
+		if len(callbackURLs) > 0 {
+			if err := api.UpdateClientCallbacks(client.ID, callbackURLs); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to sync callback URLs for %s: %v\n", req.ClientName, err)
+			}
+		}
 
 		secret, err := api.RegenerateSecret(client.ID)
 		if err != nil {
@@ -169,7 +179,7 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 			if err := api.DeleteClient(client.ID); err != nil {
 				return OIDCResponse{Error: fmt.Sprintf("Failed to delete client for recreation: %v", err)}
 			}
-			return createNewClient(api, req.ClientName, groupIDs, keptIDs)
+			return createNewClient(api, req.ClientName, groupIDs, callbackURLs, keptIDs)
 		}
 
 		keptIDs[client.ID] = true
@@ -180,12 +190,12 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 	}
 
 	// Create new client
-	return createNewClient(api, req.ClientName, groupIDs, keptIDs)
+	return createNewClient(api, req.ClientName, groupIDs, callbackURLs, keptIDs)
 }
 
 // createNewClient creates a new OIDC client
-func createNewClient(api *PocketIDAPI, name string, groupIDs []string, keptIDs map[string]bool) OIDCResponse {
-	client, err := api.CreateClient(name)
+func createNewClient(api *PocketIDAPI, name string, groupIDs []string, callbackURLs []string, keptIDs map[string]bool) OIDCResponse {
+	client, err := api.CreateClient(name, callbackURLs)
 	if err != nil {
 		return OIDCResponse{Error: fmt.Sprintf("Failed to create client: %v", err)}
 	}
