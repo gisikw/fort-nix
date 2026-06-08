@@ -251,6 +251,10 @@ in
                 forceSSL = true;
                 sslCertificate = "/var/lib/fort/ssl/${domain}/fullchain.pem";
                 sslCertificateKey = "/var/lib/fort/ssl/${domain}/key.pem";
+                # Allow iframing within the domain (lair app shell)
+                extraConfig = ''
+                  add_header Content-Security-Policy "frame-ancestors 'self' https://*.${domain}" always;
+                '';
                 # Static file serving mode
                 root = lib.mkIf isStatic svc.staticRoot;
                 locations."/" = if isStatic then {
