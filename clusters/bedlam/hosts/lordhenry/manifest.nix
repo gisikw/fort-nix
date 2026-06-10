@@ -22,7 +22,7 @@ rec {
       expose = {
         port = 8900;
         visibility = "public";
-        sso = { mode = "identity"; groups = [ "admin" ]; };
+        sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
       };
     };
   };
