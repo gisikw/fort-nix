@@ -128,17 +128,26 @@ let
       fi
     '') ggufs)}
 
-    # Phase 3: Create Modelfile-based models
+    # Phase 3: Create Modelfile-based models (non-fatal — one bad model shouldn't block the rest)
+    FAILURES=0
     ${lib.concatStringsSep "\n" (map (m: ''
       echo "${m.name}: creating from Modelfile..."
       MODELFILE=$(cat ${m.modelfile})
-      curl -sf ${api}/api/create \
+      if curl -sf ${api}/api/create \
         -d "$(${pkgs.jq}/bin/jq -n --arg name "${m.name}" --arg mf "$MODELFILE" '{name:$name,modelfile:$mf,stream:false}')" \
-        >/dev/null
-      echo "${m.name}: done"
+        >/dev/null; then
+        echo "${m.name}: done"
+      else
+        echo "${m.name}: FAILED (curl exit $?)"
+        FAILURES=$((FAILURES + 1))
+      fi
     '') creates)}
 
-    echo "Model reconciliation complete"
+    if [ "$FAILURES" -gt 0 ]; then
+      echo "Model reconciliation complete with $FAILURES failure(s)"
+    else
+      echo "Model reconciliation complete"
+    fi
   '';
 in
 {
