@@ -23,6 +23,7 @@ let
   #     params = {...}; renderer = "gemma4"; parser = "gemma4"; }
   models = [
     "devstral-small-2:latest"
+    "nomic-embed-text:latest"
     "gpt-oss:20b"
     "gpt-oss:120b"
     "hf.co/LatitudeGames/Wayfarer-2-12B-GGUF:Q4_K_M"
