@@ -276,6 +276,7 @@ rec {
         };
         "exocortex" = {};
         "hoard" = {};
+        "phylactery" = {};
       };
     };
   };
