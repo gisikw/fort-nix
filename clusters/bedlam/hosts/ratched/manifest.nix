@@ -37,6 +37,9 @@ rec {
     muse = {
       package = "infra/muse";
     };
+    phylactery = {
+      package = "infra/phylactery";
+    };
     litmus = {
       package = "infra/litmus";
       config.port = "8700";
