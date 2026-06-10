@@ -15,6 +15,18 @@ rec {
     "whisper"
   ];
 
+  overlays = {
+    tiamat = {
+      package = "infra/tiamat";
+      config.port = "8900";
+      expose = {
+        port = 8900;
+        visibility = "public";
+        sso = { mode = "identity"; groups = [ "admin" ]; };
+      };
+    };
+  };
+
   aspects = [
     "mesh"
     "observable"
