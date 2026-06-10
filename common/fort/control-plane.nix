@@ -142,6 +142,10 @@ let
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"unit\":\"nginx\",\"lines\":50}"}'
+        exit 1
+      fi
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
       identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
       lines=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 100')
@@ -179,6 +183,10 @@ let
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"unit\":\"nginx\",\"lines\":50}"}'
+        exit 1
+      fi
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
       identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
       lines=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 100')
@@ -219,6 +227,10 @@ let
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"action\":\"status\",\"unit\":\"nginx\"}"}'
+        exit 1
+      fi
       action=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.action // "restart"')
 
       # Helper: validate service label
@@ -346,6 +358,10 @@ let
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"action\":\"status\",\"unit\":\"nginx\"}"}'
+        exit 1
+      fi
       action=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.action // "restart"')
 
       case "$action" in
@@ -502,6 +518,10 @@ let
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"path\":\"/var/log/nginx\"}"}'
+        exit 1
+      fi
       file_path=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.path // empty')
       offset=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.offset // 0')
       limit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.limit // 1000')
@@ -577,6 +597,10 @@ let
       set -euo pipefail
 
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"capability\":\"oidc-register\"}"}'
+        exit 1
+      fi
       capability=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.capability // empty')
       force=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.force // false')
 
@@ -612,6 +636,10 @@ let
 
       STATE_FILE="/var/lib/fort/fulfillment-state.json"
       input=$(${pkgs.coreutils}/bin/cat)
+      if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"pattern\":\"oidc\"} or {}"}'
+        exit 1
+      fi
       pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.pattern // empty')
 
       if [ ! -f "$STATE_FILE" ]; then
