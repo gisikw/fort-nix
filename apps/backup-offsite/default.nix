@@ -15,8 +15,6 @@ in
     extraFlags = [ "--no-auth" ];
   };
 
-  # Initialize the restic repository if it doesn't exist yet.
-  # Clients cannot back up until the repo is initialized.
   systemd.services.restic-repo-init = {
     after = [ "restic-rest-server.service" ];
     requires = [ "restic-rest-server.service" ];
@@ -34,8 +32,6 @@ in
       else
         echo "Repository already initialized."
       fi
-      # Ensure all repo files are owned by restic (fixes drift from
-      # services that previously ran as root, e.g. prune)
       chown -R restic:restic "${dataDir}"
     '';
   };
@@ -47,18 +43,17 @@ in
     owner = "restic";
   };
 
-  # Centralized prune — runs on the hub so clients never contend for locks.
-  # Scheduled after the backup window (clients run at midnight + up to 1h jitter).
+  # Prune with same retention as the primary hub.
   systemd.timers.restic-prune = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*-*-* 04:00:00";
+      OnCalendar = "*-*-* 06:00:00";
       Persistent = true;
     };
   };
 
   systemd.services.restic-prune = {
-    description = "Restic repository prune";
+    description = "Restic repository prune (offsite)";
     after = [ "restic-rest-server.service" ];
     serviceConfig = {
       Type = "oneshot";
@@ -77,43 +72,9 @@ in
     '';
   };
 
-  # Offsite replication — copy snapshots to pettigrew after prune completes.
-  # Rate-limited to avoid saturating the residential connection.
-  systemd.timers.restic-offsite-sync = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 05:00:00";
-      Persistent = true;
-    };
-  };
-
-  systemd.services.restic-offsite-sync = {
-    description = "Replicate backups to offsite (pettigrew)";
-    after = [ "restic-rest-server.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "restic";
-      Group = "restic";
-    };
-    path = [ pkgs.restic ];
-    script = let
-      passwordFile = config.sops.secrets.restic-password.path;
-      offsiteRepo = "rest:https://backup-offsite.${domain}/";
-    in ''
-      echo "Syncing snapshots to offsite..."
-      restic -r "${offsiteRepo}" \
-        --password-file ${passwordFile} \
-        --limit-upload 1024 \
-        copy \
-        --from-repo "${dataDir}" \
-        --from-password-file ${passwordFile}
-      echo "Offsite sync complete."
-    '';
-  };
-
   fort.cluster.services = [
     {
-      name = "backup";
+      name = "backup-offsite";
       inherit port;
       visibility = "vpn";
       sso.mode = "none";

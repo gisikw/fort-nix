@@ -4,7 +4,7 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [ "backup-offsite" ];
 
   aspects = [
     "observable"
