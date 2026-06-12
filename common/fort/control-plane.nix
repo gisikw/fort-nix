@@ -1100,7 +1100,13 @@ let
 
     # Install RBAC and capabilities config (includes mandatory endpoints)
     install -Dm0644 ${pkgs.writeText "rbac.json" rbacJson} /etc/fort/rbac.json
-    install -Dm0644 ${pkgs.writeText "capabilities.json" capabilitiesJson} /etc/fort/capabilities.json
+    # Only update capabilities.json when content changes — PathModified
+    # on this file triggers a fort-provider restart, and unconditional
+    # writes cause spurious restart cascades during deploys.
+    _new_caps=${pkgs.writeText "capabilities.json" capabilitiesJson}
+    if ! cmp -s "$_new_caps" /etc/fort/capabilities.json 2>/dev/null; then
+      install -Dm0644 "$_new_caps" /etc/fort/capabilities.json
+    fi
 
     ${lib.optionalString isDarwin ''
       # Darwin: ensure state directories exist
