@@ -129,10 +129,10 @@ in
           # activation (health checks, store fetches, etc.)
           if [ -n "$overlay" ]; then
             echo "Refreshing overlay: $overlay" >&2
-            ${fort-overlay-manager}/bin/fort-overlay-manager check --overlay "$overlay" &
+            ${fort-overlay-manager}/bin/fort-overlay-manager check --overlay "$overlay" </dev/null >/dev/null 2>&1 &
           else
             echo "Refreshing all overlays" >&2
-            ${fort-overlay-manager}/bin/fort-overlay-manager check &
+            ${fort-overlay-manager}/bin/fort-overlay-manager check </dev/null >/dev/null 2>&1 &
           fi
           echo '{"status":"accepted"}'
         '';
