@@ -53,6 +53,8 @@ type ServiceDef struct {
 	Exec             string   `json:"exec"`
 	User             string   `json:"user"`
 	Group            string   `json:"group"`
+	DynamicUser      bool     `json:"dynamicUser"`
+	StateDirectory   string   `json:"stateDirectory"`
 	WorkingDirectory string   `json:"workingDirectory"`
 	After            []string `json:"after"`
 	Restart          string   `json:"restart"`
@@ -480,11 +482,16 @@ RestartSec=%d
 		if svc.TimeoutStopSec > 0 {
 			content += fmt.Sprintf("TimeoutStopSec=%d\n", svc.TimeoutStopSec)
 		}
-		if svc.User != "" {
+		if svc.DynamicUser {
+			content += "DynamicUser=true\n"
+		} else if svc.User != "" {
 			content += fmt.Sprintf("User=%s\n", svc.User)
 		}
-		if svc.Group != "" {
+		if svc.Group != "" && !svc.DynamicUser {
 			content += fmt.Sprintf("Group=%s\n", svc.Group)
+		}
+		if svc.StateDirectory != "" {
+			content += fmt.Sprintf("StateDirectory=%s\n", svc.StateDirectory)
 		}
 		if svc.WorkingDirectory != "" {
 			content += fmt.Sprintf("WorkingDirectory=%s\n", svc.WorkingDirectory)

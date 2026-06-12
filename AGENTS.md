@@ -90,12 +90,14 @@ For services built from project repos (knockout, headjack, litmus), use **overla
 {
   services.myapp = {
     exec = "${storePath}/bin/myapp serve --port ${port}";
-    user = "dev";
+    user = "dev";                       # or use dynamicUser (see below)
     group = "users";
     workingDirectory = "/home/dev/Projects/myapp";
     after = [ "network.target" ];
     restart = "on-failure";
     restartSec = 5;
+    # dynamicUser = true;               # allocates transient user at runtime
+    # stateDirectory = "myapp";          # creates /var/lib/myapp owned by dynamic user
   };
 
   bins = [ "${storePath}/bin/myapp" ];
@@ -159,6 +161,23 @@ overlays = {
 | `secrets` | Age-encrypted files → decrypted paths passed to `overlay.nix` |
 | `expose` | Optional `fort.cluster.services` equivalent (port, visibility, sso) |
 | `enabled` | Boolean, default `true` |
+
+**Service definition fields** (inside `services.<name>` in overlay.nix):
+
+| Field | Description |
+|-------|-------------|
+| `exec` | ExecStart command |
+| `user` / `group` | Static user/group (mutually exclusive with `dynamicUser`) |
+| `dynamicUser` | `true` to allocate a transient systemd user at runtime |
+| `stateDirectory` | Directory name under `/var/lib/` — auto-created and owned by the service user |
+| `workingDirectory` | Working directory for the process |
+| `environment` | List of `"KEY=value"` strings |
+| `environmentFile` | List of paths to env files |
+| `restart` | Restart policy (default: `on-failure`) |
+| `restartSec` | Seconds between restarts (default: `5`) |
+| `timeoutStopSec` | Seconds before SIGKILL on stop |
+
+Use `dynamicUser = true` + `stateDirectory` for services that don't need a real user — systemd handles user allocation and directory ownership. Prefer this over `user = "nobody"` when the service needs writable state.
 
 **Health check types:** `tcp`, `http`, `exec`, `none` (default). Failed health checks trigger automatic rollback.
 
