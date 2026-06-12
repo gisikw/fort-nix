@@ -28,7 +28,7 @@ rec {
         subdomain = "ko";
         port = 19876;
         visibility = "public";
-        sso = { mode = "identity"; groups = [ "admin" ]; };
+        sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
       };
     };
     headjack = {
