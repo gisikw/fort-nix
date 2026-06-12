@@ -100,6 +100,7 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+          - age1yq3ahanz54nk76wm2kc8vqj2g4yp6378ksnegmnvcamxegypcqcszxsk4h # pettigrew
           - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
           - age1jsj034tf5t96r03w30ar36qkenl0d0sy4dkwkl6p84590afp64rqckv9cl # ursula
