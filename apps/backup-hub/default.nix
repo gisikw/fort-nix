@@ -30,11 +30,13 @@ in
       if [ ! -f "${dataDir}/config" ]; then
         echo "Initializing restic repository..."
         restic -r "${dataDir}" init --password-file ${config.sops.secrets.restic-password.path}
-        chown -R restic:restic "${dataDir}"
         echo "Repository initialized."
       else
         echo "Repository already initialized."
       fi
+      # Ensure all repo files are owned by restic (fixes drift from
+      # services that previously ran as root, e.g. prune)
+      chown -R restic:restic "${dataDir}"
     '';
   };
 
@@ -42,6 +44,7 @@ in
     sopsFile = ../../aspects/backup-client/restic-password.sops;
     format = "binary";
     mode = "0400";
+    owner = "restic";
   };
 
   # Centralized prune — runs on the hub so clients never contend for locks.
@@ -59,6 +62,8 @@ in
     after = [ "restic-rest-server.service" ];
     serviceConfig = {
       Type = "oneshot";
+      User = "restic";
+      Group = "restic";
     };
     path = [ pkgs.restic ];
     script = ''
