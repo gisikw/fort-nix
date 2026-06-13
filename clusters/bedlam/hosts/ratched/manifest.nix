@@ -60,7 +60,7 @@ rec {
       expose = {
         port = 4001;
         visibility = "public";
-        sso = { mode = "identity"; groups = [ "admin" ]; };
+        sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
       };
     };
     cranium = {
