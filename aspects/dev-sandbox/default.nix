@@ -21,7 +21,6 @@ let
   codex = import ../../pkgs/codex { inherit pkgs; };
   gemini-cli = import ../../pkgs/gemini-cli { inherit pkgs; };
   pi-coding-agent = import ../../pkgs/pi-coding-agent { inherit pkgs; };
-  ccd = import ../../pkgs/clauded { inherit pkgs; };
   slidev = import ../../pkgs/slidev { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
@@ -125,31 +124,11 @@ let
 
     # Claude/AI tools
     claude-code
-    (pkgs.writeShellScriptBin "claude-spawn" ''
-      unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-      exec claude "$@"
-    '')
     codex
     cursor-agent
     gemini-cli
     opencode
     pi-coding-agent
-
-    # ccd client — shell script that talks to the ccd daemon via ncat + jq.
-    # The Go binary can't be used as a client because the Go runtime's fd
-    # handling interferes with the Bash tool's output capture mechanism.
-    # String literals in the script body are constructed at runtime to avoid
-    # triggering the Bash tool's command-string pattern matching.
-    (pkgs.writeShellScriptBin "ccd" ''
-      # ccd client — talks to the ccd daemon via nc + jq.
-      # Uses /tmp as cwd to avoid session conflicts with the caller's
-      # project directory (claude detects .claude/ and interferes with
-      # the parent session's output capture).
-      PROMPT="$1"
-      echo '{"args":["-p","'"$PROMPT"'","--no-session-persistence"],"cwd":"/tmp"}' | \
-        ${pkgs.libressl.nc}/bin/nc -U /run/ccd/ccd.sock | \
-        ${pkgs.jq}/bin/jq -r 'select(.type == "stdout" and .data) | .data'
-    '')
     beads
     ticket
 
@@ -599,36 +578,6 @@ in
     script = ''
       export PATH="/run/overlays/bin:$PATH"
       ${homeDir}/Projects/hoard/scripts/ship-digest-podcast.sh
-    '';
-  };
-
-  # Process-isolated CC daemon (ccd)
-  # Runs in its own process tree so spawned processes don't trigger
-  # the Bash tool output suppression.
-  systemd.services.ccd = {
-    description = "CC process-isolated daemon";
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "simple";
-      User = user;
-      Group = "users";
-      Restart = "on-failure";
-      RestartSec = "5s";
-      RuntimeDirectory = "ccd";
-      RuntimeDirectoryMode = "0700";
-    };
-    environment = {
-      HOME = homeDir;
-      FORT_SSH_KEY = agentKeyPath;
-      FORT_ORIGIN = "dev-sandbox";
-    };
-    path = devTools ++ [ pkgs.bash ];
-    script = ''
-      set -a
-      . /var/lib/fort/dev-sandbox/env
-      set +a
-      export PATH="/run/overlays/bin:$PATH"
-      exec ${ccd}/bin/ccd serve
     '';
   };
 
