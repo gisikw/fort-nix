@@ -26,12 +26,14 @@ let
     "nomic-embed-text:latest"
     "gpt-oss:20b"
     "gpt-oss:120b"
+    "gemma4:31b"
     "hf.co/LatitudeGames/Wayfarer-2-12B-GGUF:Q4_K_M"
     "hf.co/mradermacher/Mistral-Nemo-Instruct-2407-abliterated-GGUF:Q4_K_M"
     "hf.co/mradermacher/patricide-12B-Unslop-Mell-GGUF:Q4_K_M"
     "phi:latest"
     "qwen3:30b-a3b-q8_0"
     "qwen3.5:4b"
+    "qwen3.6:27b"
     {
       name = "gemma4-heretic";
       fromGguf = {
