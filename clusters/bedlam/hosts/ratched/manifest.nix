@@ -31,6 +31,16 @@ rec {
         sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
       };
     };
+    questbook = {
+      package = "infra/questbook";
+      config.port = "19877";
+      expose = {
+        subdomain = "qb";
+        port = 19877;
+        visibility = "public";
+        sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
+      };
+    };
     headjack = {
       package = "infra/headjack";
     };

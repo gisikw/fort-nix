@@ -121,6 +121,15 @@ rec {
             };
           };
         };
+        "questbook" = {
+          mirrors = {
+            github = {
+              remote = "github.com/gisikw/questbook";
+              tokenFile = ./github-mirror-token.sops;
+              branches = [ "main" ];
+            };
+          };
+        };
         "gee" = {
           mirrors = {
             github = {
