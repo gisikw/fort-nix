@@ -184,6 +184,7 @@ creation_rules:
           - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
+          - age1x0z78gpnpgkxpzm22wvcvlaylhkj58ds6vvsjqtrrvlrn7cducyqdhv6j6 # azula
           - age1m667p65ssznqrrdnytx0mpvm72g5kqdqmewwg47d20c8xhqsguaqg28f4z # doofenshmirtz
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
           - age1h3zgexmpakalacdwswdfyu0wh6krhdsvez270m9a9wluckt75uqsknzc7j # frankenstein
@@ -231,6 +232,7 @@ creation_rules:
           - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
+          - age1x0z78gpnpgkxpzm22wvcvlaylhkj58ds6vvsjqtrrvlrn7cducyqdhv6j6 # azula
           - age1m667p65ssznqrrdnytx0mpvm72g5kqdqmewwg47d20c8xhqsguaqg28f4z # doofenshmirtz
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
           - age1h3zgexmpakalacdwswdfyu0wh6krhdsvez270m9a9wluckt75uqsknzc7j # frankenstein

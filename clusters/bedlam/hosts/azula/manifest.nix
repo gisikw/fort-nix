@@ -6,7 +6,10 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "observable" ];
+  aspects = [
+    "mesh"
+    "observable"
+  ];
 
   module =
     { config, ... }:
