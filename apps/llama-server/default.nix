@@ -1,19 +1,36 @@
-{ ... }:
+{ accelerator ? "cuda"
+, subdomain ? null
+, serviceName ? "llama"
+, model ? {
+    repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
+    file = "Qwen3.6-27B-Q8_0.gguf";
+    sha256 = "9408dcb356cc061a05c139e5647cbde0698ff980c6a69f7fc214e9989f86cfa8";
+  }
+, extraModels ? [ ]
+, contextSize ? 200000
+, gpuLayers ? 999
+, enableMtp ? true
+, ...
+}:
 { config, pkgs, lib, ... }:
 let
   llama-cpp-cuda = import ../../pkgs/llama-cpp-cuda { inherit pkgs; };
+  llama-cpp-cpu = import ../../pkgs/llama-cpp-cuda { inherit pkgs; cuda = false; };
+  llamaPackage = if accelerator == "cuda" then llama-cpp-cuda else llama-cpp-cpu;
   modelStore = "/var/lib/llama-server/models";
   port = 8012;
 
-  models = [
-    {
-      repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
-      file = "Qwen3.6-27B-Q8_0.gguf";
-      sha256 = "9408dcb356cc061a05c139e5647cbde0698ff980c6a69f7fc214e9989f86cfa8";
-    }
-  ];
+  models = [ model ] ++ extraModels;
 
   modelsJson = builtins.toJSON models;
+
+  optionalFlags = lib.optionals (accelerator == "cuda") [
+    "--gpu-layers ${toString gpuLayers}"
+    "--flash-attn on"
+  ] ++ lib.optionals enableMtp [
+    "--spec-type draft-mtp"
+    "--spec-draft-n-max 3"
+  ];
 
   reconcileScript = pkgs.writeShellScript "llama-model-reconcile" ''
     set -uo pipefail
@@ -94,6 +111,11 @@ let
   '';
 in
 {
+  assertions = [{
+    assertion = builtins.elem accelerator [ "cuda" "cpu" ];
+    message = "llama-server accelerator must be either 'cuda' or 'cpu'";
+  }];
+
   systemd.tmpfiles.rules = [
     "d ${modelStore} 0755 llama-server llama-server -"
   ];
@@ -106,7 +128,7 @@ in
   users.groups.llama-server = { };
 
   systemd.services.llama-server = {
-    description = "llama.cpp inference server (CUDA)";
+    description = "llama.cpp inference server (${accelerator})";
     after = [ "network.target" ];
     # Don't start during activation — model reconciliation starts us
     # after downloading GGUFs. Prevents crash-loop failing the switch.
@@ -117,23 +139,19 @@ in
       User = "llama-server";
       Group = "llama-server";
       StateDirectory = "llama-server";
-      ExecStart = lib.concatStringsSep " " [
-        "${llama-cpp-cuda}/bin/llama-server"
+      ExecStart = lib.concatStringsSep " " ([
+        "${llamaPackage}/bin/llama-server"
         "--host 0.0.0.0"
         "--port ${toString port}"
-        "--model ${modelStore}/${(builtins.head models).file}"
-        "--gpu-layers 999"
+        "--model ${modelStore}/${model.file}"
         "--parallel 1"
-        "--ctx-size 200000"
+        "--ctx-size ${toString contextSize}"
         "--cache-type-k q8_0"
         "--cache-type-v q8_0"
-        "--flash-attn on"
-        "--spec-type draft-mtp"
-        "--spec-draft-n-max 3"
-      ];
+      ] ++ optionalFlags);
       Restart = "on-failure";
       RestartSec = 5;
-
+    } // lib.optionalAttrs (accelerator == "cuda") {
       # GPU access
       SupplementaryGroups = [ "video" "render" ];
     };
@@ -152,7 +170,7 @@ in
     description = "Reconcile GGUF model store for llama-server";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
-    # Don't restart during activation — the 29GB download can't complete
+    # Don't restart during activation — large model downloads can't complete
     # within the switch timeout. Let the timer handle it.
     restartIfChanged = false;
 
@@ -168,8 +186,8 @@ in
   };
 
   fort.cluster.services = [{
-    name = "llama";
-    inherit port;
+    name = serviceName;
+    inherit port subdomain;
     visibility = "public";
     sso = {
       mode = "token";

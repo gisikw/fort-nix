@@ -4,7 +4,21 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  apps = [
+    {
+      name = "llama-server";
+      accelerator = "cpu";
+      subdomain = "llama2";
+      serviceName = "llama2";
+      contextSize = 131072;
+      enableMtp = true;
+      model = {
+        repo = "unsloth/Qwen3.6-35B-A3B-MTP-GGUF";
+        file = "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf";
+        sha256 = "55983c5a75a1ab969824077b3bb3de4146e82a9234072b48ad4e8f92ad3fe9f1";
+      };
+    }
+  ];
 
   aspects = [ "observable" ];
 

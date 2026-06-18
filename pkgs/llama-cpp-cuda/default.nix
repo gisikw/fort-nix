@@ -1,11 +1,12 @@
-{ pkgs }:
+{ pkgs, cuda ? true, cudaArch ? "86" }:
 
 let
   version = "9181";
   cudaPackages = pkgs.cudaPackages_12_8;
+  stdenv = if cuda then cudaPackages.backendStdenv else pkgs.stdenv;
 in
-cudaPackages.backendStdenv.mkDerivation {
-  pname = "llama-cpp-cuda";
+stdenv.mkDerivation {
+  pname = if cuda then "llama-cpp-cuda" else "llama-cpp";
   inherit version;
 
   src = pkgs.fetchFromGitHub {
@@ -19,16 +20,18 @@ cudaPackages.backendStdenv.mkDerivation {
     pkgs.cmake
     pkgs.ninja
     pkgs.pkg-config
+  ] ++ pkgs.lib.optionals cuda [
     cudaPackages.cuda_nvcc
     pkgs.autoAddDriverRunpath
   ];
 
-  buildInputs = with cudaPackages; [
+  buildInputs = [
+    pkgs.curl
+  ] ++ pkgs.lib.optionals cuda (with cudaPackages; [
     cuda_cccl
     cuda_cudart
     libcublas
-    pkgs.curl
-  ];
+  ]);
 
   # LLAMA_BUILD_UI=OFF skips the npm build, leaving dist/ files missing or
   # empty. Replace xxd.cmake with a version that handles both cases.
@@ -61,14 +64,17 @@ XXDEOF
 
   cmakeFlags = [
     "-DGGML_NATIVE=OFF"
-    "-DGGML_CUDA=ON"
-    "-DCMAKE_CUDA_ARCHITECTURES=86"
     "-DLLAMA_BUILD_SERVER=ON"
     "-DLLAMA_BUILD_UI=OFF"
     "-DLLAMA_BUILD_EXAMPLES=OFF"
     "-DLLAMA_BUILD_TESTS=OFF"
     "-DLLAMA_CURL=ON"
     "-DBUILD_SHARED_LIBS=ON"
+  ] ++ pkgs.lib.optionals cuda [
+    "-DGGML_CUDA=ON"
+    "-DCMAKE_CUDA_ARCHITECTURES=${cudaArch}"
+  ] ++ pkgs.lib.optionals (!cuda) [
+    "-DGGML_CUDA=OFF"
   ];
 
   postInstall = ''
@@ -77,7 +83,7 @@ XXDEOF
   '';
 
   meta = with pkgs.lib; {
-    description = "LLM inference in C/C++ (CUDA build for RTX 3090)";
+    description = "LLM inference in C/C++${optionalString cuda " (CUDA build)"}";
     homepage = "https://github.com/ggml-org/llama.cpp";
     license = licenses.mit;
     platforms = [ "x86_64-linux" ];
