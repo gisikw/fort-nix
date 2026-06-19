@@ -129,12 +129,14 @@ EOF
 
     log() { logger -t fort-gitops "$@"; }
 
-    # Clone if missing
+    # Clone if missing. The fort-nix repo is public-read so new hosts can
+    # bootstrap before the control plane has delivered their RO deploy token.
     if [ ! -d "${repoDir}/.git" ]; then
-      if [ ! -s "${tokenFile}" ]; then
-        exit 0  # No token yet, wait for control plane delivery
+      if [ -s "${tokenFile}" ]; then
+        log "Cloning ${repoUrl} with deploy token"
+      else
+        log "Cloning ${repoUrl} anonymously; deploy token not available yet"
       fi
-      log "Cloning ${repoUrl}"
       if ! git -c credential.helper=${gitCredHelper} clone --branch main "${repoUrl}" "${repoDir}"; then
         log "Clone failed, will retry"
         exit 0
@@ -266,11 +268,11 @@ EOF
     log() { /usr/bin/logger -t fort-gitops "$@"; echo "$@"; }
 
     if [ ! -d "${darwinRepoDir}/.git" ]; then
-      if [ ! -s "${tokenFile}" ]; then
-        log "No token yet, waiting for control plane delivery"
-        exit 0
+      if [ -s "${tokenFile}" ]; then
+        log "Cloning ${repoUrl} into ${darwinRepoDir} with deploy token"
+      else
+        log "Cloning ${repoUrl} into ${darwinRepoDir} anonymously; deploy token not available yet"
       fi
-      log "Cloning ${repoUrl} into ${darwinRepoDir}"
       git ${darwinGitOpts} clone --branch main "${repoUrl}" "${darwinRepoDir}"
     fi
 
