@@ -41,6 +41,7 @@ rec {
       config.boot.kernelParams = [ "amdgpu.cwsr_enable=0" ];
 
       config.environment.systemPackages = [
+        (import ../../../../pkgs/claude-code { inherit pkgs; })
         pkgs.ffmpeg
         pkgs.neovim
         pkgs.tailscale
