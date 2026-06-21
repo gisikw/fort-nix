@@ -71,6 +71,9 @@ rec {
         "d /var/lib/tiamat/.local 0700 tiamat tiamat -"
         "d /var/lib/tiamat/.local/state 0700 tiamat tiamat -"
         "d /var/lib/tiamat/.local/share 0700 tiamat tiamat -"
+        # Repair ownership after migrating away from DynamicUser-created
+        # /var/lib/private/tiamat state. Preserve existing file modes.
+        "Z /var/lib/tiamat - tiamat tiamat -"
       ];
 
       config.environment.interactiveShellInit = ''
