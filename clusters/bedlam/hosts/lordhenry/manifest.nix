@@ -40,6 +40,26 @@ rec {
 
   module =
     { config, pkgs, ... }:
+    let
+      tiamatProfilesYaml = pkgs.writeText "tiamat-profiles.yaml" ''
+        prompt_root: /var/lib/tiamat/prompts
+        profiles:
+          exo:
+            default_arm: claude_code
+            arms:
+              claude_code:
+                backend: claude_code
+                provider: anthropic
+                model: claude_code
+                system_prompt:
+                  - id: claude-code-v0-tool-defer-steering
+                    text: |
+                      When a requested action requires tools unavailable inside Claude Code, do not pretend to perform the action.
+                      State the required tool/action clearly so Tiamat/Cranium can route or fulfill it outside Claude Code.
+                  - id: exo-opus-behavioral
+                    file: exo-opus.md
+      '';
+    in
     {
       # Disable Compute Wave Store and Resume — MES firmware bug on gfx1151
       # causes GPU hangs under ROCm workloads (ROCm #5590)
@@ -66,6 +86,7 @@ rec {
 
       config.systemd.tmpfiles.rules = [
         "d /var/lib/tiamat 0750 tiamat tiamat -"
+        "C+ /var/lib/tiamat/profiles.yaml 0440 tiamat tiamat - ${tiamatProfilesYaml}"
         "d /var/lib/tiamat/prompts 0700 tiamat tiamat -"
         "d /var/lib/tiamat/claude 0700 tiamat tiamat -"
         "d /var/lib/tiamat/.cache 0700 tiamat tiamat -"
