@@ -18,7 +18,12 @@ rec {
   overlays = {
     tiamat = {
       package = "infra/tiamat";
-      config.port = "8900";
+      config = {
+        port = "8900";
+        user = "tiamat";
+        group = "tiamat";
+        home = "/var/lib/tiamat";
+      };
       expose = {
         port = 8900;
         visibility = "public";
@@ -48,6 +53,35 @@ rec {
         pkgs.tmux
         pkgs.rsync
       ];
+
+      config.users.groups.tiamat = { };
+      config.users.users.tiamat = {
+        isSystemUser = true;
+        group = "tiamat";
+        description = "Tiamat service user";
+        home = "/var/lib/tiamat";
+        createHome = true;
+        shell = pkgs.bashInteractive;
+      };
+
+      config.systemd.tmpfiles.rules = [
+        "d /var/lib/tiamat 0750 tiamat tiamat -"
+        "d /var/lib/tiamat/claude 0700 tiamat tiamat -"
+        "d /var/lib/tiamat/.cache 0700 tiamat tiamat -"
+        "d /var/lib/tiamat/.local 0700 tiamat tiamat -"
+        "d /var/lib/tiamat/.local/state 0700 tiamat tiamat -"
+        "d /var/lib/tiamat/.local/share 0700 tiamat tiamat -"
+      ];
+
+      config.environment.interactiveShellInit = ''
+        if [ "''${USER:-}" = "tiamat" ]; then
+          export HOME=/var/lib/tiamat
+          export CLAUDE_CONFIG_DIR=/var/lib/tiamat/claude
+          export XDG_CACHE_HOME=/var/lib/tiamat/.cache
+          export XDG_STATE_HOME=/var/lib/tiamat/.local/state
+          export XDG_DATA_HOME=/var/lib/tiamat/.local/share
+        fi
+      '';
 
       config.fort.host = { inherit roles apps aspects; };
     };
