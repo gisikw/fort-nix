@@ -85,7 +85,6 @@ rec {
 
       config.systemd.tmpfiles.rules = [
         "d /var/lib/tiamat 0750 tiamat tiamat -"
-        "C+ /var/lib/tiamat/profiles.yaml 0440 tiamat tiamat - ${tiamatProfilesYaml}"
         "d /var/lib/tiamat/prompts 0700 tiamat tiamat -"
         "d /var/lib/tiamat/claude 0700 tiamat tiamat -"
         "d /var/lib/tiamat/.cache 0700 tiamat tiamat -"
@@ -104,6 +103,16 @@ rec {
         owner = "tiamat";
         group = "tiamat";
         mode = "0400";
+      };
+
+      config.systemd.services.tiamat-profiles-provision = {
+        description = "Provision Tiamat profile configuration";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "overlay-tiamat-tiamat.service" ];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          ${pkgs.coreutils}/bin/install -D -o tiamat -g tiamat -m 0440 ${tiamatProfilesYaml} /var/lib/tiamat/profiles.yaml
+        '';
       };
 
       config.environment.interactiveShellInit = ''
