@@ -66,6 +66,7 @@ rec {
 
       config.systemd.tmpfiles.rules = [
         "d /var/lib/tiamat 0750 tiamat tiamat -"
+        "d /var/lib/tiamat/prompts 0700 tiamat tiamat -"
         "d /var/lib/tiamat/claude 0700 tiamat tiamat -"
         "d /var/lib/tiamat/.cache 0700 tiamat tiamat -"
         "d /var/lib/tiamat/.local 0700 tiamat tiamat -"
@@ -75,6 +76,15 @@ rec {
         # /var/lib/private/tiamat state. Preserve existing file modes.
         "Z /var/lib/tiamat - tiamat tiamat -"
       ];
+
+      config.sops.secrets.tiamat-exo-opus-prompt = {
+        sopsFile = ./exo-opus-prompt.sops;
+        format = "binary";
+        path = "/var/lib/tiamat/prompts/exo-opus.md";
+        owner = "tiamat";
+        group = "tiamat";
+        mode = "0400";
+      };
 
       config.environment.interactiveShellInit = ''
         if [ "''${USER:-}" = "tiamat" ]; then
