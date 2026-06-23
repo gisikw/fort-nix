@@ -57,10 +57,14 @@ let
         proxy_set_header Upgrade    \$http_upgrade;
         proxy_set_header Connection \$connection_upgrade;
 
-        proxy_ssl_verify on;
+        # The public ingress reaches Fort services over the Headscale mesh.  Do
+        # not couple edge availability to the beacon's system CA bundle being
+        # able to validate whatever public ACME chain an internal host is
+        # currently serving; a CA rollover can otherwise turn healthy internal
+        # services into public 502s.
+        proxy_ssl_verify off;
         proxy_ssl_server_name on;
         proxy_ssl_name \$host;
-        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
       }
     }
     "
