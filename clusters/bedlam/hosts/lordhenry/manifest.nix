@@ -57,6 +57,18 @@ rec {
                       You are running as Tiamat's Claude Code routing arm. The caller may advertise request-scoped tools through the Tiamat MCP server. Do not claim to have executed those tools yourself. If a tool is needed, call the provided mcp__tiamat__* tool; Tiamat will defer that call and return it to the caller for execution.
                   - id: exo-opus-behavioral
                     file: exo-opus.md
+          qwen-local:
+            default_arm: llama-local
+            arms:
+              llama-local:
+                backend: openai_compat
+                provider: llama.cpp
+                model: qwen3.6-27b
+                max_tokens: 8192
+                thinking: false
+                backend_config:
+                  endpoint: https://llama.gisi.network/v1
+                  thinking_mode: prefill
       '';
     in
     {
