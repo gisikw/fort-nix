@@ -255,6 +255,24 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+  - path_regex: clusters/bedlam/hosts/lordhenry/claude-code-tool-defer-prompt\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age13g9zncylyhf46r90fd8qkhw6lhnkp43qnmkaxy4rtsw8xsd9xudsd8uhzx # lordhenry
+  - path_regex: clusters/bedlam/hosts/lordhenry/exo-gpt-prompt\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age13g9zncylyhf46r90fd8qkhw6lhnkp43qnmkaxy4rtsw8xsd9xudsd8uhzx # lordhenry
   - path_regex: clusters/bedlam/hosts/lordhenry/exo-opus-prompt\.sops$
     key_groups:
       - age:

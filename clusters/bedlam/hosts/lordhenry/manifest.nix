@@ -59,10 +59,66 @@ rec {
                 model: claude_code
                 system_prompt:
                   - id: claude-code-v0-tool-defer-steering
-                    text: |
-                      You are running as Tiamat's Claude Code routing arm. The caller may advertise request-scoped tools through the Tiamat MCP server. Do not claim to have executed those tools yourself. If a tool is needed, call the provided mcp__tiamat__* tool; Tiamat will defer that call and return it to the caller for execution.
+                    file: claude-code-v0-tool-defer.md
                   - id: exo-opus-behavioral
                     file: exo-opus.md
+
+          exo-claude-code:
+            default_arm: claude_code
+            arms:
+              claude_code:
+                backend: claude_code
+                provider: anthropic
+                model: claude_code
+                system_prompt:
+                  - id: claude-code-v0-tool-defer-steering
+                    file: claude-code-v0-tool-defer.md
+                  - id: exo-opus-behavioral
+                    file: exo-opus.md
+
+          exo-opus-api:
+            default_arm: opus-api
+            arms:
+              opus-api:
+                backend: anthropic
+                provider: anthropic
+                model: claude-opus-4-6
+                max_tokens: 8192
+                system_prompt:
+                  - id: exo-opus-behavioral
+                    file: exo-opus.md
+                backend_config:
+                  api_key_file: /run/secrets/tiamat-anthropic-api-key
+
+          exo-gpt:
+            default_arm: gpt-oauth
+            arms:
+              gpt-oauth:
+                backend: openai_responses
+                provider: openai
+                model: gpt-5-codex
+                max_tokens: 8192
+                system_prompt:
+                  - id: exo-gpt-behavioral
+                    file: exo-gpt.md
+                backend_config:
+                  endpoint: https://chatgpt.com/backend-api/codex
+                  auth: oauth
+                  oauth_token_file: /var/lib/tiamat/openai_oauth.json
+
+          exo-qwen-local:
+            default_arm: llama-local
+            arms:
+              llama-local:
+                backend: openai_compat
+                provider: llama.cpp
+                model: qwen3.6-27b
+                max_tokens: 8192
+                thinking: false
+                backend_config:
+                  endpoint: https://llama.gisi.network/v1
+                  thinking_mode: prefill
+
           qwen-local:
             default_arm: llama-local
             arms:
@@ -123,6 +179,24 @@ rec {
         sopsFile = ./exo-opus-prompt.sops;
         format = "binary";
         path = "/var/lib/tiamat/prompts/exo-opus.md";
+        owner = "tiamat";
+        group = "tiamat";
+        mode = "0400";
+      };
+
+      config.sops.secrets.tiamat-exo-gpt-prompt = {
+        sopsFile = ./exo-gpt-prompt.sops;
+        format = "binary";
+        path = "/var/lib/tiamat/prompts/exo-gpt.md";
+        owner = "tiamat";
+        group = "tiamat";
+        mode = "0400";
+      };
+
+      config.sops.secrets.tiamat-claude-code-tool-defer-prompt = {
+        sopsFile = ./claude-code-tool-defer-prompt.sops;
+        format = "binary";
+        path = "/var/lib/tiamat/prompts/claude-code-v0-tool-defer.md";
         owner = "tiamat";
         group = "tiamat";
         mode = "0400";
