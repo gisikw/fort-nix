@@ -57,6 +57,7 @@ rec {
                 backend: claude_code
                 provider: anthropic
                 model: claude_code
+                supports_vision: true
                 system_prompt:
                   - id: claude-code-v0-tool-defer-steering
                     file: claude-code-v0-tool-defer.md
@@ -70,6 +71,7 @@ rec {
                 backend: claude_code
                 provider: anthropic
                 model: claude_code
+                supports_vision: true
                 system_prompt:
                   - id: claude-code-v0-tool-defer-steering
                     file: claude-code-v0-tool-defer.md
@@ -83,6 +85,7 @@ rec {
                 backend: anthropic
                 provider: anthropic
                 model: claude-opus-4-6
+                supports_vision: true
                 max_tokens: 8192
                 system_prompt:
                   - id: exo-opus-behavioral
@@ -97,6 +100,7 @@ rec {
                 backend: openai_responses
                 provider: openai
                 model: gpt-5.5
+                supports_vision: true
                 max_tokens: 8192
                 system_prompt:
                   - id: exo-gpt-behavioral
@@ -113,6 +117,7 @@ rec {
                 backend: openai_compat
                 provider: llama.cpp
                 model: qwen3.6-27b
+                supports_vision: true
                 max_tokens: 8192
                 thinking: false
                 backend_config:
@@ -126,6 +131,7 @@ rec {
                 backend: openai_compat
                 provider: llama.cpp
                 model: qwen3.6-27b
+                supports_vision: true
                 max_tokens: 8192
                 thinking: false
                 backend_config:
