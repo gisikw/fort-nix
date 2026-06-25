@@ -96,7 +96,7 @@ rec {
               gpt-oauth:
                 backend: openai_responses
                 provider: openai
-                model: gpt-5-codex
+                model: gpt-5.5
                 max_tokens: 8192
                 system_prompt:
                   - id: exo-gpt-behavioral
