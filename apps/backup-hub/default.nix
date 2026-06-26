@@ -67,9 +67,15 @@ in
     };
     path = [ pkgs.restic ];
     script = ''
+      echo "Removing stale restic locks before prune..."
+      restic -r "${dataDir}" \
+        --password-file ${config.sops.secrets.restic-password.path} \
+        unlock
+
       restic -r "${dataDir}" \
         --password-file ${config.sops.secrets.restic-password.path} \
         forget \
+        --retry-lock 30m \
         --keep-daily 7 \
         --keep-weekly 4 \
         --keep-monthly 6 \
