@@ -6,6 +6,7 @@
     file = "Qwen3.6-27B-Q8_0.gguf";
     sha256 = "9408dcb356cc061a05c139e5647cbde0698ff980c6a69f7fc214e9989f86cfa8";
   }
+, mmproj ? null
 , extraModels ? [ ]
 , contextSize ? 200000
 , gpuLayers ? 999
@@ -21,8 +22,9 @@ let
   port = 8012;
 
   models = [ model ] ++ extraModels;
+  artifacts = models ++ lib.optional (mmproj != null) mmproj;
 
-  modelsJson = builtins.toJSON models;
+  artifactsJson = builtins.toJSON artifacts;
 
   optionalFlags = lib.optionals (accelerator == "cuda") [
     "--gpu-layers ${toString gpuLayers}"
@@ -37,13 +39,13 @@ let
 
     MODEL_STORE="${modelStore}"
 
-    model_count=$(echo '${modelsJson}' | ${pkgs.jq}/bin/jq 'length')
+    artifact_count=$(echo '${artifactsJson}' | ${pkgs.jq}/bin/jq 'length')
     failed=0
 
-    for i in $(seq 0 $((model_count - 1))); do
-      repo=$(echo '${modelsJson}' | ${pkgs.jq}/bin/jq -r ".[$i].repo")
-      file=$(echo '${modelsJson}' | ${pkgs.jq}/bin/jq -r ".[$i].file")
-      expected_sha256=$(echo '${modelsJson}' | ${pkgs.jq}/bin/jq -r ".[$i].sha256")
+    for i in $(seq 0 $((artifact_count - 1))); do
+      repo=$(echo '${artifactsJson}' | ${pkgs.jq}/bin/jq -r ".[$i].repo")
+      file=$(echo '${artifactsJson}' | ${pkgs.jq}/bin/jq -r ".[$i].file")
+      expected_sha256=$(echo '${artifactsJson}' | ${pkgs.jq}/bin/jq -r ".[$i].sha256 // \"\"")
 
       target="$MODEL_STORE/$file"
       partial="$MODEL_STORE/$file.downloading"
@@ -103,11 +105,11 @@ let
     done
 
     if [ "$failed" -gt 0 ]; then
-      echo "$failed model(s) failed. Will retry next cycle."
+      echo "$failed artifact(s) failed. Will retry next cycle."
       exit 1
     fi
 
-    echo "Model reconciliation complete"
+    echo "Artifact reconciliation complete"
   '';
 in
 {
@@ -148,7 +150,7 @@ in
         "--ctx-size ${toString contextSize}"
         "--cache-type-k q8_0"
         "--cache-type-v q8_0"
-      ] ++ optionalFlags);
+      ] ++ lib.optional (mmproj != null) "--mmproj ${modelStore}/${mmproj.file}" ++ optionalFlags);
       Restart = "on-failure";
       RestartSec = 5;
     } // lib.optionalAttrs (accelerator == "cuda") {
@@ -157,7 +159,7 @@ in
     };
   };
 
-  # Model reconciliation — download declared GGUFs to the model store
+  # Artifact reconciliation — download declared GGUFs to the model store
   systemd.timers.llama-server-models = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
@@ -179,7 +181,7 @@ in
       User = "llama-server";
       Group = "llama-server";
       ExecStart = reconcileScript;
-      # Restart llama-server after successful model download (runs as root).
+      # Restart llama-server after successful artifact download (runs as root).
       # --no-block avoids deadlock if llama-server has ordering on this unit.
       ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart --no-block llama-server";
     };
