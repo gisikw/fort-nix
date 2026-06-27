@@ -284,7 +284,7 @@ rec {
           };
         };
         "exocortex" = {};
-        "gizzard" = {};
+        "kobold" = {};
         "hoard" = {};
         "phylactery" = {};
         "tiamat" = {};
