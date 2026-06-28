@@ -53,6 +53,78 @@ let
   hostsJson = builtins.listToAttrs (hostEntries ++ principalEntries);
 
   fcgiSocket = "/run/fort/fcgi.sock";
+  sanitizeJournalOutput = pkgs.writeText "sanitize-journal-output.py" ''
+    import json
+    import sys
+
+    path, lines_requested, line_limit, max_chars, max_line_chars, line_limit_clamped, char_limit_clamped, max_line_chars_clamped = sys.argv[1:]
+    lines_requested = int(lines_requested)
+    line_limit = int(line_limit)
+    max_chars = int(max_chars)
+    max_line_chars = int(max_line_chars)
+    line_limit_clamped = line_limit_clamped == "true"
+    char_limit_clamped = char_limit_clamped == "true"
+    max_line_chars_clamped = max_line_chars_clamped == "true"
+
+    output_lines = []
+    chars_returned = 0
+    lines_seen = 0
+    long_lines_truncated = 0
+    total_budget_truncated = False
+
+    def append_marker_within_budget(text, marker, limit):
+        if limit <= 0:
+            return ""
+        if len(text) + len(marker) <= limit:
+            return text + marker
+        if len(marker) >= limit:
+            return marker[:limit]
+        return text[:limit - len(marker)] + marker
+
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for raw in f:
+            lines_seen += 1
+            line = raw[:-1] if raw.endswith("\n") else raw
+            if len(line) > max_line_chars:
+                omitted = len(line) - max_line_chars
+                marker = f"...[truncated line: omitted {omitted} chars]"
+                line = append_marker_within_budget(line[:max_line_chars], marker, max_line_chars + len(marker))
+                long_lines_truncated += 1
+
+            separator_len = 1 if output_lines else 0
+            remaining = max_chars - chars_returned - separator_len
+            if remaining <= 0:
+                total_budget_truncated = True
+                break
+            if len(line) > remaining:
+                marker = f"...[truncated output: char budget {max_chars} reached]"
+                output_lines.append(append_marker_within_budget(line, marker, remaining))
+                total_budget_truncated = True
+                break
+
+            output_lines.append(line)
+            chars_returned += separator_len + len(line)
+
+    output = "\n".join(output_lines)
+    truncated = total_budget_truncated or long_lines_truncated > 0 or lines_seen > len(output_lines)
+    response = {
+        "output": output,
+        "lines_requested": lines_requested,
+        "line_limit": line_limit,
+        "lines_returned": len(output_lines),
+        "chars_returned": len(output),
+        "char_limit": max_chars,
+        "max_line_chars": max_line_chars,
+        "truncated": truncated,
+        "line_limit_clamped": line_limit_clamped,
+        "char_limit_clamped": char_limit_clamped,
+        "max_line_chars_clamped": max_line_chars_clamped,
+        "long_lines_truncated": long_lines_truncated,
+    }
+    if truncated or line_limit_clamped or char_limit_clamped or max_line_chars_clamped:
+        response["continuation"] = "Request fewer lines, narrower since/unit/identifier filters, or larger max_chars/max_line_chars if you need omitted content. Limits are clamped to protect model context."
+    print(json.dumps(response))
+  '';
 
   # Mandatory capability handlers (always present on all hosts)
   mandatoryHandlers = {
@@ -143,12 +215,14 @@ let
 
       input=$(${pkgs.coreutils}/bin/cat)
       if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
-        echo '{"error": "invalid request: expected JSON body, e.g. {\"unit\":\"nginx\",\"lines\":50}"}'
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"unit\":\"nginx\",\"lines\":40}"}'
         exit 1
       fi
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
       identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
-      lines=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 100')
+      lines_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 40')
+      max_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_chars // 20000')
+      max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 2000')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
 
       if [ -z "$unit" ] && [ -z "$identifier" ]; then
@@ -158,6 +232,37 @@ let
       if [ -n "$unit" ] && [ -n "$identifier" ]; then
         echo '{"error": "unit and identifier are mutually exclusive"}'
         exit 1
+      fi
+      for value_name in lines max_chars max_line_chars; do
+        value_var="''${value_name}_raw"
+        value="''${!value_var}"
+        if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+          ${pkgs.jq}/bin/jq -n --arg field "$value_name" --arg value "$value" '{"error": "invalid numeric parameter", "field": $field, "value": $value}'
+          exit 1
+        fi
+      done
+
+      lines_requested="$lines_raw"
+      line_limit_clamped=false
+      char_limit_clamped=false
+      max_line_chars_clamped=false
+      if [ "$lines_raw" -gt 100 ]; then
+        lines=100
+        line_limit_clamped=true
+      else
+        lines="$lines_raw"
+      fi
+      if [ "$max_chars_raw" -gt 100000 ]; then
+        max_chars=100000
+        char_limit_clamped=true
+      else
+        max_chars="$max_chars_raw"
+      fi
+      if [ "$max_line_chars_raw" -gt 10000 ]; then
+        max_line_chars=10000
+        max_line_chars_clamped=true
+      else
+        max_line_chars="$max_line_chars_raw"
       fi
 
       # Build macOS log show command
@@ -173,10 +278,13 @@ let
         args=("--predicate" "$predicate" "--style" "compact" "--start" "$since")
       fi
 
-      if output=$(/usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines"); then
-        ${pkgs.jq}/bin/jq -n --arg output "$output" '{"output": $output}'
+      raw_file=$(${pkgs.coreutils}/bin/mktemp)
+      trap 'rm -f "$raw_file"' EXIT
+      if /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file"; then
+        ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
       else
-        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "log show failed", "details": $error}'
+        output=$(${pkgs.coreutils}/bin/head -c 20000 "$raw_file")
+        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "log show failed", "details": $error, "truncated": true, "char_limit": 20000}'
         exit 1
       fi
     '' else ''
@@ -184,12 +292,14 @@ let
 
       input=$(${pkgs.coreutils}/bin/cat)
       if ! echo "$input" | ${pkgs.jq}/bin/jq empty 2>/dev/null; then
-        echo '{"error": "invalid request: expected JSON body, e.g. {\"unit\":\"nginx\",\"lines\":50}"}'
+        echo '{"error": "invalid request: expected JSON body, e.g. {\"unit\":\"nginx\",\"lines\":40}"}'
         exit 1
       fi
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
       identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
-      lines=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 100')
+      lines_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 40')
+      max_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_chars // 20000')
+      max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 2000')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
 
       if [ -z "$unit" ] && [ -z "$identifier" ]; then
@@ -199,6 +309,37 @@ let
       if [ -n "$unit" ] && [ -n "$identifier" ]; then
         echo '{"error": "unit and identifier are mutually exclusive"}'
         exit 1
+      fi
+      for value_name in lines max_chars max_line_chars; do
+        value_var="''${value_name}_raw"
+        value="''${!value_var}"
+        if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
+          ${pkgs.jq}/bin/jq -n --arg field "$value_name" --arg value "$value" '{"error": "invalid numeric parameter", "field": $field, "value": $value}'
+          exit 1
+        fi
+      done
+
+      lines_requested="$lines_raw"
+      line_limit_clamped=false
+      char_limit_clamped=false
+      max_line_chars_clamped=false
+      if [ "$lines_raw" -gt 100 ]; then
+        lines=100
+        line_limit_clamped=true
+      else
+        lines="$lines_raw"
+      fi
+      if [ "$max_chars_raw" -gt 100000 ]; then
+        max_chars=100000
+        char_limit_clamped=true
+      else
+        max_chars="$max_chars_raw"
+      fi
+      if [ "$max_line_chars_raw" -gt 10000 ]; then
+        max_line_chars=10000
+        max_line_chars_clamped=true
+      else
+        max_line_chars="$max_line_chars_raw"
       fi
 
       # Build journalctl command
@@ -212,10 +353,13 @@ let
         args+=("--since" "$since")
       fi
 
-      if output=$(${pkgs.systemd}/bin/journalctl "''${args[@]}" 2>&1); then
-        ${pkgs.jq}/bin/jq -n --arg output "$output" '{"output": $output}'
+      raw_file=$(${pkgs.coreutils}/bin/mktemp)
+      trap 'rm -f "$raw_file"' EXIT
+      if ${pkgs.systemd}/bin/journalctl "''${args[@]}" > "$raw_file" 2>&1; then
+        ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
       else
-        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "journalctl failed", "details": $error}'
+        output=$(${pkgs.coreutils}/bin/head -c 20000 "$raw_file")
+        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "journalctl failed", "details": $error, "truncated": true, "char_limit": 20000}'
         exit 1
       fi
     '');
