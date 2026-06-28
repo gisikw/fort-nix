@@ -66,30 +66,34 @@ let
     char_limit_clamped = char_limit_clamped == "true"
     max_line_chars_clamped = max_line_chars_clamped == "true"
 
+    HEAD_CHARS = 300
+    TAIL_CHARS = 200
+
     output_lines = []
     chars_returned = 0
     lines_seen = 0
     long_lines_truncated = 0
     total_budget_truncated = False
 
-    def append_marker_within_budget(text, marker, limit):
-        if limit <= 0:
-            return ""
-        if len(text) + len(marker) <= limit:
-            return text + marker
-        if len(marker) >= limit:
-            return marker[:limit]
-        return text[:limit - len(marker)] + marker
+    def truncate_long_line(line, limit):
+        if len(line) <= limit:
+            return line, False
+        omitted = len(line) - HEAD_CHARS - TAIL_CHARS
+        if omitted > 0 and HEAD_CHARS + TAIL_CHARS < len(line):
+            marker = f"...[omitted {omitted} chars]..."
+            truncated = line[:HEAD_CHARS] + marker + line[-TAIL_CHARS:]
+        else:
+            truncated = line[:limit] + f"...[truncated: omitted {len(line) - limit} chars]"
+        return truncated, True
 
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for raw in f:
             lines_seen += 1
             line = raw[:-1] if raw.endswith("\n") else raw
             if len(line) > max_line_chars:
-                omitted = len(line) - max_line_chars
-                marker = f"...[truncated line: omitted {omitted} chars]"
-                line = append_marker_within_budget(line[:max_line_chars], marker, max_line_chars + len(marker))
-                long_lines_truncated += 1
+                line, was_truncated = truncate_long_line(line, max_line_chars)
+                if was_truncated:
+                    long_lines_truncated += 1
 
             separator_len = 1 if output_lines else 0
             remaining = max_chars - chars_returned - separator_len
@@ -97,8 +101,7 @@ let
                 total_budget_truncated = True
                 break
             if len(line) > remaining:
-                marker = f"...[truncated output: char budget {max_chars} reached]"
-                output_lines.append(append_marker_within_budget(line, marker, remaining))
+                output_lines.append(line[:remaining] + f"...[char budget {max_chars} reached]")
                 total_budget_truncated = True
                 break
 
@@ -122,7 +125,7 @@ let
         "long_lines_truncated": long_lines_truncated,
     }
     if truncated or line_limit_clamped or char_limit_clamped or max_line_chars_clamped:
-        response["continuation"] = "Request fewer lines, narrower since/unit/identifier filters, or larger max_chars/max_line_chars if you need omitted content. Limits are clamped to protect model context."
+        response["continuation"] = "Request fewer lines, narrower since/unit/identifier filters, add grep to filter, or pass larger max_chars/max_line_chars if you need omitted content."
     print(json.dumps(response))
   '';
 
@@ -221,8 +224,9 @@ let
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
       identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
       lines_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 40')
-      max_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_chars // 20000')
-      max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 2000')
+      max_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_chars // 8000')
+      max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 500')
+      grep_pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.grep // empty')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
 
       if [ -z "$unit" ] && [ -z "$identifier" ]; then
@@ -280,13 +284,12 @@ let
 
       raw_file=$(${pkgs.coreutils}/bin/mktemp)
       trap 'rm -f "$raw_file"' EXIT
-      if /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file"; then
-        ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
+      if [ -n "$grep_pattern" ]; then
+        /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" | ${pkgs.gnugrep}/bin/grep -E -i -- "$grep_pattern" > "$raw_file" || true
       else
-        output=$(${pkgs.coreutils}/bin/head -c 20000 "$raw_file")
-        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "log show failed", "details": $error, "truncated": true, "char_limit": 20000}'
-        exit 1
+        /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file" || true
       fi
+      ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
     '' else ''
       set -euo pipefail
 
@@ -298,8 +301,9 @@ let
       unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
       identifier=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.identifier // empty')
       lines_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.lines // 40')
-      max_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_chars // 20000')
-      max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 2000')
+      max_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_chars // 8000')
+      max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 500')
+      grep_pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.grep // empty')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
 
       if [ -z "$unit" ] && [ -z "$identifier" ]; then
@@ -352,16 +356,14 @@ let
       if [ -n "$since" ]; then
         args+=("--since" "$since")
       fi
+      if [ -n "$grep_pattern" ]; then
+        args+=("--grep" "$grep_pattern")
+      fi
 
       raw_file=$(${pkgs.coreutils}/bin/mktemp)
       trap 'rm -f "$raw_file"' EXIT
-      if ${pkgs.systemd}/bin/journalctl "''${args[@]}" > "$raw_file" 2>&1; then
-        ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
-      else
-        output=$(${pkgs.coreutils}/bin/head -c 20000 "$raw_file")
-        ${pkgs.jq}/bin/jq -n --arg error "$output" '{"error": "journalctl failed", "details": $error, "truncated": true, "char_limit": 20000}'
-        exit 1
-      fi
+      ${pkgs.systemd}/bin/journalctl "''${args[@]}" > "$raw_file" 2>&1 || true
+      ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
     '');
 
     # Service management operations (debug capability)
