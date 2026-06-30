@@ -137,6 +137,18 @@ rec {
                 backend_config:
                   endpoint: https://llama.gisi.network/v1
                   thinking_mode: prefill
+
+          exo-glm:
+            default_arm: opencode
+            arms:
+              opencode:
+                backend: openai_compat
+                provider: opencode
+                model: opencode-go/glm-5.2
+                max_tokens: 8192
+                backend_config:
+                  endpoint: https://opencode.ai/zen/go/v1
+                  api_key_file: /run/secrets/tiamat-opencode-api-key
       '';
       tiamatAnthropicSecretDropin = pkgs.writeText "tiamat-anthropic-secret-file.conf" ''
         [Service]
@@ -210,6 +222,14 @@ rec {
 
       config.sops.secrets.tiamat-anthropic-api-key = {
         sopsFile = ./tiamat-anthropic-api-key.sops;
+        format = "binary";
+        owner = "tiamat";
+        group = "tiamat";
+        mode = "0400";
+      };
+
+      config.sops.secrets.tiamat-opencode-api-key = {
+        sopsFile = ./tiamat-opencode-api-key.sops;
         format = "binary";
         owner = "tiamat";
         group = "tiamat";
