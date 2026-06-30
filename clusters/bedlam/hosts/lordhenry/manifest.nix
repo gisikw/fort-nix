@@ -144,7 +144,7 @@ rec {
               opencode:
                 backend: openai_compat
                 provider: opencode
-                model: opencode-go/glm-5.2
+                model: glm-5.2
                 max_tokens: 8192
                 backend_config:
                   endpoint: https://opencode.ai/zen/go/v1
