@@ -1,44 +1,39 @@
 { pkgs }:
 
-pkgs.buildNpmPackage rec {
+pkgs.stdenvNoCC.mkDerivation rec {
   pname = "claude-code";
-  version = "2.1.89";
+  version = "2.1.118";
 
   src = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-${version}.tgz";
-    hash = "sha256-FoTm6KDr+8Dzhk4ibZUlU1QLPFdPm/OriUUWqAaFswg=";
+    url = "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-${version}.tgz";
+    hash = "sha256-kxdVAdImUstZoHQMrcFyouXNmtxQj/xOmei9wQuWqn0=";
   };
 
-  npmDepsHash = "sha256-NI4F5bq0lEuMjLUdkGrml2aOzGbGkdyUckgfeVFEe8o=";
+  nativeBuildInputs = [
+    pkgs.makeWrapper
+    pkgs.patchelf
+  ];
 
-  postPatch = ''
-    cp ${./package-lock.json} package-lock.json
-  '';
+  dontConfigure = true;
+  dontBuild = true;
 
-  dontNpmBuild = true;
+  installPhase = ''
+    runHook preInstall
 
-  env.AUTHORIZED = "1";
-
-  # Disable auto-update and unset DEV (causes WebSocket crash).
-  # Patch only Claude Code's deferred-tool auto-resume prompt. The generic
-  # interrupted-turn prompt uses `content:`; the deferred-tool path uses this
-  # `value:` shape after logging "Auto-resuming deferred tool".
-  postInstall = ''
-    substituteInPlace $out/lib/node_modules/@anthropic-ai/claude-code/cli.js \
-      --replace-fail \
-        'value:"Continue from where you left off.",uuid:zP(),isMeta:!0' \
-        'value:"<tool-result>Tool call complete. Results are above.</tool-result>",uuid:zP(),isMeta:!0'
-
+    install -Dm755 claude $out/bin/claude
+    patchelf --set-interpreter ${pkgs.stdenv.cc.bintools.dynamicLinker} $out/bin/claude
     wrapProgram $out/bin/claude \
       --set DISABLE_AUTOUPDATER 1 \
       --unset DEV
+
+    runHook postInstall
   '';
 
   meta = with pkgs.lib; {
     description = "Agentic coding tool that lives in your terminal";
     homepage = "https://github.com/anthropics/claude-code";
     license = licenses.unfree;
-    platforms = platforms.linux;
+    platforms = [ "x86_64-linux" ];
     mainProgram = "claude";
   };
 }
