@@ -78,6 +78,21 @@ rec {
                   - id: exo-opus-behavioral
                     file: exo-opus.md
 
+          exo-fable:
+            default_arm: claude_code_fable
+            arms:
+              claude_code_fable:
+                backend: claude_code
+                provider: anthropic
+                model: claude-fable-5
+                supports_vision: true
+                system_prompt:
+                  - id: claude-code-v0-tool-defer-steering
+                    file: claude-code-v0-tool-defer.md
+                  - id: fable-arm-steering
+                    text: |
+                      You are running as Tiamat's Claude Code Fable routing arm. The selected Claude Code model is Claude Fable 5.
+
           exo-opus-api:
             default_arm: opus-api
             arms:
@@ -145,6 +160,10 @@ rec {
                 backend: openai_compat
                 provider: opencode
                 model: glm-5.2
+                system_prompt:
+                  - id: glm-arm-steering
+                    text: |
+                      You are running as Tiamat's GLM routing arm. The selected model is GLM 5.2.
                 max_tokens: 8192
                 backend_config:
                   endpoint: https://opencode.ai/zen/go/v1
