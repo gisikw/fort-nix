@@ -56,7 +56,7 @@ rec {
               claude_code:
                 backend: claude_code
                 provider: anthropic
-                model: claude_code
+                model: claude-opus-4-6
                 supports_vision: true
                 system_prompt:
                   - id: claude-code-v0-tool-defer-steering
@@ -70,7 +70,7 @@ rec {
               claude_code:
                 backend: claude_code
                 provider: anthropic
-                model: claude_code
+                model: claude-opus-4-6
                 supports_vision: true
                 system_prompt:
                   - id: claude-code-v0-tool-defer-steering
