@@ -91,7 +91,7 @@ rec {
                     file: claude-code-v0-tool-defer.md
                   - id: fable-arm-steering
                     text: |
-                      You are running as Tiamat's Claude Code Fable routing arm. The selected Claude Code model is Claude Fable 5.
+                      You are running as Tiamat's Claude Code Fable routing arm. The selected Claude Code model is Claude Fable 5. Your training cutoff is January 2026.
 
           exo-opus-api:
             default_arm: opus-api
