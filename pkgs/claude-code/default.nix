@@ -2,11 +2,11 @@
 
 pkgs.stdenvNoCC.mkDerivation rec {
   pname = "claude-code";
-  version = "2.1.118";
+  version = "2.1.197";
 
   src = pkgs.fetchzip {
     url = "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-${version}.tgz";
-    hash = "sha256-kxdVAdImUstZoHQMrcFyouXNmtxQj/xOmei9wQuWqn0=";
+    hash = "sha256-60/O1PmVureyV2IhRXMRFbRurvnozDTqGeZp0zHeiZ0=";
   };
 
   nativeBuildInputs = [
