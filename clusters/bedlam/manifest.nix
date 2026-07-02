@@ -288,6 +288,7 @@ rec {
         "hoard" = {};
         "phylactery" = {};
         "tiamat" = {};
+        "grotto" = {};
       };
     };
   };

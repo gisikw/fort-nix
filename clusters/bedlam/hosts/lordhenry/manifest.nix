@@ -16,6 +16,13 @@ rec {
   ];
 
   overlays = {
+    grotto = {
+      package = "infra/grotto";
+      config = {
+        port = "9410";
+        dataDir = "/home/dev/.local/share/grotto";
+      };
+    };
     tiamat = {
       package = "infra/tiamat";
       config = {
@@ -211,6 +218,7 @@ rec {
         # Repair ownership after migrating away from DynamicUser-created
         # /var/lib/private/tiamat state. Preserve existing file modes.
         "Z /var/lib/tiamat - tiamat tiamat -"
+        "d /home/dev/.local/share/grotto 0755 dev users -"
       ];
 
       config.sops.secrets.tiamat-exo-opus-prompt = {
