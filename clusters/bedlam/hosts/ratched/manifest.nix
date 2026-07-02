@@ -77,6 +77,7 @@ rec {
       package = "infra/cranium";
       config = {
         port = "4100";
+        grottoUrl = "https://grotto.gisi.network";
       };
       secrets = {
         envFile = ./cranium-env.sops;
