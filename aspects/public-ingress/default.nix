@@ -81,12 +81,13 @@ in
 {
   services.nginx = {
     enable = lib.mkDefault true;
+    # Generous ceiling at the edge; backends enforce their own per-service
+    # client_max_body_size (fort svc.maxBodySize). Without this the edge sits
+    # at nginx's default and 413s large uploads (e.g. base64 screenshots)
+    # before they ever reach the backend. Set via the canonical NixOS option
+    # rather than appendHttpConfig to avoid a duplicate http-level directive.
+    clientMaxBodySize = "100m";
     appendHttpConfig = ''
-      # Generous ceiling at the edge; backends enforce their own per-service
-      # client_max_body_size (fort svc.maxBodySize). Without this the edge sits
-      # at nginx's 1MB default and 413s large uploads (e.g. base64 screenshots)
-      # before they ever reach the backend.
-      client_max_body_size 100m;
       include /var/lib/fort/nginx/public-services.conf;
     '';
   };
