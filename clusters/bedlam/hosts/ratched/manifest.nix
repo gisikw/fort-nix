@@ -108,6 +108,9 @@ rec {
       config.port = "4200";
       # Inference nodes call Tiamat on lordhenry (tiamat.turn.request.v1).
       config.tiamatBaseUrl = "https://tiamat.gisi.network";
+      # Default profile for inference nodes: non-persona, local, free.
+      # Nodes needing frontier quality override via per-node config.profile.
+      config.inferenceProfile = "qwen-local";
       # VPN-only by default (no visibility key): kobold's HTTP port is
       # remote code execution by design and must never be public. No sso.
       expose = {
