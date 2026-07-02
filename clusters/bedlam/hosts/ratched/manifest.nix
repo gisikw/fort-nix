@@ -103,6 +103,16 @@ rec {
         sso = { mode = "identity"; groups = [ "admin" ]; };
       };
     };
+    kobold = {
+      package = "infra/kobold";
+      config.port = "4200";
+      # VPN-only by default (no visibility key): kobold's HTTP port is
+      # remote code execution by design and must never be public. No sso.
+      expose = {
+        subdomain = "kobold";
+        port = 4200;
+      };
+    };
     discovery-zone = {
       package = "infra/discovery-zone";
       config.port = "9878";
@@ -138,7 +148,7 @@ rec {
         inherit roles apps aspects;
       };
 
-      # PostgreSQL for overlays (cranium). Trust auth on localhost — no
+      # PostgreSQL for overlays (cranium, kobold). Trust auth on localhost — no
       # password complexity needed on a single-user dev sandbox.
       config.services.postgresql.enable = true;
       config.services.postgresql.authentication = lib.mkForce ''
@@ -146,11 +156,22 @@ rec {
         host    all             all             127.0.0.1/32            trust
         host    all             all             ::1/128                 trust
       '';
+      config.services.postgresql.ensureDatabases = [ "kobold" ];
+      config.services.postgresql.ensureUsers = [
+        {
+          name = "kobold";
+          ensureDBOwnership = true;
+        }
+      ];
 
       config.environment.systemPackages = [ pkgs.inotify-tools ];
 
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
+        # kobold overlay working directory: systemd chdirs into it before
+        # exec, so the service cannot create it itself (it creates its
+        # artifact/work roots underneath on boot).
+        "d /home/dev/.local/state/kobold 0755 dev users -"
       ];
     };
 }
