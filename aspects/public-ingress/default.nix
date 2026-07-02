@@ -82,6 +82,11 @@ in
   services.nginx = {
     enable = lib.mkDefault true;
     appendHttpConfig = ''
+      # Generous ceiling at the edge; backends enforce their own per-service
+      # client_max_body_size (fort svc.maxBodySize). Without this the edge sits
+      # at nginx's 1MB default and 413s large uploads (e.g. base64 screenshots)
+      # before they ever reach the backend.
+      client_max_body_size 100m;
       include /var/lib/fort/nginx/public-services.conf;
     '';
   };
