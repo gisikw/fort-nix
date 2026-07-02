@@ -39,6 +39,7 @@ rec {
         user = "tiamat";
         group = "tiamat";
         home = "/var/lib/tiamat";
+        grottoUrl = "https://grotto.gisi.network";
       };
       expose = {
         port = 8900;
