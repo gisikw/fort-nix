@@ -27,6 +27,7 @@ rec {
       expose = {
         port = 8900;
         visibility = "public";
+        maxBodySize = "50m";
         sso = {
           mode = "identity";
           groups = [
