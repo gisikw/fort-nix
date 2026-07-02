@@ -21,6 +21,8 @@ rec {
       config = {
         port = "9410";
         dataDir = "/home/dev/.local/share/grotto";
+        user = "grotto";
+        group = "grotto";
       };
     };
     tiamat = {
@@ -197,6 +199,14 @@ rec {
         pkgs.rsync
       ];
 
+      config.users.groups.grotto = { };
+      config.users.users.grotto = {
+        isSystemUser = true;
+        group = "grotto";
+        description = "Grotto service user";
+        home = "/home/dev/.local/share/grotto";
+        createHome = true;
+      };
       config.users.groups.tiamat = { };
       config.users.users.tiamat = {
         isSystemUser = true;
@@ -218,7 +228,7 @@ rec {
         # Repair ownership after migrating away from DynamicUser-created
         # /var/lib/private/tiamat state. Preserve existing file modes.
         "Z /var/lib/tiamat - tiamat tiamat -"
-        "d /home/dev/.local/share/grotto 0755 dev users -"
+        "d /home/dev/.local/share/grotto 0750 grotto grotto -"
       ];
 
       config.sops.secrets.tiamat-exo-opus-prompt = {
