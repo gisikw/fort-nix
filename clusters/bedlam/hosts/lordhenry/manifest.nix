@@ -24,6 +24,13 @@ rec {
         user = "grotto";
         group = "grotto";
       };
+      # VPN-only (no visibility key): grotto is unauthenticated blob
+      # storage; consumers are internal services (cranium, tiamat). No sso
+      # so service-to-service calls don't hit oauth2-proxy.
+      expose = {
+        subdomain = "grotto";
+        port = 9410;
+      };
     };
     tiamat = {
       package = "infra/tiamat";
