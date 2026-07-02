@@ -126,11 +126,27 @@ in
     # VPN geo block - always defined so aspects (like host-status) can use it
     # Also configure realip to trust X-Real-IP from VPN (beacon proxy)
     {
+      # headers-more module: loaded unconditionally alongside the more_set_headers
+      # directive below so the two never desync (a directive without its module is
+      # an nginx emerg). Merges with any additionalModules defined elsewhere.
+      services.nginx.additionalModules = [ pkgs.nginxModules.moreheaders ];
       services.nginx.commonHttpConfig = lib.mkBefore (''
         # Trust X-Real-IP header from VPN peers (beacon proxy)
         set_real_ip_from ${vpnIpv4Prefix};
         real_ip_header X-Real-IP;
         real_ip_recursive on;
+
+        # Stamp every response -- including nginx-generated errors like 413 --
+        # with a per-host header so the responding (and traversed) nginx is
+        # always identifiable from the client side. Unique header NAME per host
+        # means edge and backend never collide: a proxied response carries the
+        # full hop path (e.g. X-Fort-Hop-raishan + X-Fort-Hop-lordhenry), and an
+        # error that dies at the edge carries only the edge's header -- so you can
+        # tell exactly which nginx rejected a request. Uses more_set_headers
+        # (headers-more) rather than add_header because add_header is silently
+        # dropped whenever a location defines its own add_header, and does not
+        # fire on internally-generated error responses.
+        more_set_headers "X-Fort-Hop-${config.networking.hostName}: 1";
 
         # Disable proxy buffering globally so SSE streams flush immediately
         proxy_buffering off;
