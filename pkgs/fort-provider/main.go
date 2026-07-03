@@ -311,7 +311,7 @@ func (h *AgentHandler) initializeCapabilities() {
 		output, err := cmd.Output()
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
-				fmt.Fprintf(os.Stderr, "[init] %s: handler failed: %s\n", capName, strings.TrimSpace(string(exitErr.Stderr)))
+				fmt.Fprintf(os.Stderr, "[init] %s: handler failed: %s\n", capName, handlerErrorMessage(exitErr, output))
 			} else {
 				fmt.Fprintf(os.Stderr, "[init] %s: handler exec failed: %v\n", capName, err)
 			}
@@ -573,6 +573,16 @@ func (h *AgentHandler) executeHandler(w http.ResponseWriter, handlerPath, capabi
 	}
 }
 
+// handlerErrorMessage extracts a meaningful error from a failed handler execution.
+// Handlers may write error details to stdout (as JSON) rather than stderr,
+// so when stderr is empty we fall back to stdout content.
+func handlerErrorMessage(exitErr *exec.ExitError, stdout []byte) string {
+	errMsg := strings.TrimSpace(string(exitErr.Stderr))
+	if errMsg == "" && len(stdout) > 0 {
+		errMsg = strings.TrimSpace(string(stdout))
+	}
+	return errMsg
+}
 // executeRpcHandler runs a synchronous RPC-style handler (single request/response)
 func (h *AgentHandler) executeRpcHandler(w http.ResponseWriter, handlerPath, capability, origin string, body []byte) {
 	cmd := exec.Command(handlerPath)
@@ -586,7 +596,7 @@ func (h *AgentHandler) executeRpcHandler(w http.ResponseWriter, handlerPath, cap
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			h.errorResponse(w, http.StatusInternalServerError,
-				fmt.Sprintf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr))))
+				fmt.Sprintf("handler failed: %s", handlerErrorMessage(exitErr, output)))
 		} else {
 			h.errorResponse(w, http.StatusInternalServerError,
 				fmt.Sprintf("handler exec failed: %v", err))
@@ -683,7 +693,7 @@ func (h *AgentHandler) executeAsyncHandler(w http.ResponseWriter, handlerPath, c
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			h.errorResponse(w, http.StatusInternalServerError,
-				fmt.Sprintf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr))))
+				fmt.Sprintf("handler failed: %s", handlerErrorMessage(exitErr, output)))
 		} else {
 			h.errorResponse(w, http.StatusInternalServerError,
 				fmt.Sprintf("handler exec failed: %v", err))
@@ -1218,7 +1228,7 @@ func runTrigger(capability string, force bool) error {
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+			return fmt.Errorf("handler failed: %s", handlerErrorMessage(exitErr, output))
 		}
 		return fmt.Errorf("handler exec failed: %w", err)
 	}
@@ -1580,7 +1590,7 @@ func invokeHandlerForGC(capName string, capConfig CapabilityConfig, state map[st
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("handler failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+			return fmt.Errorf("handler failed: %s", handlerErrorMessage(exitErr, output))
 		}
 		return fmt.Errorf("handler exec failed: %w", err)
 	}
