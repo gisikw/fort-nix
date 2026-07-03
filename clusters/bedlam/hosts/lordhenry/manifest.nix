@@ -32,6 +32,24 @@ rec {
         port = 9410;
       };
     };
+    kobold = {
+      package = "infra/kobold";
+      # Pull-based worker only (role=worker): claims shell nodes tagged
+      # "lordhenry" from the coordinator on ratched. Runs as the tiamat
+      # service user so claimed work (nightly labeler) can read/write
+      # tiamat's data dir. No expose — the worker is outbound-only.
+      config = {
+        role = "worker";
+        workerConfigFile = "/etc/kobold/worker.json";
+        workerUser = "tiamat";
+        workerGroup = "tiamat";
+      };
+      secrets = {
+        # KOBOLD_WORKER_TOKEN=… env file; must match the coordinator's
+        # token on ratched (/home/dev/.config/kobold/worker-token).
+        workerTokenEnvFile = ./kobold-worker-token-env.sops;
+      };
+    };
     tiamat = {
       package = "infra/tiamat";
       config = {
@@ -244,6 +262,18 @@ rec {
         pkgs.tmux
         pkgs.rsync
       ];
+
+      # Kobold worker settings (no secrets here — the bearer token arrives
+      # via the overlay's workerTokenEnvFile). work_root lives under
+      # tiamat's home so the worker (running as tiamat) can create it.
+      config.environment.etc."kobold/worker.json".text = builtins.toJSON {
+        url = "https://kobold.gisi.network";
+        worker_id = "lordhenry";
+        tags = [ "lordhenry" ];
+        concurrency = 1;
+        shell_path = "/run/overlays/bin:/run/current-system/sw/bin";
+        work_root = "/var/lib/tiamat/kobold-worker";
+      };
 
       config.users.groups.grotto = { };
       config.users.users.grotto = {
