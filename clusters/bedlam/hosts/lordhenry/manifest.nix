@@ -77,8 +77,6 @@ rec {
                 model: claude-opus-4-6
                 supports_vision: true
                 system_prompt:
-                  - id: claude-code-v0-tool-defer-steering
-                    file: claude-code-v0-tool-defer.md
                   - id: exo-opus-behavioral
                     file: exo-opus.md
 
@@ -91,8 +89,6 @@ rec {
                 model: claude-opus-4-6
                 supports_vision: true
                 system_prompt:
-                  - id: claude-code-v0-tool-defer-steering
-                    file: claude-code-v0-tool-defer.md
                   - id: exo-opus-behavioral
                     file: exo-opus.md
 
@@ -105,8 +101,6 @@ rec {
                 model: claude-fable-5
                 supports_vision: true
                 system_prompt:
-                  - id: claude-code-v0-tool-defer-steering
-                    file: claude-code-v0-tool-defer.md
                   - id: fable-arm-steering
                     text: |
                       You are running as Tiamat's Claude Code Fable routing arm. The selected Claude Code model is Claude Fable 5. Your training cutoff is January 2026.
@@ -142,6 +136,50 @@ rec {
                   endpoint: https://chatgpt.com/backend-api/codex
                   auth: oauth
                   oauth_token_file: /var/lib/tiamat/openai_oauth.json
+
+          anthropic-opus-4-6:
+            default_arm: opus-api
+            arms:
+              opus-api:
+                backend: anthropic
+                provider: anthropic
+                model: claude-opus-4-6
+                supports_vision: true
+                max_tokens: 8192
+                backend_config:
+                  api_key_file: /run/secrets/tiamat-anthropic-api-key
+
+          anthropic-sonnet-5:
+            default_arm: sonnet-api
+            arms:
+              sonnet-api:
+                backend: anthropic
+                provider: anthropic
+                model: claude-sonnet-5
+                supports_vision: true
+                max_tokens: 8192
+                backend_config:
+                  api_key_file: /run/secrets/tiamat-anthropic-api-key
+
+          cc-opus-4-6:
+            default_arm: claude_code
+            arms:
+              claude_code:
+                backend: claude_code
+                provider: anthropic
+                model: claude-opus-4-6
+                supports_vision: true
+
+
+          cc-sonnet-5:
+            default_arm: claude_code
+            arms:
+              claude_code:
+                backend: claude_code
+                provider: anthropic
+                model: claude-sonnet-5
+                supports_vision: true
+
 
           exo-qwen-local:
             default_arm: llama-local
@@ -252,15 +290,6 @@ rec {
         sopsFile = ./exo-gpt-prompt.sops;
         format = "binary";
         path = "/var/lib/tiamat/prompts/exo-gpt.md";
-        owner = "tiamat";
-        group = "tiamat";
-        mode = "0400";
-      };
-
-      config.sops.secrets.tiamat-claude-code-tool-defer-prompt = {
-        sopsFile = ./claude-code-tool-defer-prompt.sops;
-        format = "binary";
-        path = "/var/lib/tiamat/prompts/claude-code-v0-tool-defer.md";
         owner = "tiamat";
         group = "tiamat";
         mode = "0400";
