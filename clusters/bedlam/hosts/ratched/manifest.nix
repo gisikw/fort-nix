@@ -170,6 +170,10 @@ rec {
         }
       ];
 
+      # Grotto shared-write group: agents and dev user can read/write
+      # materialized trees once plane-2 materialize mappings are configured.
+      config.users.groups.grotto = { };
+      config.users.users.dev.extraGroups = [ "grotto" ];
       config.environment.systemPackages = [ pkgs.inotify-tools ];
 
       config.systemd.tmpfiles.rules = [
