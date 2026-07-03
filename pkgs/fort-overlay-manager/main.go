@@ -209,6 +209,7 @@ func cmdActivate(cfg Config, name, storePath string) {
 	}
 
 	// PROVISIONING: generate and load systemd units
+	ensureDataDirOwnership(name, ov.Config, manifest)
 	writeState(stateDir, "provisioning")
 	if err := generateUnits(name, manifest); err != nil {
 		log.Printf("[%s] unit generation failed: %v", name, err)
@@ -326,6 +327,8 @@ func cmdBoot(cfg Config) {
 			log.Printf("[%s] boot eval failed: %v", name, err)
 			continue
 		}
+
+		ensureDataDirOwnership(name, ov.Config, manifest)
 
 		if err := generateUnits(name, manifest); err != nil {
 			log.Printf("[%s] boot unit generation failed: %v", name, err)
@@ -599,6 +602,51 @@ func checkTCP(endpoint string) bool {
 func checkExec(command string) bool {
 	cmd := exec.Command("sh", "-c", command)
 	return cmd.Run() == nil
+}
+
+// ensureDataDirOwnership chowns the overlay's data directory tree to the
+// configured user:group. Prevents ownership drift when a deploy changes
+// the overlay's user/group (e.g. root → grotto) while files on disk retain
+// the old owner.
+func ensureDataDirOwnership(name string, config map[string]string, manifest *OverlayManifest) {
+	// Find the data directory from overlay config
+	dataDir := config["dataDir"]
+	if dataDir == "" {
+		dataDir = config["home"]
+	}
+	if dataDir == "" {
+		return
+	}
+
+	// Find user/group from service definitions
+	var user, group string
+	for _, svc := range manifest.Services {
+		if svc.User != "" {
+			user = svc.User
+			group = svc.Group
+			break
+		}
+	}
+	if user == "" {
+		return
+	}
+	if group == "" {
+		group = user
+	}
+
+	// Verify the directory exists before attempting chown
+	if _, err := os.Stat(dataDir); err != nil {
+		log.Printf("[%s] dataDir %s does not exist, skipping ownership check", name, dataDir)
+		return
+	}
+
+	log.Printf("[%s] ensuring %s is owned by %s:%s", name, dataDir, user, group)
+	cmd := exec.Command("chown", "-R", fmt.Sprintf("%s:%s", user, group), dataDir)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Printf("[%s] chown %s failed: %v", name, dataDir, err)
+	}
 }
 
 func rollbackOverlay(cfg Config, name string) {
