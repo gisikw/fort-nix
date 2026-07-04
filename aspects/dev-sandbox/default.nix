@@ -201,6 +201,19 @@ in
   # with questbook's internal/questbook/ko-mapping.json (the bulk-import map).
   environment.etc."knockout/qql-mapping.yaml".source = ./qql-mapping.yaml;
 
+  # Knockout -> Questbook cutover: route ko through the QQL compat shim and
+  # make the legacy ko store read-only. Only on hosts running qb locally.
+  # Session-wide (/etc/set-environment) rather than zsh interactiveShellInit so
+  # non-interactive/agent shells get the flip too — the 2026-07-04 delta test
+  # caught agent tool-call shells silently writing to the legacy ko store.
+  # Note: long-lived services only pick this up on restart.
+  environment.variables = lib.mkIf hasLocalQb {
+    KO_QQL = "1";
+    KO_QQL_URL = "http://127.0.0.1:19877";
+    KO_QQL_MAPPING = "/etc/knockout/qql-mapping.yaml";
+    KO_READONLY = "1";
+  };
+
   # Enable zsh with tmux auto-attach
   programs.zsh = {
     enable = true;
@@ -234,15 +247,6 @@ in
         source /var/lib/fort/dev-sandbox/env
         set +a
       fi
-
-      # Knockout -> Questbook cutover: route ko through the QQL compat shim and
-      # make the legacy ko store read-only. Only on hosts running qb locally.
-      ${lib.optionalString hasLocalQb ''
-        export KO_QQL=1
-        export KO_QQL_URL="http://127.0.0.1:19877"
-        export KO_QQL_MAPPING="/etc/knockout/qql-mapping.yaml"
-        export KO_READONLY=1
-      ''}
     '';
   };
 
