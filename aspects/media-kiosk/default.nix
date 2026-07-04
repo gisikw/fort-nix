@@ -6,37 +6,6 @@ let
   homeDir = "/home/${user}";
   jellyfinUrl = "https://jellyfin.${domain}";
 
-  # Script to find and enable HDMI audio
-  setupHdmiAudio = pkgs.writeShellScriptBin "setup-hdmi-audio" ''
-    for i in $(seq 1 10); do
-      ${pkgs.wireplumber}/bin/wpctl status &>/dev/null && break
-      sleep 0.5
-    done
-
-    CARD_ID=$(${pkgs.wireplumber}/bin/wpctl status | grep -E "^\s+[0-9]+\. .*\[alsa\]" | head -1 | awk '{print $1}' | tr -d '.')
-
-    if [ -z "$CARD_ID" ]; then
-      echo "No ALSA card found"
-      exit 0
-    fi
-
-    for profile in 3 4 5; do
-      ${pkgs.wireplumber}/bin/wpctl set-profile "$CARD_ID" "$profile" 2>/dev/null
-      sleep 0.3
-
-      HDMI_SINK=$(${pkgs.wireplumber}/bin/wpctl status | grep -E "^\s+[0-9]+\. .*HDMI" | head -1 | awk '{print $1}' | tr -d '.')
-
-      if [ -n "$HDMI_SINK" ]; then
-        echo "Found HDMI sink $HDMI_SINK on profile $profile"
-        ${pkgs.wireplumber}/bin/wpctl set-default "$HDMI_SINK"
-        ${pkgs.wireplumber}/bin/wpctl set-volume "$HDMI_SINK" 1.0
-        exit 0
-      fi
-    done
-
-    echo "No HDMI sink found"
-  '';
-
   # Wait for Tailscale mesh + DNS resolution before launching browser
   waitForNetwork = pkgs.writeShellScriptBin "wait-for-network" ''
     echo "Waiting for Tailscale..."
@@ -61,8 +30,6 @@ let
 
   # Cage session: straight into Jellyfin Media Player (TV mode)
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
-    (sleep 2 && ${setupHdmiAudio}/bin/setup-hdmi-audio) &
-
     ${waitForNetwork}/bin/wait-for-network
 
     export QT_QPA_PLATFORM=wayland
