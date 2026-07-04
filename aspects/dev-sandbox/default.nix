@@ -1,9 +1,15 @@
-{ rootManifest, extraInputs ? {}, accessKeys ? [], ... }:
+{ rootManifest, hostManifest ? {}, extraInputs ? {}, accessKeys ? [], ... }:
 { config, lib, pkgs, ... }:
 let
   domain = rootManifest.fortConfig.settings.domain;
   settings = rootManifest.fortConfig.settings;
   user = "dev";
+
+  # Knockout -> Questbook cutover applies only where a questbook overlay runs
+  # locally (the shim points at qb on loopback). Other dev-sandbox hosts (e.g.
+  # raishan) keep native ko so their shell doesn't break reaching a qb that
+  # isn't there. See instructions-ko-cutover.md.
+  hasLocalQb = (hostManifest.overlays or { }) ? questbook;
 
   # Cluster-specific inputs (available when passed from host flake)
   home-config = extraInputs.home-config or null;
@@ -189,6 +195,12 @@ in
   # Install dev tools system-wide
   environment.systemPackages = devTools;
 
+  # Knockout -> Questbook realm mapping for the QQL shim (KO_QQL_MAPPING points
+  # here). Shipped fort-nix-managed so both the interactive dev shell and the
+  # knockout overlay service on this host read the same bindings. Kept in sync
+  # with questbook's internal/questbook/ko-mapping.json (the bulk-import map).
+  environment.etc."knockout/qql-mapping.yaml".source = ./qql-mapping.yaml;
+
   # Enable zsh with tmux auto-attach
   programs.zsh = {
     enable = true;
@@ -222,6 +234,15 @@ in
         source /var/lib/fort/dev-sandbox/env
         set +a
       fi
+
+      # Knockout -> Questbook cutover: route ko through the QQL compat shim and
+      # make the legacy ko store read-only. Only on hosts running qb locally.
+      ${lib.optionalString hasLocalQb ''
+        export KO_QQL=1
+        export KO_QQL_URL="http://127.0.0.1:19877"
+        export KO_QQL_MAPPING="/etc/knockout/qql-mapping.yaml"
+        export KO_READONLY=1
+      ''}
     '';
   };
 

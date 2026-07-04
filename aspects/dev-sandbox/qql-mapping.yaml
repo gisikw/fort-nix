@@ -1,0 +1,60 @@
+# Knockout project tag -> Questbook realm mapping for the QQL compat shim.
+# fort-nix-managed; installed at /etc/knockout/qql-mapping.yaml via the
+# dev-sandbox aspect. Kept in sync with questbook's embedded
+# internal/questbook/ko-mapping.json (bulk-import mapping) so ko IDs land in
+# the same realms whether bulk-imported or shim-routed.
+#
+# Format note: the shim uses a minimal line parser (knockout qql_mapping.go),
+# NOT a full YAML lib. Use the inline shorthand 'tag: realm' — flow mappings
+# ({realm: x}) and trailing # comments on a mapping line are NOT supported.
+#
+# Unlisted tags fall back here (stray/new ko projects land in inbox for triage).
+default_realm: inbox
+
+projects:
+  # strays / numeric fixtures -> inbox for triage
+  001: inbox
+  002: inbox
+  project: inbox
+  user: inbox
+  giz: inbox
+  # exocortex family (exo- prefix); 'interview' is a misnamed exocortex tag
+  exo: exocortex
+  exo-tiamat-gpt: exocortex
+  interview: exocortex
+  # grotto (grt is the short prefix)
+  grotto: grotto
+  grt: grotto
+  # lair (lr legacy prefix)
+  lair: lair
+  lr: lair
+  # tokenmaxx (tmx prefix)
+  tokenmaxx: tokenmaxx
+  tmx: tokenmaxx
+  # tiamat (tmt prefix), muse (mus prefix)
+  tmt: tiamat
+  mus: muse
+  # direct tag=realm
+  barely-game-console: barely-game-console
+  cranium: cranium
+  cupola: cupola
+  discovery-zone: discovery-zone
+  fort-nix: fort-nix
+  gee: gee
+  gloss: gloss
+  headjack: headjack
+  hearth: hearth
+  hoard: hoard
+  knockout: knockout
+  kobold: kobold
+  litmus: litmus
+  maw: maw
+  nerve: nerve
+  phy: phylactery
+  punchlist: punchlist
+  qb: questbook
+  rep: rep
+  research: research
+  roost: roost
+  tickler: tickler
+  unk: unkork

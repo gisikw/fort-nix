@@ -39,6 +39,31 @@ in
     };
   };
 
+  # Questbook SQLite backup, gated to hosts running the questbook overlay.
+  # The `system` backup above already sweeps /var/lib/questbook, but a raw
+  # filesystem copy of a live SQLite DB can be torn (main file vs -wal captured
+  # at different instants). Take a consistent online-backup snapshot first so
+  # the questbook corpus (1400+ imported tickets) has a restorable copy — this
+  # is the cutover's insurance, mirroring the postgres pattern below.
+  services.restic.backups.questbook = lib.mkIf ((hostManifest.overlays or { }) ? questbook) {
+    repository = repoUrl;
+    passwordFile = passwordPath;
+    backupPrepareCommand = ''
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/questbook/questbook.sqlite \
+        ".backup '/tmp/restic-questbook-backup.sqlite'"
+    '';
+    paths = [ "/tmp/restic-questbook-backup.sqlite" ];
+    backupCleanupCommand = "rm -f /tmp/restic-questbook-backup.sqlite";
+    extraBackupArgs = [
+      "--tag" "${hostname}-questbook"
+    ];
+    timerConfig = {
+      OnCalendar = "daily";
+      RandomizedDelaySec = "1h";
+      Persistent = true;
+    };
+  };
+
   # PostgreSQL backup if enabled on this host
   services.restic.backups.postgres = lib.mkIf config.services.postgresql.enable {
     repository = repoUrl;

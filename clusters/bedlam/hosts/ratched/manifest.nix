@@ -23,7 +23,18 @@ rec {
   overlays = {
     knockout = {
       package = "infra/knockout";
-      config.port = "19876";
+      config = {
+        port = "19876";
+        # Knockout -> Questbook cutover (serve side): route the remote/HTTP path
+        # (ko serve -> Punchlist et al.) through the QQL shim, keep the legacy
+        # store read-only, and log every shim invocation. KO_SHIM_LOG is the
+        # cutover's vital sign — when it goes quiet, migration is done.
+        koQql = "1";
+        koQqlUrl = "http://127.0.0.1:19877";
+        koQqlMapping = "/etc/knockout/qql-mapping.yaml";
+        koReadonly = "1";
+        koShimLog = "/var/lib/knockout/shim-usage.jsonl";
+      };
       expose = {
         subdomain = "ko";
         port = 19876;
@@ -182,6 +193,9 @@ rec {
         # exec, so the service cannot create it itself (it creates its
         # artifact/work roots underneath on boot).
         "d /home/dev/.local/state/kobold 0755 dev users -"
+        # knockout overlay QQL-shim usage log dir (KO_SHIM_LOG). Owned by dev,
+        # the user the knockout overlay runs as. Persisted under /var/lib.
+        "d /var/lib/knockout 0755 dev users -"
       ];
     };
 }
