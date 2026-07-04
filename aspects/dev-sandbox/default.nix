@@ -211,11 +211,16 @@ in
   # make the legacy ko store read-only. Only on hosts running qb locally.
   # The flip must reach BOTH env layers (2026-07-04 delta test findings):
   #  - environment.variables -> /etc/set-environment: login/SSH/cron shells.
-  #  - systemd.globalEnvironment -> DefaultEnvironment: PID1-spawned services
-  #    (Cranium/agent tool-call shells inherit from the service, never from
-  #    set-environment). Requires systemd re-exec + service restart to apply.
+  #  - systemd.settings.Manager DefaultEnvironment: PID1 applies it to EVERY unit,
+  #    including runtime-generated fort overlay units (/run/systemd/system/),
+  #    which systemd.globalEnvironment misses — it merges into NixOS-declared
+  #    unit files at build time only. Cranium (and thus agent tool-call
+  #    shells) is an overlay unit. Requires systemd re-exec (activation
+  #    daemon-reexecs) + service restart to apply.
   environment.variables = lib.mkIf hasLocalQb koQqlEnv;
-  systemd.globalEnvironment = lib.mkIf hasLocalQb koQqlEnv;
+  systemd.settings.Manager = lib.mkIf hasLocalQb {
+    DefaultEnvironment = lib.concatStringsSep " " (lib.mapAttrsToList (n: v: "\"${n}=${v}\"") koQqlEnv);
+  };
 
   # Enable zsh with tmux auto-attach
   programs.zsh = {
