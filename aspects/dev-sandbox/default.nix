@@ -22,6 +22,7 @@ let
   gemini-cli = import ../../pkgs/gemini-cli { inherit pkgs; };
   pi-coding-agent = import ../../pkgs/pi-coding-agent { inherit pkgs; };
   slidev = import ../../pkgs/slidev { inherit pkgs; };
+  webtools = import ../../pkgs/webtools { inherit pkgs; };
 
   # Handler for git-token: extracts token from JSON response and stores it
   # Note: chmod 644 so dev user can read it for git credential helper
@@ -141,6 +142,9 @@ let
 
     # Diagramming
     d2
+
+    # Web feedback loop (headless Chromium): webshot + webdom
+    webtools
 
     # Search
     (import ../../pkgs/qmd { inherit pkgs; })

@@ -12,7 +12,7 @@ This project uses **ko** (knockout) for issue tracking. Prefer ko over TodoWrite
 
 ```bash
 ko ready              # Unblocked tasks sorted by priority
-ko create "title"     # Create a ticket (prints ID)
+ko add "title"        # Create a ticket (prints ID)
 ko show <id>          # View details
 ko start <id>         # Mark in progress
 ko close <id>         # Mark complete
@@ -523,6 +523,28 @@ The dev-sandbox environment has limited local privileges:
 - **No sudo access** - use `fort <host> systemd` to restart services or run privileged operations on hosts
 - **No interactive SSH** - construct one-shot commands or use agent calls
 - **Age key for secrets** - can decrypt secrets on `main` branch only
+
+### Web Feedback Loop (webshot / webdom)
+
+The sandbox has headless Chromium tooling (`pkgs/webtools/`, Playwright-based)
+so agents can *see* web work — screenshot a page, read the PNG back, inspect
+rendered DOM and console errors:
+
+```bash
+webshot https://qb.gisi.network --width 1280 --out desktop.png   # screenshot
+webshot <url> --width 390 --height 844 --out mobile.png          # mobile viewport
+webdom <url>                       # rendered HTML + console/page errors
+webdom <url> --a11y                # ARIA accessibility tree instead of HTML
+webshot <url> --do 'click:text=Login' --do 'wait:500' --out after.png  # scripted steps
+```
+
+`--do` actions: `click:<selector>`, `fill:<selector>=<text>`, `press:<key>`,
+`goto:<url>`, `wait:<ms>`, `waitfor:<selector>`. Both tools accept `--wait MS`
+(settle time after load, default 1000ms — raise for slow SPAs) and `--timeout MS`.
+Works against local dev servers and `*.gisi.network` (public Let's Encrypt
+certs, no CA gymnastics). Limitations: Chromium only; no persistent sessions
+between invocations (each run is a fresh browser context, so multi-step auth
+flows must happen within one invocation's `--do` chain).
 
 ## Debugging Deployment Failures
 
