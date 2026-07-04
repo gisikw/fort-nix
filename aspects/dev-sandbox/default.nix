@@ -10,6 +10,12 @@ let
   # raishan) keep native ko so their shell doesn't break reaching a qb that
   # isn't there. See instructions-ko-cutover.md.
   hasLocalQb = (hostManifest.overlays or { }) ? questbook;
+  koQqlEnv = {
+    KO_QQL = "1";
+    KO_QQL_URL = "http://127.0.0.1:19877";
+    KO_QQL_MAPPING = "/etc/knockout/qql-mapping.yaml";
+    KO_READONLY = "1";
+  };
 
   # Cluster-specific inputs (available when passed from host flake)
   home-config = extraInputs.home-config or null;
@@ -203,16 +209,13 @@ in
 
   # Knockout -> Questbook cutover: route ko through the QQL compat shim and
   # make the legacy ko store read-only. Only on hosts running qb locally.
-  # Session-wide (/etc/set-environment) rather than zsh interactiveShellInit so
-  # non-interactive/agent shells get the flip too — the 2026-07-04 delta test
-  # caught agent tool-call shells silently writing to the legacy ko store.
-  # Note: long-lived services only pick this up on restart.
-  environment.variables = lib.mkIf hasLocalQb {
-    KO_QQL = "1";
-    KO_QQL_URL = "http://127.0.0.1:19877";
-    KO_QQL_MAPPING = "/etc/knockout/qql-mapping.yaml";
-    KO_READONLY = "1";
-  };
+  # The flip must reach BOTH env layers (2026-07-04 delta test findings):
+  #  - environment.variables -> /etc/set-environment: login/SSH/cron shells.
+  #  - systemd.globalEnvironment -> DefaultEnvironment: PID1-spawned services
+  #    (Cranium/agent tool-call shells inherit from the service, never from
+  #    set-environment). Requires systemd re-exec + service restart to apply.
+  environment.variables = lib.mkIf hasLocalQb koQqlEnv;
+  systemd.globalEnvironment = lib.mkIf hasLocalQb koQqlEnv;
 
   # Enable zsh with tmux auto-attach
   programs.zsh = {
