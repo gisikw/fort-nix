@@ -243,6 +243,179 @@ rec {
                   endpoint: https://opencode.ai/zen/go/v1
                   api_key_file: /run/secrets/tiamat-opencode-api-key
       '';
+      # Rate card: human-owned per-arm pricing. Keys are provider/model —
+      # the same pair usage observations record. Rates confirmed against
+      # published prices 2026-07-05; the nightly drift sensor keeps them
+      # honest. Subscription-mode dollars are metered-EQUIVALENT burn, not
+      # billed dollars.
+      tiamatRatecardJson = pkgs.writeText "tiamat-ratecard.json" (
+        builtins.toJSON {
+          updated_at = "2026-07-05";
+          arms = {
+            "anthropic/claude-opus-4-6" = {
+              pricing_mode = "subscription";
+              input_per_mtok = 5;
+              output_per_mtok = 25;
+              cache = {
+                mode = "explicit";
+                read_multiplier = 0.1;
+                write_multipliers = {
+                  "5m" = 1.25;
+                  "1h" = 2.0;
+                };
+                default_write_ttl = "5m";
+                refresh_on_hit = true;
+              };
+              notes = "Served by BOTH the CC subscription arm and the metered opus-api arm; card keys cannot split by backend, so mode follows the dominant (sub) traffic. The API overflow valve is tracked separately by the backend-scoped anthropic-api-monthly constraint. Published Opus 4.6 rates $5/$25.";
+            };
+            "anthropic/claude-fable-5" = {
+              pricing_mode = "subscription";
+              input_per_mtok = 10;
+              output_per_mtok = 50;
+              cache = {
+                mode = "explicit";
+                read_multiplier = 0.1;
+                write_multipliers = {
+                  "5m" = 1.25;
+                  "1h" = 2.0;
+                };
+                default_write_ttl = "5m";
+                refresh_on_hit = true;
+              };
+              notes = "Fable 5 via the CC subscription (subsidized window). Burn priced at published API rates $10/$50. The current 50%-of-weekly sub-cap is the anthropic-fable-weekly constraint, not a rate.";
+            };
+            "anthropic/claude-sonnet-5" = {
+              pricing_mode = "subscription";
+              input_per_mtok = 3;
+              output_per_mtok = 15;
+              cache = {
+                mode = "explicit";
+                read_multiplier = 0.1;
+                write_multipliers = {
+                  "5m" = 1.25;
+                  "1h" = 2.0;
+                };
+                default_write_ttl = "5m";
+                refresh_on_hit = true;
+              };
+              notes = "Standard rates $3/$15; intro pricing $2/$10 runs through 2026-08-31 — standard chosen so the card doesn't silently undercount after expiry. Serves both cc-sonnet-5 (sub) and anthropic-sonnet-5 (API) profiles.";
+            };
+            "openai/gpt-5.5" = {
+              pricing_mode = "subscription";
+              input_per_mtok = 5;
+              output_per_mtok = 30;
+              cache = {
+                mode = "automatic";
+                read_multiplier = 0.1;
+              };
+              notes = "ChatGPT sub via the codex responses backend. Burn priced at published API rates $5/$30, cached input $0.50 (0.1x).";
+            };
+            "opencode/glm-5.2" = {
+              pricing_mode = "metered";
+              input_per_mtok = 1.4;
+              output_per_mtok = 4.4;
+              cache = {
+                mode = "automatic";
+                read_multiplier = 0.2;
+              };
+              notes = "Priced at Z.AI official rates $1.40/$4.40 (cached ~$0.26) as a proxy for opencode zen billing — pending confirmation against an actual opencode invoice.";
+            };
+            "llama.cpp/qwen3.6-27b" = {
+              pricing_mode = "free";
+              input_per_mtok = 0;
+              output_per_mtok = 0;
+              cache = {
+                mode = "none";
+                read_multiplier = 1;
+              };
+              notes = "Local llama.cpp; electricity is not modeled.";
+            };
+            "ollama/qwen3.6-27b" = {
+              pricing_mode = "free";
+              input_per_mtok = 0;
+              output_per_mtok = 0;
+              cache = {
+                mode = "none";
+                read_multiplier = 1;
+              };
+              notes = "Legacy provider key for the same local model; kept so old usage rows still price.";
+            };
+          };
+        }
+      );
+      # Economics: constraints are the REAL limits (subscription weekly
+      # windows, backend-scoped); API arms are ~$20 overflow valves, not
+      # budgets. Sub seats are $2k/mo inference-equivalent, tracked
+      # adaptive by the burn factor. Ground truth: briefs/economics-
+      # ground-truth.md (2026-07-04).
+      tiamatEconomicsJson = pkgs.writeText "tiamat-economics.json" (
+        builtins.toJSON {
+          lambda_cost = 0.2;
+          default_score = 0.5;
+          min_count = 1;
+          constraints = [
+            {
+              # Anthropic API arm is an overflow valve (~$20/mo intended);
+              # its being used at all is a signal. Backend-scoped so the
+              # CC subscription traffic (same provider/model!) never
+              # counts against it.
+              name = "anthropic-api-monthly";
+              providers = [ "anthropic" ];
+              backends = [ "anthropic" ];
+              budget_usd = 20;
+              window = "month";
+              kp = 5;
+            }
+            {
+              # Anthropic sub weekly window: $2k/mo equivalent -> ~$460
+              # per rolling 168h. The 5h window limits are assumed away
+              # by smooth weekly burn per the ground-truth brief.
+              name = "anthropic-sub-weekly";
+              providers = [ "anthropic" ];
+              backends = [ "claude_code" ];
+              budget_usd = 460;
+              window = "168h";
+              kp = 5;
+              fill_threshold = 0.8;
+            }
+            {
+              # Current ad-hoc sub-cap: Fable at 50% of weekly. These
+              # appear and disappear; delete this block when Anthropic
+              # lifts the cap.
+              name = "anthropic-fable-weekly";
+              providers = [ "anthropic" ];
+              backends = [ "claude_code" ];
+              models = [ "claude-fable-5" ];
+              budget_usd = 230;
+              window = "168h";
+              kp = 5;
+              fill_threshold = 0.8;
+            }
+            {
+              # OpenAI's real constraint is the sub's weekly window, not
+              # API dollars (the invented $500/168h API budget is gone —
+              # there is no metered OpenAI arm in the live profiles).
+              name = "openai-sub-weekly";
+              providers = [ "openai" ];
+              backends = [ "openai_responses" ];
+              budget_usd = 460;
+              window = "168h";
+              kp = 5;
+              fill_threshold = 0.8;
+            }
+          ];
+          subscriptions = [
+            {
+              provider = "anthropic";
+              monthly_usd = 2000;
+            }
+            {
+              provider = "openai";
+              monthly_usd = 2000;
+            }
+          ];
+        }
+      );
       tiamatAnthropicSecretDropin = pkgs.writeText "tiamat-anthropic-secret-file.conf" ''
         [Service]
         Environment=TIAMAT_ANTHROPIC_API_KEY_FILE=${config.sops.secrets.tiamat-anthropic-api-key.path}
@@ -356,6 +529,8 @@ rec {
         serviceConfig.Type = "oneshot";
         script = ''
           ${pkgs.coreutils}/bin/install -D -o tiamat -g tiamat -m 0440 ${tiamatProfilesYaml} /var/lib/tiamat/profiles.yaml
+          ${pkgs.coreutils}/bin/install -D -o tiamat -g tiamat -m 0440 ${tiamatRatecardJson} /var/lib/tiamat/ratecard.json
+          ${pkgs.coreutils}/bin/install -D -o tiamat -g tiamat -m 0440 ${tiamatEconomicsJson} /var/lib/tiamat/economics.json
         '';
       };
 
