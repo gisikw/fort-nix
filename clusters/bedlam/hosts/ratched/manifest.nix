@@ -10,6 +10,7 @@ rec {
     "apple-dist"
     "conduit"
     "cdn"
+    "capstone"
     {
       name = "sse-probe";
       mode = "monitor";
