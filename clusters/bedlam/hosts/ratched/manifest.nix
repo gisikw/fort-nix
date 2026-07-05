@@ -187,6 +187,40 @@ rec {
       config.users.users.dev.extraGroups = [ "grotto" ];
       config.environment.systemPackages = [ pkgs.inotify-tools ];
 
+      # Gee bridge publisher: the SINGLE writer to the gee belief ledger.
+      # `gee eval` appends mechanical status transitions on every run, so
+      # exactly one caller may invoke it; cranium only ever reads the
+      # published artifact (see cranium docs/gee-belief-injection.md).
+      # Publishes atomically (write temp + rename) every 15 minutes. The
+      # gee binary is dev-managed at ~/.local/bin/gee (built from
+      # ~/Projects/gee), same as the other dev-sandbox tools.
+      config.systemd.services.gee-bridge-publisher = {
+        description = "Publish gee eval --bridge artifact for cranium belief injection";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "dev";
+          Group = "users";
+          Environment = [ "HOME=/home/dev" ];
+          ExecStart = pkgs.writeShellScript "gee-bridge-publish" ''
+            set -euo pipefail
+            out=/home/dev/.local/state/gee/bridge.txt
+            mkdir -p "$(dirname "$out")"
+            tmp="$out.tmp.$$"
+            trap 'rm -f "$tmp"' EXIT
+            /home/dev/.local/bin/gee eval --bridge > "$tmp"
+            mv "$tmp" "$out"
+          '';
+        };
+      };
+
+      config.systemd.timers.gee-bridge-publisher = {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "2m";
+          OnUnitActiveSec = "15m";
+        };
+      };
+
       config.systemd.tmpfiles.rules = [
         "d /home/dev/Projects/exocortex 0755 dev users -"
         # kobold overlay working directory: systemd chdirs into it before
