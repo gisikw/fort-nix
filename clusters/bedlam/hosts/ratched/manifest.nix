@@ -11,6 +11,7 @@ rec {
     "conduit"
     "cdn"
     "capstone"
+    "vault"
     {
       name = "sse-probe";
       mode = "monitor";
