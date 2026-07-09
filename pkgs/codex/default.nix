@@ -2,14 +2,14 @@
 
 pkgs.buildNpmPackage rec {
   pname = "codex";
-  version = "0.106.0";
+  version = "0.144.0";
 
   src = pkgs.fetchzip {
     url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}.tgz";
-    hash = "sha256-FwrY6BLNR6If3TLEAgYRgr+AZ1LGm2Er2daamxPiYj4=";
+    hash = "sha256-RJDXSUlR0cB5haLgD0ICAZV5NTGVvaGusPvLi2LqoLU=";
   };
 
-  npmDepsHash = "sha256-bh/805OjdI87z6xFqmKJpgJhWBS8bEw7q1ds6AcqnFI=";
+  npmDepsHash = "sha256-G3d1qOjq0S0/MR+/BHwmErevQ/JovV+gf9WsyiLfeKA=";
 
   postPatch = ''
     cp ${./package-lock.json} package-lock.json
