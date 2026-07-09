@@ -155,6 +155,23 @@ rec {
                   auth: oauth
                   oauth_token_file: /var/lib/tiamat/openai_oauth.json
 
+          exo-gpt-sol:
+            default_arm: gpt-oauth
+            arms:
+              gpt-oauth:
+                backend: openai_responses
+                provider: openai
+                model: gpt-5.6-sol
+                supports_vision: true
+                max_tokens: 8192
+                system_prompt:
+                  - id: exo-gpt-behavioral
+                    file: exo-gpt.md
+                backend_config:
+                  endpoint: https://chatgpt.com/backend-api/codex
+                  auth: oauth
+                  oauth_token_file: /var/lib/tiamat/openai_oauth.json
+
           anthropic-opus-4-6:
             default_arm: opus-api
             arms:
@@ -309,6 +326,16 @@ rec {
                 read_multiplier = 0.1;
               };
               notes = "ChatGPT sub via the codex responses backend. Burn priced at published API rates $5/$30, cached input $0.50 (0.1x).";
+            };
+            "openai/gpt-5.6-sol" = {
+              pricing_mode = "subscription";
+              input_per_mtok = 5;
+              output_per_mtok = 30;
+              cache = {
+                mode = "automatic";
+                read_multiplier = 0.1;
+              };
+              notes = "ChatGPT sub via codex responses backend. Burn priced same as gpt-5.5 pending published rate confirmation for 5.6-sol.";
             };
             "opencode/glm-5.2" = {
               pricing_mode = "metered";
