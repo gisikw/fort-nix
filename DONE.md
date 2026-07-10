@@ -1,197 +1,232 @@
-# DONE — Darwin parity audit + parameterization
+# DONE — control-plane decomposition theme
 
-Branch: `burn/darwin-parity` (7 code/doc commits + this file). Full inventory
-and rationale live in `docs/darwin-parity-audit.md`; this file is the
-execution summary.
+Branch: `burn/control-plane-decomp` (off `burn/darwin-parity`, with
+`burn/cert-lifecycle` merged in as the verification baseline). Nothing
+deployed; no live-host changes; `flake.lock` and all per-host locks
+untouched (`git diff main...HEAD -- '*lock*'` is empty). The parent lanes'
+DONE.md records live on their own branches; this file supersedes the
+concatenated copy from the merge commit.
 
-## What was done
+## Base merge (verified before any decomp work)
 
-1. **Audited** `common/`, `aspects/`, `roles/`, `core/`, `device-profiles/`,
-   `clusters/bedlam/`, `pkgs/fort*`, `apps/fort-*`, gitops, and CI for
-   Linux-specific assumptions (four parallel deep-read passes + repo-wide
-   greps). Big picture: the platform dispatch, control-plane launchd
-   services, mesh, and gitops-lite were already in place on main; the seed
-   quests q-6b76fb89 / q-54520608 / q-4c48ba93 are substantially done there.
-   The real gaps were the two open bugs (journal, launchd throttle), missing
-   status/deploy state on darwin, and ungated Linux-only aspects.
-2. **Fixed** the darwin journal handler (q-314c1d31), the launchd restart
-   throttle + label resolution (q-d9b7ef7b), gave darwin gitops
-   deployed-commit tracking + exponential failure backoff, ported
-   host-status to darwin (launchd status.json writer, now a default aspect
-   on both platforms — `fort obrien status` gets real uptime/failed-units/
-   deploy data), added explicit fail-fast platform gates to 14 Linux-only
-   aspects, and made CI force-evaluate `darwinConfigurations`.
-3. **Documented** everything else: what's correctly gated by architecture,
-   what was deliberately left alone (and the two `src = ./.` traps that make
-   "free" edits impossible in emergency-reboot and fort-overlay-manager),
-   and what needs hardware or a decision (§3–4 of the audit doc).
+- `e32bff8` merges `burn/cert-lifecycle` into this branch. The predicted
+  conflicts from the cert-lifecycle audit §5 auto-merged cleanly
+  (certificate-broker take-both landed as gate-on-top + new-body-below;
+  control-plane.nix hunks were disjoint). The only manual conflict was an
+  undocumented add/add on `DONE.md` (both lanes wrote one) — resolved by
+  concatenation, superseded by this file.
+- Union verified green: full `just test` (root + 14 host flakes + device
+  flakes) passed on the merge commit.
+- **Verification baseline**: toplevel `drvPath` snapshotted for all 13
+  NixOS hosts + obrien (darwin) at the merge commit. All drv-diff claims
+  below are against this snapshot, not main.
 
-## Commits (low → med; docs last, doc-only)
+## Quest dispositions
 
-| Commit | Tier | Subject |
-|--------|------|---------|
-| 0cc68a2 | low | control-plane: fix darwin journal + systemd handlers, provider throttle |
-| 3a7136a | low | gitops: darwin deployed-commit tracking + failure backoff |
-| ab0e24d | low | host-status: darwin branch (launchd status.json writer) |
-| c69182c | low | ci: force-evaluate darwinConfigurations in release checks |
-| 0607ab1 | med | host.nix: host-status is a default aspect on darwin too |
-| fd6bca2 | med | aspects: explicit Linux-only platform gates (14 aspects) |
-| e7675ed | low | docs: darwin parity audit |
+### q-d9cba37c — Decompose common/fort.nix — DONE (`b92425e`, [low])
 
-No high-tier commits: nothing on this branch changes what a Linux host
-evaluates to (proven below), and the genuinely high-risk ideas (darwin
-rollback, gitops mechanism merge beyond state-model convergence, upload on
-darwin) were deliberately documented instead of attempted — they need
-hardware or a decision (audit doc §4).
+`common/fort.nix` (680 lines) split by concern into `common/fort/`:
 
-Cherry-pick notes: 0607ab1 (`[med]` host.nix) requires ab0e24d (`[low]`
-host-status) or darwin eval breaks. Everything else is independent.
+| File | Concern |
+|------|---------|
+| `services.nix` | host-manifest generation + discovery needs (proxy, dns-headscale, dns-coredns) |
+| `nginx.nix` | realip/geo/hop-header plumbing + per-service virtual hosts + firewall |
+| `auth.nix` | oauth2-proxy instances, identity-proxy, token secret, oidc-register needs |
+| `ssl.nix` | placeholder certs + ssl-cert need with freshness probe |
+| `service-lib.nix` | shared pure helpers (subdomainOf, hostManifestContentFor) |
 
-## Verification actually run (Linux dev sandbox; no Darwin hardware, no
-deploys, no live-host mutations)
+Naming note: the quest suggested `services/nginx/auth`; `ssl.nix` was added
+as a fourth concern (the quest listed SSL cert handling as a mixed concern)
+and "service exposure" landed as manifest+discovery bookkeeping in
+`services.nix`.
 
-- `git diff main -- flake.lock '**/flake.lock'` → **empty** (root and all
-  per-host/cluster lockfiles untouched).
-- **drv-path comparison, all 13 NixOS hosts** (azula, doofenshmirtz,
-  drhorrible, frankenstein, joker, lordhenry, minos, pettigrew, q, raishan,
-  ratched, robotnik, ursula): evaluated
-  `nixosConfigurations.<host>.config.system.build.toplevel.drvPath` from the
-  branch working tree and from a `main` worktree — **all 13 IDENTICAL**
-  (e.g. ratched `p7n5pb0rgh6ajmm3c9xjplrfhapk143r-nixos-system-ratched-…drv`
-  on both). This covers low+medium tiers together and every gated aspect in
-  actual use. Two intermediate regressions were caught and reverted this
-  way (`meta` addition to fort-overlay-manager and the emergency-reboot
-  gate, both `src = ./.` self-hash traps).
-- `nix eval ./clusters/bedlam/hosts/obrien#darwinConfigurations.obrien.config.system.build.toplevel.drvPath`
-  → evaluates cleanly (`7hy9w4vbkb5qp67wbi4zg3k9qb1w1r38-darwin-system-…drv`;
-  differs from main as intended — new status daemon, updated handlers).
-- `nix flake check --no-build` on the root flake, ratched's host flake, and
-  obrien's host flake → all pass. (Noted: flake check does not deep-eval
-  darwinConfigurations on Linux — hence the new CI step.)
-- `go build ./...` + `go vet` + `go test ./...` in `pkgs/fort-provider`,
-  `pkgs/fort-upload`, `pkgs/fort-tokens`, `pkgs/fort-overlay-manager` →
-  build/vet clean; **no test files exist in any fort package** (pre-existing;
-  `go test` reports "no test files").
-- Aspect gate behavior: direct `nix-instantiate --eval` of gated aspects
-  with `platform = "darwin"` → throws
-  `fort-nix: aspect 'zfs' is Linux-only (…); remove it from this darwin
-  host's manifest`; with `platform = "nixos"` → returns the module attrset.
+**Design constraint discovered**: the aggregator composes the concern
+modules *functionally* (one module, configs merged in pre-split order)
+rather than via `imports`. The module system expands `imports`
+breadth-first (`genericClosure`), which pushes imported definitions AFTER
+the host's aspect/app modules and reorders list-typed option merges —
+observed concretely as nginx `ReadWritePaths` flipping order with
+`aspects/host-status`, changing the unit file. The functional composition
+preserves definition order byte-for-byte; the header comment in fort.nix
+documents why.
 
-## Needs Darwin hardware to verify (in suggested order, on obrien after cherry-pick)
+Verified: full-fleet drv sweep after the commit — **all 14 hosts
+byte-identical to baseline**.
 
-1. `fort obrien status` — expect `status: "running"`, real uptime,
-   `deploy.commit` populated after the first post-deploy gitops tick.
-2. `fort obrien journal '{"unit":"fort-provider"}'` — expect log lines from
-   `/var/log/fort-provider.log` (this was the empty-results bug).
-3. `fort obrien systemd '{"action":"restart","unit":"fort-provider"}'`
-   twice in quick succession — both should succeed (second used to hit the
-   launchd throttle); response reports `"method": "bootstrap"`.
-4. `fort obrien systemd '{"action":"list"}'` / `'{"action":"status","unit":"fort-gitops"}'`
-   — label resolution for short names.
-5. Push a commit, watch `/var/log/fort-gitops.log` — expect
-   deployed-commit written on success; push a deliberately broken commit —
-   expect backoff messages instead of a 30s retry storm.
-6. Root-cause of q-d9b7ef7b (why the provider crashes at early boot) —
-   `ThrottleInterval`/bootstrap fix the symptom; the boot-time log will show
-   the cause.
+### q-1f08acd9 — Factor shared control-plane logic — DONE, honest-remainder scope (`5c4008b`, [low])
 
-Not attempted (documented in audit §4): darwin rollback on failed switch,
-manualDeploy/deploy capability on darwin, test-branch gitops (absent on both
-platforms in this repo), file upload to darwin hosts, attic push of darwin
-closures.
+The honest answer the brief anticipated: **darwin-parity (and the work it
+built on) already did most of this.** `common/fort/control-plane.nix` is
+already a single shared module — both platform builders import it (darwin
+with `platform = "darwin"`), and all handlers/consumer/GC logic is shared
+with explicit `isDarwin` branches. There was no NixOS-only module left
+holding hostage logic that darwin needs, with one small exception (below).
 
----
+Remainder actually done:
 
-# DONE — cert/ACME lifecycle hardening
+- Structural decomposition of the 1783-line file into
+  `common/fort/control-plane/`: `handlers.nix` (the 8 mandatory capability
+  handlers + sanitizeJournalOutput), `options.nix` (need/capability option
+  types), `fulfill.nix` (the consumer fulfill loop). The top-level
+  `control-plane.nix` (624 lines) is now data derivation (hosts.json, RBAC,
+  needs.json) + platform wiring (systemd vs launchd) — the shared/platform
+  boundary is now file-level, not buried in a monolith.
+- The one real duplication: host-manifest.json construction existed twice
+  (NixOS in `fort.nix`, darwin in `control-plane.nix`). Both now share
+  `service-lib.nix#hostManifestContentFor`; each platform keeps its own
+  byte-identical wrapper (`builtins.toFile` vs `pkgs.writeText`) because
+  changing either wrapper would change that platform's drv.
 
-Branch: `burn/cert-lifecycle` (from `main` @ 130968f). Nothing deployed;
-no remote state touched; `flake.lock` untouched (`git diff main --
-flake.lock` is empty).
+Verified: full-fleet drv sweep after the commit — **all 14 hosts (incl.
+obrien darwin) byte-identical to baseline**. Tier-1 boundary `just test`
+green.
 
-## Summary
+### q-1e0a32ed — Declared overlay dependencies — DONE (`af64648`, [med])
 
-The pinned nixpkgs ACME module splits each cert into a marker-gated
-self-signed bootstrap unit (`acme-<domain>.service`, exits 0 when
-`out/acme-success` exists) and the real timer-driven lego renewal
-(`acme-order-renew-<domain>.service`). fort-nix had its entire
-re-distribution path — the ssl-cert push trigger and the broker's local
-nginx copy — hooked to the bootstrap unit, so real renewals propagated
-nowhere. On top of that, the generated `fort-provider-trigger-*` units had
-no `path`, so even fired triggers lost every callback to an exec ENOENT on
-the `fort` CLI while exiting 0. And consumers, once `satisfied=true`,
-never re-requested — hence the manual force-nag ritual.
+- Host manifests: `overlays.<name>.dependsOn = [ "other-overlay" ]`,
+  validated at eval time (throws if the dep isn't declared on the host).
+- Manager (`pkgs/fort-overlay-manager`): activation processes overlays in
+  dependency order (deterministic DFS topo sort, name-ordered ties,
+  cycle-tolerant with a logged warning) in both `check` and `boot`.
+- systemd-level guarantee: the overlay's target gets `Wants=`/`After=` on
+  each dependency's target, and each *service* unit gets `After=` on them
+  too (a target's own `After=` does not order its wanted services). Target
+  units implicitly order `After=` their `Wants=`, so a dependency's
+  services have started before the dependent target activates.
+- First user: `discovery-zone.dependsOn = [ "knockout" ]` on ratched (the
+  quest's own example — previously an implicit /run/overlays/bin PATH dep).
+- Scope note: ordering is start-ordering, not health-gating — a dependent
+  starts once the dependency's services have *started*, not once healthy.
+  Health-gated deps would need the manager to consult health state across
+  overlays; not needed for the current dep (CLI on PATH) so not built.
+- Includes a `gofmt` pass over main.go (pre-existing misalignment).
 
-Fixes: renewal push moved to the ACME module's `postRun` hook (fires only
-on actual renewal); trigger units got `path = [ fortCli ]` (also repairs
-`oidc-register` pushes); a new opt-in `check` freshness probe in the needs
-protocol lets a satisfied need decay and re-request (ssl-cert re-pulls
-below 21 days validity — the pull-side backstop, no wire change); a broker
-watchdog force-renews on actual expiry (marker explicitly ignored) and
-fails loudly if the cert expires; the consumer install path now validates,
-refuses downgrades/garbage, installs atomically, and reloads nginx only on
-change; nginx's placeholder bootstrap also recovers from corrupt (not just
-missing) cert files. All expiry/marker/install decisions live in a new
-stdlib-only Go package, `pkgs/fort-certcheck`, as pure functions with unit
-tests (no live CA needed).
+### q-9f7a3b5b — Drain hooks — DONE, propose-and-implement (`df3cf1f`, [med])
 
-Full walkthrough, blast-radius audit, and deferred proposals:
-`docs/cert-lifecycle-audit.md`.
+Body was empty; scoped minimally. **Design decision**: the drain hook is
+systemd's native drain point, `ExecStop=`. overlay.nix services gain an
+optional `drain` (string command) written into the generated unit; systemd
+runs it while the service is still up and only signals remaining processes
+after it exits, bounded by the existing `timeoutStopSec`. Why this shape:
 
-## Commits
+- Stop, replace, and rollback all drain via the same path with zero manager
+  orchestration — no new states in the activation state machine.
+- The *running* unit file carries its own version's drain command, so a
+  replace drains the old process with the drain logic matching the old
+  binary (a manager-side hook would have run the new version's drain
+  against the old process).
+- Rejected alternatives: a manager-executed pre-stop command (wrong-version
+  problem above, plus duplicate timeout bookkeeping); a health-type-like
+  drain endpoint (HTTP-only, and ExecStop can curl an endpoint anyway).
 
-- 090011a `[med] q-6f9d966e: pkgs/fort-certcheck — testable cert lifecycle decisions`
-- e009736 `[med] q-6f9d966e: broker — push renewals via postRun, expiry watchdog`
-- 7424222 `[med] q-5118c7ed: control plane — trigger PATH fix + check freshness probe`
-- 972df4d `[med] q-b0530f9b: consumers — validated atomic cert install + freshness check`
-- 960aa5d `[low] docs: cert lifecycle audit`
+No current overlay declares `drain`; it becomes available to project repos'
+overlay.nix immediately after deploy (no fort-nix change needed per-project).
 
-## Quest disposition
+### q-b5f9ad4b — Flatten overlay unit naming — DONE (`dbfb163`, [med], intentionally last/droppable)
 
-| Quest | Disposition |
-|-------|-------------|
-| q-6f9d966e | **Fixed.** Renewal decisions keyed on actual notAfter (`DecideRenewal` ignores the marker by design; `TestDecideRenewal_ExpiredCertWithStaleMarker` is the regression test). Broker watchdog force-starts `acme-order-renew` below 25d and fails visibly at expiry. Correct manual knob documented: `systemctl start acme-order-renew-<domain>.service`. |
-| q-5118c7ed | **Fixed (safe subset) + proposal.** Push path repaired (postRun hook + trigger PATH); pull backstop via the new `check` probe on the ssl-cert need (re-requests under 21d validity, once per nag interval). Consumer-local only — wire protocol, callbacks, GC untouched. Deferred to proposal (audit §4): provider-side delivery tracking/retry and content-hash/notAfter in the fulfillment identity, both needing live two-host testing. Test covering fulfilled-but-stale: `TestIsFresh` + `TestShouldInstall_RenewedCertReplacesOld`. |
-| q-b0530f9b | **Audited + worst wedges fixed.** Blast-radius writeup in audit §2. Fixed: malformed callback payload clobbering live certs (latent, would have broken TLS cluster-wide), corrupt cert wedging nginx at boot, silent renewal-path death (watchdog alarm). Everything now degrades to serve-stale + loud failed unit. |
-| q-5c4502d3 | **Sketch only** (audit §4), per brief: not built. The per-domain request keying is additive and backward compatible when wanted. |
+New scheme: a service named after its overlay generates
+`overlay-<name>.service` (was `overlay-<name>-<name>.service`); distinct
+service names keep the namespaced `overlay-<overlay>-<service>.service`
+(full flattening was rejected — two overlays could both define a service
+named e.g. `web` and collide). Targets unchanged (`overlay-<name>.target`).
 
-## Verification actually run
+**Renamed units** (enumerated from live `/run/systemd/system` on the
+overlay hosts via `fort read-file`):
 
-1. `go test ./...` in `pkgs/fort-certcheck` — pass (12 tests). Also runs
-   in the nix build checkPhase (verified via `nix build` of the package)
-   and added to `just test`.
-2. CLI smoke test with openssl-generated certs (scratchpad): marker
-   ignored on expired cert; 1-day placeholder → stale; 90-day → fresh;
-   downgrade refused (rc=1); garbage / key mismatch refused (rc=3);
-   real-over-placeholder accepted (rc=0).
-3. `nix flake check ./clusters/bedlam/hosts/drhorrible` and `…/ratched` —
-   pass.
-4. Full `just test` (root flake + all 14 hosts + all devices in parallel,
-   plus all Go provider suites) — exit 0.
-5. drv-diff vs main (recursive derivation-graph set difference):
-   - ratched: `p7n5pb0r…` → `jxb3yrhv…`; only intended drvs changed
-     (fort-certcheck, ssl-cert-handler, ssl-cert-fresh, fort-fulfill,
-     needs.json, fort-consumer units, nginx pre-start, roll-ups).
-   - drhorrible: `9c2qvrab…` → `gk8wybqm…`; only intended drvs changed
-     (watchdog units, acme-order-renew + acme-postrun, both
-     fort-provider-trigger units, handler-ssl-cert, fort-fulfill,
-     fort-certcheck, roll-ups).
-   Closure changes are intended in every case; details in audit §3.
-6. `git diff main -- flake.lock` — empty.
+| Host | Renamed | Unchanged |
+|------|---------|-----------|
+| ratched | overlay-{cranium,cupola,discovery-zone,headjack,knockout,kobold,lair,litmus,questbook}.service (9) | — |
+| lordhenry | overlay-{grotto,tiamat}.service (2) | overlay-kobold-worker.service (service `worker` ≠ overlay `kobold`) |
+| frankenstein | — (unkork has no generated service units yet) | — |
+| (ratched) muse, phylactery | — (targets only, no service units) | — |
 
-Not verified (needs live hosts, out of scope per brief): an actual
-renewal→push→install round trip, and watchdog behavior against a real
-wedged timer. The decision layer is unit-tested; the wiring is
-eval-checked; first live renewal on a canary host (suggest `<host>-test`
-branch on a consumer + `fort drhorrible systemd '{"action":"start","unit":"fort-provider-trigger-ssl-cert"}'`)
-is the remaining prudent step before trusting it in anger.
+**Migration** is self-contained in the manager: when a pre-flattening unit
+file exists, `generateUnits` stops that unit *before* removing it (so the
+renamed unit doesn't double-run into port conflicts when
+`fort-overlay-manager-boot` regenerates after the deploy), and
+`stopServices` also stops the legacy name as belt-and-braces. Expect one
+brief stop/start per renamed service on the first activation after deploy.
 
-## darwin-parity merge friction (unmerged `burn/darwin-parity`)
+**References audited and updated** (repo-wide grep over nix/md/go/js/sh/yml):
 
-Overlapping files: `aspects/certificate-broker/default.nix` (parity adds a
-platform-gate header, this branch edits the body — expect one trivial
-take-both conflict at the file head) and `common/fort/control-plane.nix`
-(disjoint hunks: parity touches the darwin journal handler and platform
-gating; this branch touches needOptions / needsJson / fulfill script /
-trigger generation — should auto-merge). The `check` probe runs unchanged
-under parity's darwin launchd consumer (plain jq/coreutils store paths).
-Details in audit §5.
+- `clusters/bedlam/hosts/lordhenry/manifest.nix` — tiamat anthropic-secret
+  drop-in dir (`overlay-tiamat.service.d/`, with `rm -rf` of the stale
+  pre-rename dir) and `tiamat-profiles-provision.before`.
+- `AGENTS.md` — unit-naming line rewritten for the new scheme.
+- `pkgs/fort-overlay-manager/main.go` — all generation/stop sites go
+  through `serviceUnitName`/`legacyServiceUnitName`.
+- No other in-repo references exist (fort capabilities take unit names as
+  request parameters; nothing hardcodes overlay unit names).
+
+## Verification record
+
+Executed on this branch (Linux dev sandbox; no darwin hardware):
+
+1. **Baseline**: merge commit `e32bff8` — `just test` green; drvPath
+   snapshot for all 14 hosts (13 NixOS + obrien darwin).
+2. **After factoring tier** (q-d9cba37c, then again after q-1f08acd9):
+   full-fleet drv sweep — **zero changes**; every host's toplevel drvPath
+   byte-identical to baseline, including obrien's darwinConfigurations
+   (which also keeps the CI darwin force-eval covered — the release.yml
+   step from darwin-parity is untouched). `just test` green at the tier
+   boundary.
+3. **After overlay tier** (q-1e0a32ed + q-9f7a3b5b): `just test` green.
+   Drv sweep — exactly three hosts changed, all mapped:
+   - ratched, lordhenry, frankenstein → fort-overlay-manager rebuild
+     (refresh handler in /etc + manager units) and /etc/fort/overlays.json
+     gaining `dependsOn`; ratched additionally the discovery-zone
+     declaration. All are overlay hosts; doofenshmirtz (empty `overlays =
+     {}`) correctly unchanged; the other 10 NixOS hosts + obrien
+     byte-identical. Nothing unmapped.
+4. **After rename tier** (q-b5f9ad4b): `just test` green. Drv sweep vs
+   tier-2: same three hosts changed (manager rebuild; lordhenry also the
+   tiamat drop-in path + activation script). All other hosts byte-identical
+   to baseline. Nothing unmapped.
+5. `go build ./...` + `go vet` + `gofmt -l` clean in
+   `pkgs/fort-overlay-manager` at every commit touching it (no test files
+   exist in the package — pre-existing).
+6. `git diff main...HEAD` touches no lockfile.
+
+## Questbook true-up notes (for merge review)
+
+- **q-d9cba37c**: close on merge. Note for the record: aggregation must
+  stay functional-composition, not `imports` (ordering hazard documented in
+  `common/fort.nix` header).
+- **q-1f08acd9**: close on merge, with the honest note that darwin-parity
+  had already done the platform-sharing substance; this quest's residue was
+  file-level decomposition + the host-manifest dedup. If the quest's intent
+  was something larger (e.g. extracting a reusable control-plane library
+  for non-fort consumers), it should be re-scoped as a new quest.
+- **q-1e0a32ed**: close on merge. Follow-on candidate if ever needed:
+  health-gated dependencies (start-ordering only today).
+- **q-9f7a3b5b**: close on merge. The `drain` field is live but unused;
+  first consumer should be whichever overlay next needs graceful shutdown
+  (litmus/tiamat are the likely candidates).
+- **q-b5f9ad4b**: close on merge **after** the Kevin-side follow-ups below
+  are triaged, since the rename is visible outside this repo.
+
+## Kevin-side follow-ups (out of repo — deliberately not chased)
+
+1. **Other repos / muscle memory that reference old unit names** in
+   `fort <host> journal/systemd` calls (e.g.
+   `{"unit":"overlay-knockout-knockout"}`) — anything scripted in project
+   repos' CI, runbooks, dashboards, or shell history. In-repo audit found
+   nothing, but litmus/knockout/headjack/tiamat repos and any monitoring
+   config were out of scope.
+2. **Deploy sequencing for the rename**: on each overlay host the rename
+   lands at the first `fort-overlay-manager-boot` run after switch, with
+   one stop/start per renamed service. If tiamat mid-run interruption is
+   costly, deploy lordhenry at a quiet moment.
+3. **Stale drop-in dir on lordhenry** is cleaned by the activation script;
+   if the deploy is ever rolled back past this branch, the old
+   `overlay-tiamat-tiamat.service.d` would need restoring by re-activation.
+4. **Merge order** stands as briefed: darwin-parity → cert-lifecycle →
+   this branch. Both parents were frozen; if merge review trims them, this
+   branch rebases through the certificate-broker header and
+   control-plane.nix hunks (now split across `common/fort/control-plane/`).
+5. **Runtime verification after deploy** (nothing was deployed from this
+   branch): `fort ratched status`, `systemctl status overlay-knockout` on
+   ratched, one `fort ratched refresh '{"overlay":"discovery-zone"}'` to
+   watch the ordered activation, and `journalctl -u overlay-tiamat` on
+   lordhenry to confirm the drop-in still applies (Environment from
+   10-anthropic-secret-file.conf).
