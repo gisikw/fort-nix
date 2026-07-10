@@ -96,6 +96,27 @@ jobs:
         env:
           NIX_CONFIG: "warn-dirty = false"
 
+      # darwinConfigurations is not a standard flake output, so `nix flake
+      # check` skips it entirely — evaluate darwin hosts explicitly so a
+      # broken darwin eval fails CI like a broken NixOS eval does.
+      - name: Evaluate darwin configurations
+        run: |
+          fail=0
+          for host_dir in ./clusters/bedlam/hosts/*/; do
+            host=$(basename "$host_dir")
+            if nix flake show --json "$host_dir" 2>/dev/null | nix shell nixpkgs#jq -c jq -e '.darwinConfigurations' >/dev/null 2>&1; then
+              echo "::group::Darwin host: $host"
+              if ! nix eval --raw "$host_dir#darwinConfigurations.$host.config.system.build.toplevel.drvPath"; then
+                fail=1
+              fi
+              echo ""
+              echo "::endgroup::"
+            fi
+          done
+          [ "$fail" -eq 0 ]
+        env:
+          NIX_CONFIG: "warn-dirty = false"
+
   mirror:
     needs: check
     if: github.event_name == 'push'
