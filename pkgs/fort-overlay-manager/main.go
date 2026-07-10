@@ -62,6 +62,7 @@ type ServiceDef struct {
 	Restart          string   `json:"restart"`
 	RestartSec       int      `json:"restartSec"`
 	TimeoutStopSec   int      `json:"timeoutStopSec"`
+	Drain            string   `json:"drain"`
 	Environment      []string `json:"environment"`
 	EnvironmentFile  []string `json:"environmentFile"`
 }
@@ -561,6 +562,14 @@ RestartSec=%d
 		}
 		if svc.WorkingDirectory != "" {
 			content += fmt.Sprintf("WorkingDirectory=%s\n", svc.WorkingDirectory)
+		}
+		// Drain hook (q-9f7a3b5b): ExecStop runs the drain command while the
+		// service is still up; remaining processes are signalled only after
+		// it exits (bounded by TimeoutStopSec). The running unit file carries
+		// its own version's drain command, so replace and rollback both drain
+		// with the definition that matches the running binary.
+		if svc.Drain != "" {
+			content += fmt.Sprintf("ExecStop=%s\n", svc.Drain)
 		}
 		content += envLines
 

@@ -177,6 +177,7 @@ overlays = {
 | `restart` | Restart policy (default: `on-failure`) |
 | `restartSec` | Seconds between restarts (default: `5`) |
 | `timeoutStopSec` | Seconds before SIGKILL on stop |
+| `drain` | Command run at stop time (`ExecStop=`) to drain gracefully — runs while the service is still up; the process is signalled only after it exits (bounded by `timeoutStopSec`) |
 
 Use `dynamicUser = true` + `stateDirectory` for services that don't need a real user — systemd handles user allocation and directory ownership. Prefer this over `user = "nobody"` when the service needs writable state.
 
