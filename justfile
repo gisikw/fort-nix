@@ -638,8 +638,8 @@ test host="":
     exit 1
   fi
 
-  # Run Go tests for provider directories
-  for provider_dir in ./apps/*/provider ./aspects/*/provider; do
+  # Run Go tests for provider directories and Go packages with tests
+  for provider_dir in ./apps/*/provider ./aspects/*/provider ./pkgs/fort-certcheck; do
     if [[ -d "$provider_dir" ]] && [[ -f "$provider_dir/go.mod" ]]; then
       echo "[Fort] go test ${provider_dir}"
       (cd "$provider_dir" && go test -v ./...)
