@@ -6,10 +6,18 @@
 let
   domain = rootManifest.fortConfig.settings.domain;
 
+  fort-certcheck = import ../../pkgs/fort-certcheck { inherit pkgs; };
+
+  # The nixpkgs acme module renews when fewer than validMinDays (default 30)
+  # remain. The watchdog threshold sits below that: it only fires after the
+  # normal renewal path has been failing for ~5 days, and it gates on the
+  # cert's actual notAfter — never on the acme-success marker (q-6f9d966e).
+  watchdogMinDays = 25;
+
   # Async handler for ssl-cert capability
   # Receives aggregate requests, returns same certs for all consumers (wildcard)
   # Input: {"origin:ssl-cert-default": {"request": {...}}, ...}
-  # Output: {"origin:ssl-cert-default": {cert, key, chain, domain}, ...}
+  # Output: {"origin:ssl-cert-default": {cert, key, chain, domain, notAfter}, ...}
   sslCertHandler = pkgs.writeShellScript "handler-ssl-cert" ''
     set -euo pipefail
 
@@ -25,13 +33,18 @@ let
     key=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/key.pem")
     chain=$(${pkgs.coreutils}/bin/base64 -w0 "$cert_dir/chain.pem")
 
+    # notAfter rides along for observability and makes renewal an explicit
+    # response change (the provider pushes callbacks on response changes).
+    not_after=$(${pkgs.openssl}/bin/openssl x509 -in "$cert_dir/fullchain.pem" -noout -enddate | ${pkgs.coreutils}/bin/cut -d= -f2)
+
     # Build response template
     response=$(${pkgs.jq}/bin/jq -n \
       --arg cert "$cert" \
       --arg key "$key" \
       --arg chain "$chain" \
       --arg domain "${domain}" \
-      '{domain: $domain, cert: $cert, key: $key, chain: $chain}')
+      --arg notAfter "$not_after" \
+      '{domain: $domain, cert: $cert, key: $key, chain: $chain, notAfter: $notAfter}')
 
     # Read aggregate input and return same response for all keys
     ${pkgs.jq}/bin/jq --argjson resp "$response" 'to_entries | map({key: .key, value: $resp}) | from_entries'
@@ -59,6 +72,17 @@ in
       ];
       dnsProvider = rootManifest.fortConfig.settings.dnsProvider;
       environmentFile = config.sops.secrets.dns-provider-env.path;
+      # Real renewals happen in acme-order-renew-${domain}.service (timer-
+      # driven lego), NOT in acme-${domain}.service — that unit only
+      # bootstraps a self-signed cert and short-circuits once the
+      # acme-success marker exists. postRun is the module's renewal hook:
+      # it runs (as root) only when lego actually installed a new cert,
+      # so this is what pushes fresh certs to consumers and local nginx.
+      # --no-block: postRun runs inside the acme unit; blocking on units
+      # that are ordered against it would deadlock.
+      postRun = ''
+        systemctl --no-block start fort-ssl-local-copy.service fort-provider-trigger-ssl-cert.service
+      '';
     };
   };
 
@@ -68,9 +92,52 @@ in
     mode = "async";  # Aggregate handler, returns same certs to all consumers
     triggers = {
       initialize = true;  # Push certs on boot
-      systemd = [ "acme-${domain}.service" ];  # Push on renewal
+      # Bootstrap/restart path only: acme-${domain}.service is the nixpkgs
+      # "ensure certificate" unit (self-signed bootstrap, marker-gated). The
+      # renewal push comes from security.acme.certs.${domain}.postRun above.
+      systemd = [ "acme-${domain}.service" ];
     };
     description = "Return cluster SSL certificates (ACME-managed)";
+  };
+
+  # Renewal watchdog (q-6f9d966e): the only scheduled renewal path is the
+  # acme-order-renew-${domain}.timer; if it wedges or lego keeps failing,
+  # the cert silently ages out while acme-${domain}.service keeps exiting 0
+  # on its acme-success marker. This watchdog gates on the actual notAfter:
+  # once past the threshold it force-starts the order-renew unit, and it
+  # fails loudly (visible in `systemctl --failed` / host-status) if the
+  # cert has expired outright and renewal did not recover it.
+  systemd.services.fort-cert-renewal-watchdog = {
+    description = "Force ACME renewal when the cluster cert nears expiry";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.systemd ];
+    script = ''
+      cert="/var/lib/acme/${domain}/fullchain.pem"
+      marker="/var/lib/acme/${domain}/acme-success"
+
+      if ${fort-certcheck}/bin/fort-certcheck should-renew --cert "$cert" --min-days ${toString watchdogMinDays} --marker "$marker"; then
+        echo "renewal overdue; starting acme-order-renew-${domain}.service"
+        systemctl start "acme-order-renew-${domain}.service" || true
+      fi
+
+      # Independent of renewal outcome: an expired cluster cert is an
+      # incident — fail the unit so it surfaces in systemctl --failed.
+      if ! ${fort-certcheck}/bin/fort-certcheck fresh --cert "$cert" --min-days 0; then
+        echo "cluster certificate for ${domain} is expired or unreadable" >&2
+        exit 1
+      fi
+    '';
+  };
+
+  systemd.timers.fort-cert-renewal-watchdog = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "15m";
+      OnUnitActiveSec = "6h";
+      RandomizedDelaySec = "10m";
+    };
   };
 
   # Copy ACME certs to standard location for local nginx
