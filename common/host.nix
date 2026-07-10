@@ -35,8 +35,10 @@ let
   rootAuthorizedKeys = builtins.filter isSSHKey (map (p: p.publicKey) principalsWithRoot);
   roles = map (r: import ../roles/${r}.nix) hostManifest.roles;
   # Default aspects that every host gets
-  # mesh + gitops are platform-universal; host-status is NixOS-only (systemd, nginx, /proc)
-  defaultAspects = [ "mesh" "gitops" ] ++ (if platform == "nixos" then [ "host-status" "emergency-reboot" ] else [ ]);
+  # mesh + gitops + host-status are platform-universal (host-status branches
+  # internally: systemd/nginx on NixOS, launchd status writer on darwin);
+  # emergency-reboot is NixOS-only (systemd, netfilter)
+  defaultAspects = [ "mesh" "gitops" "host-status" ] ++ (if platform == "nixos" then [ "emergency-reboot" ] else [ ]);
   # Deduplicate aspects: host manifest overrides defaults (attrset form wins over string)
   aspectName = a: if builtins.isString a then a else a.name;
   dedup = defaults: extras:
