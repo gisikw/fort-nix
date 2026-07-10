@@ -481,6 +481,25 @@ func evalOverlay(storePath string, config map[string]string) (*OverlayManifest, 
 	return &manifest, nil
 }
 
+// serviceUnitName returns the systemd unit for an overlay service. When the
+// service is named after its overlay (the common single-service case) the
+// name is flattened to overlay-<name>.service — the overlay-tiamat-tiamat
+// double prefix was reliably confusing (q-b5f9ad4b). Overlays with distinct
+// service names keep the namespaced overlay-<overlay>-<service>.service form
+// so services from different overlays can never collide.
+func serviceUnitName(overlay, service string) string {
+	if service == overlay {
+		return fmt.Sprintf("overlay-%s.service", overlay)
+	}
+	return fmt.Sprintf("overlay-%s-%s.service", overlay, service)
+}
+
+// legacyServiceUnitName is the pre-flattening name. Used only to migrate:
+// stop and remove units written by an older manager version.
+func legacyServiceUnitName(overlay, service string) string {
+	return fmt.Sprintf("overlay-%s-%s.service", overlay, service)
+}
+
 func generateUnits(name string, manifest *OverlayManifest, dependsOn []string) error {
 	unitDir := "/run/systemd/system"
 
@@ -503,8 +522,22 @@ Description=Overlay target for %s
 	// Generate service units
 	var wantedByTarget []string
 	for svcName, svc := range manifest.Services {
-		unitName := fmt.Sprintf("overlay-%s-%s.service", name, svcName)
+		unitName := serviceUnitName(name, svcName)
 		wantedByTarget = append(wantedByTarget, unitName)
+
+		// Migrate away from the pre-flattening unit name: a leftover unit
+		// file means an older manager version may still have that unit
+		// running — stop it before removing so the renamed unit doesn't
+		// double-run (port conflicts), then drop its wants symlink.
+		if legacy := legacyServiceUnitName(name, svcName); legacy != unitName {
+			legacyPath := filepath.Join(unitDir, legacy)
+			if _, err := os.Stat(legacyPath); err == nil {
+				log.Printf("[%s] migrating unit %s -> %s", name, legacy, unitName)
+				exec.Command("systemctl", "stop", legacy).Run()
+				os.Remove(legacyPath)
+				os.Remove(filepath.Join(unitDir, targetName+".wants", legacy))
+			}
+		}
 
 		after := "network.target"
 		if len(svc.After) > 0 {
@@ -600,10 +633,17 @@ func stopTarget(name string) {
 
 func stopServices(name string, manifest *OverlayManifest) {
 	for svcName := range manifest.Services {
-		unit := fmt.Sprintf("overlay-%s-%s.service", name, svcName)
-		log.Printf("[%s] stopping %s", name, unit)
-		if err := exec.Command("systemctl", "stop", unit).Run(); err != nil {
-			log.Printf("[%s] stop %s: %v (may not have been running)", name, unit, err)
+		units := []string{serviceUnitName(name, svcName)}
+		// Belt-and-braces: also stop the pre-flattening name in case a unit
+		// from an older manager version is still loaded.
+		if legacy := legacyServiceUnitName(name, svcName); legacy != units[0] {
+			units = append(units, legacy)
+		}
+		for _, unit := range units {
+			log.Printf("[%s] stopping %s", name, unit)
+			if err := exec.Command("systemctl", "stop", unit).Run(); err != nil {
+				log.Printf("[%s] stop %s: %v (may not have been running)", name, unit, err)
+			}
 		}
 	}
 	// Also deactivate the target so startTarget sees a clean state

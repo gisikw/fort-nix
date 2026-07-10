@@ -188,7 +188,7 @@ Use `dynamicUser = true` + `stateDirectory` for services that don't need a real 
 fort <host> refresh '{"overlay": "myapp"}'  # Trigger immediate check
 ```
 
-**Overlay-managed binaries** are symlinked to `/run/overlays/bin/` (in PATH). Systemd units are named `overlay-<name>-<service>.service`.
+**Overlay-managed binaries** are symlinked to `/run/overlays/bin/` (in PATH). Systemd units are named `overlay-<name>.service` when the service is named after its overlay (the common single-service case), or `overlay-<overlay>-<service>.service` when the names differ (e.g. `overlay-kobold-worker.service`).
 
 Working examples: knockout, headjack, litmus (all on ratched).
 

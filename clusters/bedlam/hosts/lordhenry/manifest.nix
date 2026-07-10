@@ -546,13 +546,15 @@ rec {
       # continue using their OAuth state rather than accidentally switching to
       # API-key auth inherited from the parent process.
       config.system.activationScripts.tiamatAnthropicSecretDropin.text = ''
-        install -D -m 0644 ${tiamatAnthropicSecretDropin} /etc/systemd/system/overlay-tiamat-tiamat.service.d/10-anthropic-secret-file.conf
+        install -D -m 0644 ${tiamatAnthropicSecretDropin} /etc/systemd/system/overlay-tiamat.service.d/10-anthropic-secret-file.conf
+        # Pre-flattening unit name (q-b5f9ad4b) — drop the stale drop-in dir
+        rm -rf /etc/systemd/system/overlay-tiamat-tiamat.service.d
       '';
 
       config.systemd.services.tiamat-profiles-provision = {
         description = "Provision Tiamat profile configuration";
         wantedBy = [ "multi-user.target" ];
-        before = [ "overlay-tiamat-tiamat.service" ];
+        before = [ "overlay-tiamat.service" ];
         serviceConfig.Type = "oneshot";
         script = ''
           ${pkgs.coreutils}/bin/install -D -o tiamat -g tiamat -m 0440 ${tiamatProfilesYaml} /var/lib/tiamat/profiles.yaml
