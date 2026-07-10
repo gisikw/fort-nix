@@ -269,25 +269,45 @@ let
         max_line_chars="$max_line_chars_raw"
       fi
 
-      # Build macOS log show command
-      # Map unit/identifier to a process predicate
-      if [ -n "$unit" ]; then
-        predicate="process == \"$unit\" OR subsystem == \"$unit\" OR senderImagePath CONTAINS \"$unit\""
-      else
-        predicate="process == \"$identifier\" OR subsystem == \"$identifier\""
-      fi
-
-      args=("--predicate" "$predicate" "--style" "compact" "--last" "''${lines}m")
-      if [ -n "$since" ]; then
-        args=("--predicate" "$predicate" "--style" "compact" "--start" "$since")
-      fi
-
+      name="''${unit:-$identifier}"
       raw_file=$(${pkgs.coreutils}/bin/mktemp)
       trap 'rm -f "$raw_file"' EXIT
-      if [ -n "$grep_pattern" ]; then
-        /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" | ${pkgs.gnugrep}/bin/grep -E -i -- "$grep_pattern" > "$raw_file" || true
+
+      # Launchd daemons in this cluster log via StandardOutPath to
+      # /var/log/<name>.log — those messages never reach the unified log,
+      # so prefer the log file when one exists (q-314c1d31). Try the name
+      # as given, then with a network.gisi.* label mapped back to a file
+      # name (network.gisi.fort.provider -> fort-provider).
+      log_file=""
+      for candidate in "/var/log/$name.log" "/var/log/$(echo "$name" | ${pkgs.gnused}/bin/sed 's/^network\.gisi\.//; s/\./-/g').log"; do
+        if [ -f "$candidate" ]; then
+          log_file="$candidate"
+          break
+        fi
+      done
+
+      if [ -n "$log_file" ]; then
+        if [ -n "$grep_pattern" ]; then
+          ${pkgs.gnugrep}/bin/grep -E -i -- "$grep_pattern" "$log_file" | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file" || true
+        else
+          ${pkgs.coreutils}/bin/tail -n "$lines" "$log_file" > "$raw_file" || true
+        fi
       else
-        /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file" || true
+        # Fall back to the unified log. Include info/debug levels (log show
+        # only emits default-level messages otherwise) and match on process
+        # name, subsystem, or image path.
+        predicate="process == \"$name\" OR subsystem == \"$name\" OR senderImagePath CONTAINS \"$name\" OR processImagePath CONTAINS \"$name\""
+
+        args=("--predicate" "$predicate" "--style" "compact" "--info" "--debug" "--last" "1h")
+        if [ -n "$since" ]; then
+          args=("--predicate" "$predicate" "--style" "compact" "--info" "--debug" "--start" "$since")
+        fi
+
+        if [ -n "$grep_pattern" ]; then
+          /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.gnugrep}/bin/grep -E -i -- "$grep_pattern" | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file" || true
+        else
+          /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file" || true
+        fi
       fi
       ${pkgs.python3}/bin/python3 ${sanitizeJournalOutput} "$raw_file" "$lines_requested" "$lines" "$max_chars" "$max_line_chars" "$line_limit_clamped" "$char_limit_clamped" "$max_line_chars_clamped"
     '' else ''
@@ -391,14 +411,25 @@ let
         fi
       }
 
-      # Helper: resolve a short name to a launchd service target
-      # Tries system/ prefix first, falls back to gui/ for the admin user
-      resolve_target() {
-        local label="$1"
-        if /bin/launchctl print "system/$label" >/dev/null 2>&1; then
-          echo "system/$label"
+      # Helper: resolve a short name to a launchd label.
+      # Tries the name as given, then scans loaded labels for a suffix match
+      # treating '-' and '.' as interchangeable (fort-provider matches
+      # network.gisi.fort.provider).
+      resolve_label() {
+        local name="$1"
+        if /bin/launchctl print "system/$name" >/dev/null 2>&1; then
+          echo "$name"
+          return
+        fi
+        local pattern
+        pattern=$(echo "$name" | ${pkgs.gnused}/bin/sed 's/[-.]/[-.]/g')
+        local match
+        match=$(/bin/launchctl list 2>/dev/null | ${pkgs.gawk}/bin/awk 'NR>1 {print $3}' \
+          | ${pkgs.gnugrep}/bin/grep -E -- "(^|\.)''${pattern}$" | ${pkgs.coreutils}/bin/head -1)
+        if [ -n "$match" ]; then
+          echo "$match"
         else
-          echo "system/$label"  # default to system
+          echo "$name"  # fall through; launchctl will report the error
         fi
       }
 
@@ -406,13 +437,29 @@ let
         restart)
           unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
           validate_label "$unit"
-          target=$(resolve_target "$unit")
+          label=$(resolve_label "$unit")
+          plist="/Library/LaunchDaemons/$label.plist"
 
-          if output=$(/bin/launchctl kickstart -k "$target" 2>&1); then
-            ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "restarted", "unit": $unit}'
+          # Prefer bootout + bootstrap: unlike kickstart -k, this clears
+          # launchd's spawn throttle (q-d9b7ef7b — a service that crashed
+          # recently, e.g. right after reboot, refuses kickstart until the
+          # throttle interval expires).
+          if [ -f "$plist" ]; then
+            /bin/launchctl bootout "system/$label" 2>/dev/null || true
+            if output=$(/bin/launchctl bootstrap system "$plist" 2>&1); then
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" \
+                '{"status": "restarted", "unit": $unit, "label": $label, "method": "bootstrap"}'
+            else
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" --arg error "$output" \
+                '{"error": "restart failed", "unit": $unit, "label": $label, "details": $error}'
+              exit 1
+            fi
+          elif output=$(/bin/launchctl kickstart -k "system/$label" 2>&1); then
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" \
+              '{"status": "restarted", "unit": $unit, "label": $label, "method": "kickstart"}'
           else
-            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
-              '{"error": "restart failed", "unit": $unit, "details": $error}'
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" --arg error "$output" \
+              '{"error": "restart failed", "unit": $unit, "label": $label, "details": $error}'
             exit 1
           fi
           ;;
@@ -420,13 +467,26 @@ let
         start)
           unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
           validate_label "$unit"
-          target=$(resolve_target "$unit")
+          label=$(resolve_label "$unit")
+          plist="/Library/LaunchDaemons/$label.plist"
 
-          if output=$(/bin/launchctl kickstart "$target" 2>&1); then
-            ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "started", "unit": $unit}'
+          # If the service isn't loaded (e.g. after a stop via bootout),
+          # bootstrap it from its plist; otherwise kickstart it.
+          if ! /bin/launchctl print "system/$label" >/dev/null 2>&1 && [ -f "$plist" ]; then
+            if output=$(/bin/launchctl bootstrap system "$plist" 2>&1); then
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" \
+                '{"status": "started", "unit": $unit, "label": $label, "method": "bootstrap"}'
+            else
+              ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" --arg error "$output" \
+                '{"error": "start failed", "unit": $unit, "label": $label, "details": $error}'
+              exit 1
+            fi
+          elif output=$(/bin/launchctl kickstart "system/$label" 2>&1); then
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" \
+              '{"status": "started", "unit": $unit, "label": $label, "method": "kickstart"}'
           else
-            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
-              '{"error": "start failed", "unit": $unit, "details": $error}'
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" --arg error "$output" \
+              '{"error": "start failed", "unit": $unit, "label": $label, "details": $error}'
             exit 1
           fi
           ;;
@@ -434,13 +494,19 @@ let
         stop)
           unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
           validate_label "$unit"
-          target=$(resolve_target "$unit")
+          label=$(resolve_label "$unit")
 
-          if output=$(/bin/launchctl kill SIGTERM "$target" 2>&1); then
-            ${pkgs.jq}/bin/jq -n --arg unit "$unit" '{"status": "stopped", "unit": $unit}'
+          # bootout actually unloads the job — SIGTERM alone is undone by
+          # KeepAlive, which immediately respawns the process.
+          if output=$(/bin/launchctl bootout "system/$label" 2>&1); then
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" \
+              '{"status": "stopped", "unit": $unit, "label": $label, "method": "bootout"}'
+          elif output=$(/bin/launchctl kill SIGTERM "system/$label" 2>&1); then
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" \
+              '{"status": "stopped", "unit": $unit, "label": $label, "method": "sigterm"}'
           else
-            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg error "$output" \
-              '{"error": "stop failed", "unit": $unit, "details": $error}'
+            ${pkgs.jq}/bin/jq -n --arg unit "$unit" --arg label "$label" --arg error "$output" \
+              '{"error": "stop failed", "unit": $unit, "label": $label, "details": $error}'
             exit 1
           fi
           ;;
@@ -460,9 +526,10 @@ let
         status)
           unit=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.unit // empty')
           validate_label "$unit"
+          label=$(resolve_label "$unit")
 
           # Get service info from launchctl list
-          if info=$(/bin/launchctl list "$unit" 2>&1); then
+          if info=$(/bin/launchctl list "$label" 2>&1); then
             pid=$(echo "$info" | ${pkgs.gnugrep}/bin/grep '"PID"' | ${pkgs.gawk}/bin/awk '{print $NF}' | tr -d ';' || echo "0")
             exit_status=$(echo "$info" | ${pkgs.gnugrep}/bin/grep '"LastExitStatus"' | ${pkgs.gawk}/bin/awk '{print $NF}' | tr -d ';' || echo "0")
             if [ -n "$pid" ] && [ "$pid" != "0" ]; then
@@ -1469,6 +1536,10 @@ in
           ];
           KeepAlive = true;
           RunAtLoad = true;
+          # Respawn quickly after a crash instead of launchd's default 10s
+          # throttle — early-boot failures (network/TLS state not ready yet)
+          # otherwise leave the provider throttled after reboot (q-d9b7ef7b).
+          ThrottleInterval = 5;
           StandardOutPath = "/var/log/fort-provider.log";
           StandardErrorPath = "/var/log/fort-provider.log";
           EnvironmentVariables = {
