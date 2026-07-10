@@ -43,14 +43,8 @@ in
     # Write unified host manifest for service discovery
     {
       system.activationScripts.fortHostManifest.text = let
-        # Extract aspect names (handle both string and {name=...} forms)
-        aspectName = a: if builtins.isString a then a else a.name or "unknown";
-        hostManifestJson = builtins.toFile "host-manifest.json" (builtins.toJSON {
-          apps = config.fort.host.apps or [];
-          aspects = map aspectName (config.fort.host.aspects or []);
-          roles = config.fort.host.roles or [];
-          services = config.fort.cluster.services;
-        });
+        hostManifestJson = builtins.toFile "host-manifest.json"
+          ((import ./service-lib.nix).hostManifestContentFor config);
       in ''
         install -Dm0644 ${hostManifestJson} /var/lib/fort/host-manifest.json
       '';
