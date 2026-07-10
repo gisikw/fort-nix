@@ -1,6 +1,7 @@
 {
   rootManifest,
   hostManifest,
+  deviceProfileManifest,
   ...
 }:
 {
@@ -10,6 +11,7 @@
   ...
 }:
 let
+  platform = deviceProfileManifest.platform or "nixos";
   domain = rootManifest.fortConfig.settings.domain;
   hostname = hostManifest.hostName;
   statusDir = "/var/lib/fort/status";
@@ -61,6 +63,56 @@ let
       --argjson deploy "$deploy_info" \
       --argjson services '${servicesJson}' \
       --arg generated "$(date -Iseconds)" \
+      '{
+        hostname: $hostname,
+        status: $status,
+        uptime_seconds: $uptime,
+        failed_units: $failed,
+        deploy: $deploy,
+        services: $services,
+        generated_at: $generated
+      }' > "${statusDir}/status.json.tmp"
+
+    mv "${statusDir}/status.json.tmp" "${statusDir}/status.json"
+  '';
+
+  # Darwin status generator: same status.json shape, macOS data sources
+  # (kern.boottime for uptime, launchctl for failed services). No nginx
+  # vhost or upload endpoint — the fort-provider serves HTTPS directly and
+  # the status handler reads status.json from disk.
+  darwinStatusScript = pkgs.writeShellScript "generate-host-status" ''
+    set -euo pipefail
+
+    # Uptime in seconds from kernel boot time
+    boot_epoch=$(/usr/sbin/sysctl -n kern.boottime | ${pkgs.gnused}/bin/sed 's/{ sec = \([0-9]*\).*/\1/')
+    now_epoch=$(${pkgs.coreutils}/bin/date +%s)
+    uptime_seconds=$((now_epoch - boot_epoch))
+
+    # Failed launchd services (non-zero last exit status)
+    failed_units=$(/bin/launchctl list 2>/dev/null | ${pkgs.gawk}/bin/awk 'NR>1 && $2 != 0 && $2 != "-" {count++} END {print count+0}')
+
+    if [ "$failed_units" -eq 0 ]; then
+      system_status="running"
+    else
+      system_status="degraded"
+    fi
+
+    # Deploy info from gitops state
+    if [ -f "${gitopsCommit}" ]; then
+      commit=$(${pkgs.coreutils}/bin/cat "${gitopsCommit}")
+      deploy_info="{\"commit\":\"$commit\",\"branch\":\"main\",\"source\":\"gitops\"}"
+    else
+      deploy_info='{"commit":"unknown","branch":"unknown","source":"none"}'
+    fi
+
+    ${pkgs.jq}/bin/jq -n \
+      --arg hostname "${hostname}" \
+      --arg status "$system_status" \
+      --argjson uptime "$uptime_seconds" \
+      --argjson failed "$failed_units" \
+      --argjson deploy "$deploy_info" \
+      --argjson services '${servicesJson}' \
+      --arg generated "$(${pkgs.coreutils}/bin/date -Iseconds)" \
       '{
         hostname: $hostname,
         status: $status,
@@ -135,7 +187,26 @@ let
     </html>
   '';
 in
-{
+if platform == "darwin" then {
+  # Darwin: launchd timer writes status.json for the control-plane status
+  # handler. Nginx vhost, upload socket, and the HTML status page are
+  # NixOS-only (no nginx on darwin hosts).
+  system.activationScripts.preActivation.text = lib.mkAfter ''
+    mkdir -p ${statusDir} && chmod 755 ${statusDir}
+    mkdir -p ${dropsDir} && chmod 755 ${dropsDir}
+  '';
+
+  launchd.daemons.fort-host-status = {
+    serviceConfig = {
+      Label = "network.gisi.fort.host-status";
+      ProgramArguments = [ "${darwinStatusScript}" ];
+      StartInterval = 30;
+      RunAtLoad = true;
+      StandardOutPath = "/var/log/fort-host-status.log";
+      StandardErrorPath = "/var/log/fort-host-status.log";
+    };
+  };
+} else {
   # Ensure directories exist
   systemd.tmpfiles.rules = [
     "d ${statusDir} 0755 root root -"
