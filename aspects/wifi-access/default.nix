@@ -1,5 +1,8 @@
-{ credentialsFile ? null, ... }:
+{ credentialsFile ? null, deviceProfileManifest, ... }:
 { config, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'wifi-access' is Linux-only (NetworkManager and impermanence); remove it from this darwin host's manifest"
+else
 {
   sops.secrets.nm-secrets = {
     sopsFile = if credentialsFile != null then credentialsFile else ./credentials.env.sops;

@@ -1,8 +1,12 @@
 {
   rootManifest,
+  deviceProfileManifest,
   ...
 }:
 { config, pkgs, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'certificate-broker' is Linux-only (security.acme and systemd services); remove it from this darwin host's manifest"
+else
 let
   domain = rootManifest.fortConfig.settings.domain;
 

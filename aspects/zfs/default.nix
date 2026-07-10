@@ -1,6 +1,7 @@
 {
   extraPools ? [ ],
   deviceManifest,
+  deviceProfileManifest,
   ...
 }:
 {
@@ -9,6 +10,9 @@
   lib,
   ...
 }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'zfs' is Linux-only (Linux kernel modules and systemd); remove it from this darwin host's manifest"
+else
 let
   zfsInstalled = builtins.pathExists "/run/current-system/kernel-modules/lib/modules/${config.boot.kernelPackages.kernel.version}/extra/zfs.ko.xz";
 in

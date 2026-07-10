@@ -1,5 +1,8 @@
-{ ... }:
+{ deviceProfileManifest, ... }:
 { config, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'nvidia-gpu' is Linux-only (NVIDIA drivers and X11); remove it from this darwin host's manifest"
+else
 {
   # Load NVIDIA proprietary driver (kernel modules + userspace)
   services.xserver.videoDrivers = [ "nvidia" ];

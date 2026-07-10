@@ -1,5 +1,8 @@
-{ rootManifest, ... }:
+{ rootManifest, deviceProfileManifest, ... }:
 { config, lib, pkgs, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'ldap' is Linux-only (services.lldap and systemd services); remove it from this darwin host's manifest"
+else
 let
   domain = rootManifest.fortConfig.settings.domain;
   strings = lib.strings;
