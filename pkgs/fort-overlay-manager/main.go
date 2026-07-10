@@ -10,23 +10,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
 
 // Config loaded from /etc/fort/overlays.json
 type Config struct {
-	RegistryUrl  string                    `json:"registryUrl"`
-	PollInterval string                    `json:"pollInterval"`
-	StateDir     string                    `json:"stateDir"`
-	BinDir       string                    `json:"binDir"`
-	Overlays     map[string]OverlayConfig  `json:"overlays"`
+	RegistryUrl  string                   `json:"registryUrl"`
+	PollInterval string                   `json:"pollInterval"`
+	StateDir     string                   `json:"stateDir"`
+	BinDir       string                   `json:"binDir"`
+	Overlays     map[string]OverlayConfig `json:"overlays"`
 }
 
 type OverlayConfig struct {
-	Package string            `json:"package"`
-	Config  map[string]string `json:"config"`
-	Enabled bool              `json:"enabled"`
+	Package   string            `json:"package"`
+	Config    map[string]string `json:"config"`
+	Enabled   bool              `json:"enabled"`
+	DependsOn []string          `json:"dependsOn"`
 }
 
 // Registry entry from the overlay-registry service
@@ -38,7 +40,7 @@ type RegistryEntry struct {
 // Persisted state per overlay
 type OverlayState struct {
 	StorePath    string `json:"storePath"`
-	ActivatedAt int64  `json:"activatedAt"`
+	ActivatedAt  int64  `json:"activatedAt"`
 	ManifestHash string `json:"manifestHash"`
 }
 
@@ -141,6 +143,47 @@ func loadConfig() Config {
 	return cfg
 }
 
+// orderedOverlays returns overlay names with declared dependencies before
+// their dependents, so a dependency activates before anything that needs it.
+// Deterministic (ties broken by name). Deps not declared on this host are
+// ignored here — the nix side rejects them at eval time. A dependency cycle
+// is broken deterministically with a logged warning rather than failing the
+// whole run.
+func orderedOverlays(overlays map[string]OverlayConfig) []string {
+	names := make([]string, 0, len(overlays))
+	for name := range overlays {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	order := make([]string, 0, len(names))
+	state := map[string]int{} // 0 = unvisited, 1 = visiting, 2 = done
+	var visit func(string)
+	visit = func(name string) {
+		switch state[name] {
+		case 1:
+			log.Printf("[%s] dependency cycle detected, activation order not guaranteed", name)
+			return
+		case 2:
+			return
+		}
+		state[name] = 1
+		deps := append([]string(nil), overlays[name].DependsOn...)
+		sort.Strings(deps)
+		for _, dep := range deps {
+			if _, ok := overlays[dep]; ok {
+				visit(dep)
+			}
+		}
+		state[name] = 2
+		order = append(order, name)
+	}
+	for _, name := range names {
+		visit(name)
+	}
+	return order
+}
+
 // cmdCheck polls the registry and activates new versions
 func cmdCheck(cfg Config, overlayFilter string) {
 	registry := fetchRegistry(cfg.RegistryUrl)
@@ -148,7 +191,10 @@ func cmdCheck(cfg Config, overlayFilter string) {
 		return
 	}
 
-	for name, ov := range cfg.Overlays {
+	// Dependency order: a new version of a dependency lands before its
+	// dependents are (re)activated in the same check cycle.
+	for _, name := range orderedOverlays(cfg.Overlays) {
+		ov := cfg.Overlays[name]
 		if !ov.Enabled {
 			continue
 		}
@@ -211,7 +257,7 @@ func cmdActivate(cfg Config, name, storePath string) {
 	// PROVISIONING: generate and load systemd units
 	ensureDataDirOwnership(name, ov.Config, manifest)
 	writeState(stateDir, "provisioning")
-	if err := generateUnits(name, manifest); err != nil {
+	if err := generateUnits(name, manifest, ov.DependsOn); err != nil {
 		log.Printf("[%s] unit generation failed: %v", name, err)
 		writeState(stateDir, "idle")
 		return
@@ -268,12 +314,12 @@ func cmdRollback(cfg Config, name string) {
 // cmdStatus shows the state of all overlays
 func cmdStatus(cfg Config, jsonOutput bool) {
 	type StatusEntry struct {
-		Name      string       `json:"name"`
-		Package   string       `json:"package"`
-		State     string       `json:"state"`
-		Current   *OverlayState `json:"current"`
-		Previous  *OverlayState `json:"previous"`
-		Enabled   bool         `json:"enabled"`
+		Name     string        `json:"name"`
+		Package  string        `json:"package"`
+		State    string        `json:"state"`
+		Current  *OverlayState `json:"current"`
+		Previous *OverlayState `json:"previous"`
+		Enabled  bool          `json:"enabled"`
 	}
 
 	var entries []StatusEntry
@@ -306,7 +352,10 @@ func cmdStatus(cfg Config, jsonOutput bool) {
 
 // cmdBoot regenerates systemd units from state dir on startup
 func cmdBoot(cfg Config) {
-	for name, ov := range cfg.Overlays {
+	bootOrder := orderedOverlays(cfg.Overlays)
+
+	for _, name := range bootOrder {
+		ov := cfg.Overlays[name]
 		if !ov.Enabled {
 			continue
 		}
@@ -330,7 +379,7 @@ func cmdBoot(cfg Config) {
 
 		ensureDataDirOwnership(name, ov.Config, manifest)
 
-		if err := generateUnits(name, manifest); err != nil {
+		if err := generateUnits(name, manifest, ov.DependsOn); err != nil {
 			log.Printf("[%s] boot unit generation failed: %v", name, err)
 			continue
 		}
@@ -341,8 +390,11 @@ func cmdBoot(cfg Config) {
 
 	daemonReload()
 
-	// Start all overlay targets
-	for name, ov := range cfg.Overlays {
+	// Start all overlay targets, dependencies first (the generated After=
+	// ordering makes systemd enforce this too; starting in order keeps the
+	// synchronous start calls from racing it)
+	for _, name := range bootOrder {
+		ov := cfg.Overlays[name]
 		if !ov.Enabled {
 			continue
 		}
@@ -428,14 +480,20 @@ func evalOverlay(storePath string, config map[string]string) (*OverlayManifest, 
 	return &manifest, nil
 }
 
-func generateUnits(name string, manifest *OverlayManifest) error {
+func generateUnits(name string, manifest *OverlayManifest, dependsOn []string) error {
 	unitDir := "/run/systemd/system"
 
-	// Generate target unit
+	// Generate target unit. Declared overlay dependencies become Wants= +
+	// After= on the target: starting this overlay pulls its dependencies in,
+	// and target units implicitly order After= their own Wants=, so a
+	// dependency's services have started before this target activates.
 	targetName := fmt.Sprintf("overlay-%s.target", name)
 	targetContent := fmt.Sprintf(`[Unit]
 Description=Overlay target for %s
 `, name)
+	for _, dep := range dependsOn {
+		targetContent += fmt.Sprintf("Wants=overlay-%s.target\nAfter=overlay-%s.target\n", dep, dep)
+	}
 
 	if err := os.WriteFile(filepath.Join(unitDir, targetName), []byte(targetContent), 0644); err != nil {
 		return fmt.Errorf("write target: %w", err)
@@ -450,6 +508,11 @@ Description=Overlay target for %s
 		after := "network.target"
 		if len(svc.After) > 0 {
 			after = strings.Join(svc.After, " ")
+		}
+		// Order each service after dependency targets too: a service's own
+		// start job is not ordered by its target's After=, only the target is.
+		for _, dep := range dependsOn {
+			after += fmt.Sprintf(" overlay-%s.target", dep)
 		}
 
 		restart := "on-failure"
@@ -670,7 +733,7 @@ func rollbackOverlay(cfg Config, name string) {
 		return
 	}
 
-	generateUnits(name, manifest)
+	generateUnits(name, manifest, ov.DependsOn)
 	daemonReload()
 	startTarget(name)
 	updateBinSymlinks(cfg.BinDir, manifest.Bins)

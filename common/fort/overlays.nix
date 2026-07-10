@@ -59,6 +59,13 @@ let
     paths = ov.paths or {};
     expose = ov.expose or null;
     enabled = ov.enabled or true;
+    # Declared inter-overlay dependencies (q-1e0a32ed): each entry must be
+    # another overlay on this host. The manager orders activation and adds
+    # After=/Wants= on the generated units so dependencies start first.
+    dependsOn = map (dep:
+      if builtins.hasAttr dep overlays then dep
+      else throw "fort-nix: overlay '${name}' dependsOn '${dep}', which is not declared on this host"
+    ) (ov.dependsOn or []);
   };
 
   normalizedOverlays = builtins.mapAttrs normalizeOverlay overlays;
@@ -70,6 +77,7 @@ let
       "%SECRET:/run/secrets/overlay-${name}-${secretName}%"
     ) ov.secrets);
     enabled = ov.enabled;
+    dependsOn = ov.dependsOn;
   }) normalizedOverlays;
 
   managerConfig = {

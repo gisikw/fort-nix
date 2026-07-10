@@ -134,6 +134,10 @@ rec {
     };
     discovery-zone = {
       package = "infra/discovery-zone";
+      # Uses knockout's ko binary from /run/overlays/bin — declared so
+      # activation orders knockout first instead of relying on PATH luck
+      # (q-1e0a32ed).
+      dependsOn = [ "knockout" ];
       config.port = "9878";
       secrets = {
         envFile = ./discovery-zone-env.sops;

@@ -161,6 +161,7 @@ overlays = {
 | `secrets` | Age-encrypted files → decrypted paths passed to `overlay.nix` |
 | `expose` | Optional `fort.cluster.services` equivalent (port, visibility, sso) |
 | `enabled` | Boolean, default `true` |
+| `dependsOn` | List of other overlay names on this host that must activate first (e.g. `[ "knockout" ]`). The manager activates dependencies first; generated units get `After=`/`Wants=` on the dependency's target |
 
 **Service definition fields** (inside `services.<name>` in overlay.nix):
 
