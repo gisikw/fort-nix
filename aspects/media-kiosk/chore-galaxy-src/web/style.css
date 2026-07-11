@@ -1,0 +1,10 @@
+/* Chore Galaxy kiosk — global reset + keyframes from the design prototype.
+   All component styling is inline (ported verbatim from the prototype). */
+html, body { margin: 0; height: 100%; background: #05060d; }
+* { box-sizing: border-box; }
+#root { height: 100%; }
+@keyframes cg-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes cg-spin { to { transform: rotate(360deg); } }
+@keyframes cg-pop { 0% { transform: scale(.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes cg-pulse { 0%,100% { opacity: .45; transform: scale(1); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes cg-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
