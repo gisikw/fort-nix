@@ -3,7 +3,7 @@
     "argv": ["/run/current-system/sw/bin/jellyfin-desktop", "--tv", "--fullscreen"]
   },
   "brick": {
-    "argv": ["/run/current-system/sw/bin/lbreakouthd"]
+    "argv": ["/run/current-system/sw/bin/kbreakout"]
   },
   "paint": {
     "argv": ["/run/current-system/sw/bin/tuxpaint", "--fullscreen"]

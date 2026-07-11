@@ -108,9 +108,10 @@ in
       superTux
       superTuxKart
       tuxpaint
-      # The free starter app: arrow-key native, zero config (tuxpaint needs a
-      # mouse the TV doesn't have; chromium-bsu is the vetted fallback).
-      lbreakouthd
+      # The free starter app: block-breaker, arrow-key native. Qt, because Qt
+      # clients (jellyfin) present correctly under cage while SDL fullscreen
+      # surfaces (lbreakouthd, tried first) render invisibly behind chromium.
+      kdePackages.kbreakout
     ]);
   };
 
