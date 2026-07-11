@@ -171,6 +171,9 @@ in
         "OLLAMA_KEEP_ALIVE=-1"
         "OLLAMA_FLASH_ATTENTION=1"
         "OLLAMA_KV_CACHE_TYPE=q8_0"
+        # Per-request prompt-eval progress + timings; added 2026-07-10
+        # while diagnosing labeler timeouts.
+        "OLLAMA_DEBUG=1"
       ];
     };
   };
