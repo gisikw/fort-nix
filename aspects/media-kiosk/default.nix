@@ -66,20 +66,21 @@ let
     for i in $(seq 1 60); do
       if ${pkgs.curl}/bin/curl -sf --max-time 2 "http://127.0.0.1:${galaxyPort}/api/state" >/dev/null 2>&1; then
         echo "Chore Galaxy up — launching kiosk browser"
-        # --incognito: greetd restarts kill chromium uncleanly, and crash-
-        # session restore reopens a normal toolbar window that defeats
-        # --kiosk. Incognito never restores (the kiosk holds no client
-        # state — it re-renders from the SSE stream).
+        # --app, not --kiosk: chromium on wayland/ozone ignores --kiosk and
+        # --start-fullscreen under cage (observed on the panel: toolbar
+        # stayed, incognito badge proved the flags were reaching chromium).
+        # An --app window has no toolbar by construction and cage maximizes
+        # every toplevel, so this doesn't depend on fullscreen negotiation.
+        # --incognito guards against any restore/crash-bubble state; the
+        # kiosk holds no client state (re-renders from SSE).
         exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
           --ozone-platform=wayland \
-          --kiosk \
-          --start-fullscreen \
+          --app="http://127.0.0.1:${galaxyPort}/" \
           --incognito \
           --noerrdialogs \
           --disable-session-crashed-bubble \
           --no-first-run \
-          --autoplay-policy=no-user-gesture-required \
-          "http://127.0.0.1:${galaxyPort}/"
+          --autoplay-policy=no-user-gesture-required
       fi
       sleep 1
     done
