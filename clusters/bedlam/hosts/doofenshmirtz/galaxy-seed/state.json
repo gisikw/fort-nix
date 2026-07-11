@@ -51,6 +51,7 @@
       "castleOwners": ["cian", "audie"],
       "apps": [
         { "id": "jelly", "name": "Jellyfin", "icon": "🎬", "state": "ready" },
+        { "id": "brick", "name": "Brick Blaster", "icon": "🧱", "state": "ready" },
         { "id": "paint", "name": "Tux Paint", "icon": "🎨", "state": "locked", "cost": 25 }
       ]
     },

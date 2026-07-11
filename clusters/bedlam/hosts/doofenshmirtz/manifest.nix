@@ -37,11 +37,21 @@ rec {
       package = "infra/chore-galaxy";
       config = {
         port = "8600";
+        # Second listener serving the parent admin UI at / — what the
+        # choregalaxy vhost below proxies to (the URL lands on admin
+        # directly, no /admin prefix to strip).
+        adminPort = "8601";
         dataDir = "/var/lib/chore-galaxy";
         user = "kids";
         group = "users";
         runtimeDir = "/run/user/1000";
         waylandDisplay = "wayland-0";
+      };
+      # https://choregalaxy.<domain> on the mesh (visibility defaults to
+      # "vpn"; the admin surface has no auth of its own, so keep it there).
+      expose = {
+        subdomain = "choregalaxy";
+        port = 8601;
       };
     };
   };

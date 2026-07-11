@@ -108,6 +108,9 @@ in
       superTux
       superTuxKart
       tuxpaint
+      # The free starter app: arrow-key native, zero config (tuxpaint needs a
+      # mouse the TV doesn't have; chromium-bsu is the vetted fallback).
+      lbreakouthd
     ]);
   };
 
