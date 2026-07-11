@@ -161,6 +161,7 @@ overlays = {
 | `secrets` | Age-encrypted files → decrypted paths passed to `overlay.nix` |
 | `expose` | Optional `fort.cluster.services` equivalent (port, visibility, sso) |
 | `enabled` | Boolean, default `true` |
+| `dependsOn` | List of other overlay names on this host that must activate first (e.g. `[ "knockout" ]`). The manager activates dependencies first; generated units get `After=`/`Wants=` on the dependency's target |
 
 **Service definition fields** (inside `services.<name>` in overlay.nix):
 
@@ -176,6 +177,7 @@ overlays = {
 | `restart` | Restart policy (default: `on-failure`) |
 | `restartSec` | Seconds between restarts (default: `5`) |
 | `timeoutStopSec` | Seconds before SIGKILL on stop |
+| `drain` | Command run at stop time (`ExecStop=`) to drain gracefully — runs while the service is still up; the process is signalled only after it exits (bounded by `timeoutStopSec`) |
 
 Use `dynamicUser = true` + `stateDirectory` for services that don't need a real user — systemd handles user allocation and directory ownership. Prefer this over `user = "nobody"` when the service needs writable state.
 
