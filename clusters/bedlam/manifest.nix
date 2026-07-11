@@ -58,6 +58,10 @@ rec {
       org = "infra";
       repo = "fort-nix";  # Primary repo (used by gitops)
       repos = {
+        # Chore Galaxy (kids' TV kiosk). No mirror: household data/config.
+        # CI publishes to the overlay registry; doofenshmirtz cuts over from
+        # the vendored aspects/media-kiosk build once the pipeline is green.
+        "chore-galaxy" = { };
         "fort-nix" = {
           mirrors = {
             github = {

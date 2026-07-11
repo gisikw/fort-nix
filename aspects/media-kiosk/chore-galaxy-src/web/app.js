@@ -289,7 +289,7 @@ function render() {
     return;
   }
   const k = kid();
-  const screenStyle = `position:absolute;top:50%;left:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(${ui.scale});transform-origin:center center;background:radial-gradient(120% 90% at 50% -10%,#241452 0%,#0f0a2e 55%,#07050f 100%);color:#eaf6ff;font-family:'Fredoka',system-ui,sans-serif;border-radius:22px;overflow:hidden;box-shadow:0 0 0 10px #14121c, 0 0 0 12px #2a2734, 0 40px 120px rgba(0,0,0,.7), inset 0 0 120px rgba(60,40,120,.25)`;
+  const screenStyle = `position:absolute;top:50%;left:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(${ui.scale});transform-origin:center center;background:radial-gradient(120% 90% at 50% -10%,#241452 0%,#0f0a2e 55%,#07050f 100%);color:#eaf6ff;font-family:'Fredoka',system-ui,sans-serif;overflow:hidden;box-shadow:inset 0 0 120px rgba(60,40,120,.25)`;
 
   ROOT.innerHTML = `
 <div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:radial-gradient(120% 100% at 50% 0%,#141024 0%,#08060f 70%)">
@@ -573,7 +573,9 @@ function hov(spec) {
 }
 
 function fit() {
-  const s = Math.min((window.innerWidth - 24) / 1280, (window.innerHeight - 24) / 720, 1);
+  // Fill the screen: the 1280×720 stage upscales to the panel (1.5× on a
+  // 1920×1080 TV, full-bleed). min() letterboxes on non-16:9 displays.
+  const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
   ui.scale = s > 0 ? s : 1;
   render();
 }

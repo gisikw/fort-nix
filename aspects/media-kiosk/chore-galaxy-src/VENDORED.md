@@ -1,7 +1,7 @@
 # Vendored: chore-galaxy
 
 Source of truth: `~/Projects/chore-galaxy` (Kevin's dev sandbox), commit
-`5afb9ec00ce56187a4c0ebcfd7b52577ce6525c5` (main, 2026-07-11).
+`45b38861a09394cffa3bec5bbdafbbf86bff3e0a` (main, 2026-07-11).
 
 Vendored here because the sandbox that shipped the TV cutover could not
 create/push `infra/chore-galaxy` on the forge (permission boundary). Once
