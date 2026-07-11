@@ -52,25 +52,20 @@ let
       --fullscreen
   '';
 
-  # Cage session. Galaxy mode: wait (bounded) for the local backend, then a
-  # chromium kiosk pointed at it — the galaxy is local, so boot does NOT block
-  # on jellyfin reachability. If the backend never comes up, fall back to
-  # direct jellyfin: a broken galaxy must never strand the kids.
-  kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
-    ${waitForNetwork}/bin/wait-for-network
-    ${if galaxy == null then jellyfinDirect else ''
+  # Runs INSIDE the compositor (sway exec): wait (bounded) for the local
+  # backend, then a chromium --app window pointed at it — the galaxy is
+  # local, so boot does NOT block on jellyfin reachability. If the backend
+  # never comes up, fall back to direct jellyfin: a broken galaxy must never
+  # strand the kids. (--app, not --kiosk: wayland/ozone ignores kiosk
+  # fullscreen flags; an --app window has no toolbar by construction and the
+  # compositor forces every window fullscreen anyway. --incognito guards
+  # against restore/crash-bubble state; the kiosk holds no client state.)
+  kioskBrowser = pkgs.writeShellScriptBin "kiosk-browser" ''
     echo "Waiting for chore-galaxy on 127.0.0.1:${galaxyPort}..."
     for i in $(seq 1 60); do
       if ${pkgs.curl}/bin/curl -sf --max-time 2 "http://127.0.0.1:${galaxyPort}/api/state" >/dev/null 2>&1; then
         echo "Chore Galaxy up — launching kiosk browser"
-        # --app, not --kiosk: chromium on wayland/ozone ignores --kiosk and
-        # --start-fullscreen under cage (observed on the panel: toolbar
-        # stayed, incognito badge proved the flags were reaching chromium).
-        # An --app window has no toolbar by construction and cage maximizes
-        # every toplevel, so this doesn't depend on fullscreen negotiation.
-        # --incognito guards against any restore/crash-bubble state; the
-        # kiosk holds no client state (re-renders from SSE).
-        exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
+        exec ${pkgs.chromium}/bin/chromium \
           --ozone-platform=wayland \
           --app="http://127.0.0.1:${galaxyPort}/" \
           --incognito \
@@ -82,7 +77,35 @@ let
       sleep 1
     done
     echo "Chore Galaxy never came up — FALLBACK to direct Jellyfin"
-    ${jellyfinDirect}''}
+    export QT_QPA_PLATFORM=wayland
+    export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+    exec ${pkgs.jellyfin-media-player}/bin/jellyfin-desktop --tv --fullscreen
+  '';
+
+  # Sway in kiosk trim, replacing cage: cage never presented SDL/gamescope
+  # fullscreen surfaces over chromium (Qt clients were fine — jellyfin,
+  # kbreakout — but the games are SDL). Sway's stacking and fullscreen
+  # handling are battle-tested, and it brings xwayland as a fallback for
+  # stubborn clients. Kiosk-ification: zero keybindings (no way off the
+  # couch into a shell), no bar, no borders, every window forced fullscreen
+  # — a new window covers the kiosk, closing it reveals the kiosk again:
+  # the same contract cage gave us.
+  swayConfig = pkgs.writeText "kiosk-sway.conf" ''
+    default_border none
+    default_floating_border none
+    focus_follows_mouse no
+    xwayland enable
+    seat * hide_cursor 3000
+    for_window [all] fullscreen enable
+    exec ${kioskBrowser}/bin/kiosk-browser
+  '';
+
+  # Galaxy mode boots sway; the classic no-galaxy manifest keeps the
+  # original cage-into-jellyfin session untouched.
+  kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
+    ${waitForNetwork}/bin/wait-for-network
+    ${if galaxy == null then jellyfinDirect else ''
+    exec ${pkgs.sway}/bin/sway -c ${swayConfig}''}
   '';
 in
 {
@@ -110,11 +133,6 @@ in
       tuxpaint
       # The free starter app: block-breaker, arrow-key + native gamepad.
       lbreakouthd
-      # SDL games render invisibly under cage (fullscreen surface never
-      # presents over chromium; Qt clients are fine). gamescope is the fix:
-      # game launchers wrap in `gamescope -f --`, which nests a compositor
-      # that presents to cage as one well-behaved wayland surface.
-      gamescope
     ]);
   };
 
