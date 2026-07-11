@@ -65,9 +65,17 @@ let
     for i in $(seq 1 60); do
       if ${pkgs.curl}/bin/curl -sf --max-time 2 "http://127.0.0.1:${galaxyPort}/api/state" >/dev/null 2>&1; then
         echo "Chore Galaxy up — launching kiosk browser"
+        # --start-fullscreen: ignored by ozone under cage, but sway honors
+        # the xdg fullscreen request properly. Window size/position pin down
+        # the profile's remembered-geometry restore (first sway boot came up
+        # 50%-sized, centered) as a second line of defense alongside the
+        # compositor-side for_window rules.
         exec ${pkgs.chromium}/bin/chromium \
           --ozone-platform=wayland \
           --app="http://127.0.0.1:${galaxyPort}/" \
+          --start-fullscreen \
+          --window-position=0,0 \
+          --window-size=1920,1080 \
           --incognito \
           --noerrdialogs \
           --disable-session-crashed-bubble \
@@ -97,6 +105,8 @@ let
     xwayland enable
     seat * hide_cursor 3000
     for_window [all] fullscreen enable
+    for_window [app_id=".*"] fullscreen enable
+    for_window [class=".*"] fullscreen enable
     exec ${kioskBrowser}/bin/kiosk-browser
   '';
 
@@ -105,6 +115,12 @@ let
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
     ${waitForNetwork}/bin/wait-for-network
     ${if galaxy == null then jellyfinDirect else ''
+    # Claim wayland-0 deterministically: a stale socket from a previous
+    # compositor (or a restart race against a dying one) otherwise pushes
+    # sway to wayland-1, stranding backend-launched apps pinned to the
+    # manifest's waylandDisplay. greetd runs one session at a time, so
+    # anything holding these files is already being torn down.
+    rm -f "$XDG_RUNTIME_DIR/wayland-0" "$XDG_RUNTIME_DIR/wayland-0.lock"
     exec ${pkgs.sway}/bin/sway -c ${swayConfig}''}
   '';
 in
