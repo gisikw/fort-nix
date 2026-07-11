@@ -1,5 +1,8 @@
-{ namespace ? "egress-vpn", ... }:
+{ namespace ? "egress-vpn", deviceProfileManifest, ... }:
 { pkgs, config, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'egress-vpn' is Linux-only (Linux network namespaces and iptables); remove it from this darwin host's manifest"
+else
 let
   tunnelInterface = "egresstun0";
 in

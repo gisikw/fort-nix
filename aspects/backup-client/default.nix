@@ -1,5 +1,8 @@
-{ rootManifest, hostManifest, ... }:
+{ rootManifest, hostManifest, deviceProfileManifest, ... }:
 { config, lib, pkgs, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'backup-client' is Linux-only (services.restic systemd timers); remove it from this darwin host's manifest"
+else
 let
   domain = rootManifest.fortConfig.settings.domain;
   repoUrl = "rest:https://backup.${domain}/";

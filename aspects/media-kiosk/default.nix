@@ -1,5 +1,8 @@
-{ rootManifest, galaxy ? null, ... }:
+{ rootManifest, deviceProfileManifest, galaxy ? null, ... }:
 { config, lib, pkgs, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'media-kiosk' is Linux-only (greetd/pipewire Linux desktop stack); remove it from this darwin host's manifest"
+else
 let
   domain = rootManifest.fortConfig.settings.domain;
   user = "kids";

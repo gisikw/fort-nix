@@ -283,21 +283,54 @@ EOF
       exit 0
     fi
 
-    LOCAL=$(git ${darwinGitOpts} rev-parse HEAD)
+    DEPLOYED=$(cat "${stateDir}/deployed-commit" 2>/dev/null || echo "none")
     REMOTE=$(git ${darwinGitOpts} rev-parse origin/main)
 
-    if [ "$LOCAL" = "$REMOTE" ]; then
+    if [ "$DEPLOYED" = "$REMOTE" ]; then
       exit 0
     fi
 
-    log "Updating $LOCAL -> $REMOTE"
+    # Exponential backoff on repeated failures of the same commit —
+    # mirrors the NixOS gitops flow (60s * 2^(n-1), capped at 6 failures).
+    FAILURES=$(cat "${stateDir}/switch-failures" 2>/dev/null || echo "0")
+    if [ "$FAILURES" -gt 0 ]; then
+      FAILING=$(cat "${stateDir}/failing-commit" 2>/dev/null || echo "")
+      if [ "$REMOTE" != "$FAILING" ]; then
+        log "New commit ''${REMOTE:0:8} (was failing on ''${FAILING:0:8}), resetting backoff"
+        rm -f "${stateDir}/switch-failures" "${stateDir}/last-failure-time" "${stateDir}/failing-commit"
+        FAILURES=0
+      else
+        LAST_FAIL=$(cat "${stateDir}/last-failure-time" 2>/dev/null || echo "0")
+        NOW=$(date +%s)
+        CAPPED=$(( FAILURES > 6 ? 6 : FAILURES ))
+        BACKOFF=$(( 60 * (1 << (CAPPED - 1)) ))
+        ELAPSED=$(( NOW - LAST_FAIL ))
+        if [ "$ELAPSED" -lt "$BACKOFF" ]; then
+          log "Backing off: failure $FAILURES, retry in $(( BACKOFF - ELAPSED ))s"
+          exit 0
+        fi
+        log "Retrying after backoff (failure $FAILURES)"
+      fi
+    fi
+
+    log "Updating ''${DEPLOYED:0:8} -> ''${REMOTE:0:8}"
     git ${darwinGitOpts} reset --hard origin/main
 
+    # Unlike NixOS (detached systemd-run unit, state written up-front), the
+    # switch runs inline: darwin-rebuild is idempotent, so if launchd kills
+    # this script mid-switch the next tick simply retries. deployed-commit
+    # is only written on success.
     log "Running darwin-rebuild switch"
     if darwin-rebuild switch --flake "./${flakeSubdir}" 2>&1; then
       log "Rebuild succeeded at $REMOTE"
+      echo "$REMOTE" > "${stateDir}/deployed-commit"
+      rm -f "${stateDir}/switch-failures" "${stateDir}/last-failure-time" "${stateDir}/failing-commit"
     else
       log "Rebuild failed at $REMOTE"
+      FAILURES=$(cat "${stateDir}/switch-failures" 2>/dev/null || echo "0")
+      echo $((FAILURES + 1)) > "${stateDir}/switch-failures"
+      date +%s > "${stateDir}/last-failure-time"
+      echo "$REMOTE" > "${stateDir}/failing-commit"
       exit 1
     fi
   '';

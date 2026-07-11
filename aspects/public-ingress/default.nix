@@ -1,8 +1,12 @@
 {
   rootManifest,
+  deviceProfileManifest,
   ...
 }:
 { lib, pkgs, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'public-ingress' is Linux-only (nginx/ACME ingress with systemd tmpfiles); remove it from this darwin host's manifest"
+else
 let
   domain = rootManifest.fortConfig.settings.domain;
 

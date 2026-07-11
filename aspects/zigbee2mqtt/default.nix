@@ -1,5 +1,8 @@
-{ passwordFile, mqttSecretName, iot, ... }:
+{ passwordFile, mqttSecretName, iot, deviceProfileManifest, ... }:
 { config, pkgs, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'zigbee2mqtt' is Linux-only (services.zigbee2mqtt, systemd, dialout serial group); remove it from this darwin host's manifest"
+else
 {
   sops.secrets.${mqttSecretName} = {
     sopsFile = passwordFile;

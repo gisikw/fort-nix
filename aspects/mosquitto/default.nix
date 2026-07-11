@@ -1,5 +1,8 @@
-{ users ? [], ... }:
+{ users ? [], deviceProfileManifest, ... }:
 { config, lib, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'mosquitto' is Linux-only (services.mosquitto NixOS module); remove it from this darwin host's manifest"
+else
 {
   services.mosquitto = {
     enable = true;

@@ -1,5 +1,8 @@
-{ passwordFile, mqttSecretName, securityKeysFile, iot, ... }:
+{ passwordFile, mqttSecretName, securityKeysFile, iot, deviceProfileManifest, ... }:
 { config, pkgs, lib, ... }:
+if (deviceProfileManifest.platform or "nixos") != "nixos" then
+  throw "fort-nix: aspect 'zwave-js-ui' is Linux-only (systemd services); remove it from this darwin host's manifest"
+else
 let
   jsonFormat = pkgs.formats.json { };
   settingsFile = jsonFormat.generate "zwave-js-ui-settings.json" {
