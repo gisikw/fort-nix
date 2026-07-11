@@ -1015,6 +1015,21 @@ let
         updated upstream between deploys.
       '';
     };
+
+    check = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Optional freshness probe for a satisfied need. Run by the consumer
+        on every fulfill cycle while the need is marked satisfied; a
+        non-zero exit marks the need unsatisfied so it is re-requested on
+        the next eligible nag interval. Use for fulfillments that decay
+        (e.g. the ssl-cert need re-validates the on-disk certificate's
+        expiry). Unlike neverSatisfied, the need only re-requests when the
+        probe actually fails.
+      '';
+      example = "./check-cert-freshness.sh";
+    };
   };
 
   # Capability option type
@@ -1128,6 +1143,8 @@ let
           handler = toString cfg.handler;
           nag_seconds = parseDuration cfg.nag;
           never_satisfied = cfg.neverSatisfied or false;
+        } // lib.optionalAttrs (cfg.check or null != null) {
+          check = toString cfg.check;
         })
       ) needs);
   in builtins.toJSON (flattenNeeds config.fort.host.needs);
@@ -1187,12 +1204,39 @@ let
       handler=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.handler')
       nag_seconds=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.nag_seconds // 900')
       never_satisfied=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.never_satisfied // false')
+      check=$(echo "$need" | ${pkgs.jq}/bin/jq -r '.check // ""')
 
       # Get current state for this need
       need_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" '.[$id] // {satisfied: false, last_sought: 0, request_hash: ""}')
       satisfied=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.satisfied')
       last_sought=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.last_sought')
       stored_hash=$(echo "$need_state" | ${pkgs.jq}/bin/jq -r '.request_hash // ""')
+
+      # Freshness probe: a satisfied fulfillment can decay (e.g. the on-disk
+      # ssl cert nearing expiry). If the need declares a check script and it
+      # fails, mark the need unsatisfied so the normal nag flow re-requests.
+      # Nag pacing still applies — a persistently failing check re-requests
+      # once per nag interval, not on every 5m fulfill cycle.
+      if [ "$satisfied" = "true" ] && [ -n "$check" ]; then
+        if ! "$check"; then
+          log "[$id] Freshness check failed, marking unsatisfied"
+          satisfied="false"
+          fulfillment_state=$(echo "$fulfillment_state" | ${pkgs.jq}/bin/jq -c --arg id "$id" \
+            '.[$id].satisfied = false')
+          # Persist this flag to the state file immediately: the end-of-run
+          # merge prefers the file's satisfied=true (protection for callbacks
+          # that land mid-run), which would otherwise undo this reset. Only
+          # this need's flag is touched so concurrent callback updates for
+          # other needs survive.
+          if [ -f "$FULFILLMENT_STATE_FILE" ]; then
+            file_state=$(${pkgs.coreutils}/bin/cat "$FULFILLMENT_STATE_FILE")
+          else
+            file_state='{}'
+          fi
+          echo "$file_state" | ${pkgs.jq}/bin/jq --arg id "$id" \
+            '.[$id].satisfied = false' > "$FULFILLMENT_STATE_FILE"
+        fi
+      fi
 
       # Compute hash of current request (for change detection)
       current_hash=$(echo "$request" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)
@@ -1649,6 +1693,12 @@ in
       triggerServices = lib.mapAttrs' (capName: cfg:
         lib.nameValuePair "fort-provider-trigger-${capName}" {
           description = "Fort provider systemd trigger for ${capName}";
+          # fort CLI must be on PATH: dispatchCallbacks shells out to it to
+          # sign and POST consumer callbacks. Without this the trigger ran
+          # the handler but every callback died on exec (ENOENT) and the
+          # unit still exited 0 — renewals never reached consumers
+          # (q-5118c7ed).
+          path = [ fortCli ];
           serviceConfig = {
             Type = "oneshot";
             ExecStart = "${fortProvider}/bin/fort-provider --trigger ${capName}";
