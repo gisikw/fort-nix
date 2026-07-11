@@ -116,14 +116,15 @@ in
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     serviceConfig.Type = "oneshot";
-    path = [ pkgs.systemd ];
+    path = [ pkgs.systemd pkgs.util-linux ];
     script = ''
       cert="/var/lib/acme/${domain}/fullchain.pem"
       marker="/var/lib/acme/${domain}/acme-success"
 
       if ${fort-certcheck}/bin/fort-certcheck should-renew --cert "$cert" --min-days ${toString watchdogMinDays} --marker "$marker"; then
         echo "renewal overdue; starting acme-order-renew-${domain}.service"
-        systemctl start "acme-order-renew-${domain}.service" || true
+        systemctl start "acme-order-renew-${domain}.service" || \
+          logger -t fort-cert-watchdog "failed to start acme-order-renew-${domain}.service"
       fi
 
       # Independent of renewal outcome: an expired cluster cert is an
