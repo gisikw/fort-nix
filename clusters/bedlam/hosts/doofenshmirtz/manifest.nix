@@ -45,7 +45,9 @@ rec {
         user = "kids";
         group = "users";
         runtimeDir = "/run/user/1000";
-        waylandDisplay = "wayland-0";
+        # sway 1.11's auto socket starts at wayland-1 (cage sat on wayland-0);
+        # the session script clears stale sockets so this stays deterministic.
+        waylandDisplay = "wayland-1";
       };
       # https://choregalaxy.<domain> on the mesh (visibility defaults to
       # "vpn"; the admin surface has no auth of its own, so keep it there).

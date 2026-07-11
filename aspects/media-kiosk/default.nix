@@ -115,12 +115,12 @@ let
   kioskSession = pkgs.writeShellScriptBin "kiosk-session" ''
     ${waitForNetwork}/bin/wait-for-network
     ${if galaxy == null then jellyfinDirect else ''
-    # Claim wayland-0 deterministically: a stale socket from a previous
-    # compositor (or a restart race against a dying one) otherwise pushes
-    # sway to wayland-1, stranding backend-launched apps pinned to the
-    # manifest's waylandDisplay. greetd runs one session at a time, so
-    # anything holding these files is already being torn down.
-    rm -f "$XDG_RUNTIME_DIR/wayland-0" "$XDG_RUNTIME_DIR/wayland-0.lock"
+    # Keep the compositor's socket number deterministic: stale sockets from
+    # a dead compositor push the next one to a higher wayland-N, stranding
+    # backend-launched apps pinned to the manifest's waylandDisplay (sway
+    # 1.11 starts at wayland-1; observed live). greetd runs one session at
+    # a time, so anything holding these files is already being torn down.
+    rm -f "$XDG_RUNTIME_DIR"/wayland-*
     exec ${pkgs.sway}/bin/sway -c ${swayConfig}''}
   '';
 in
