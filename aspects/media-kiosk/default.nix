@@ -108,10 +108,13 @@ in
       superTux
       superTuxKart
       tuxpaint
-      # The free starter app: block-breaker, arrow-key native. Qt, because Qt
-      # clients (jellyfin) present correctly under cage while SDL fullscreen
-      # surfaces (lbreakouthd, tried first) render invisibly behind chromium.
-      kdePackages.kbreakout
+      # The free starter app: block-breaker, arrow-key + native gamepad.
+      lbreakouthd
+      # SDL games render invisibly under cage (fullscreen surface never
+      # presents over chromium; Qt clients are fine). gamescope is the fix:
+      # game launchers wrap in `gamescope -f --`, which nests a compositor
+      # that presents to cage as one well-behaved wayland surface.
+      gamescope
     ]);
   };
 
