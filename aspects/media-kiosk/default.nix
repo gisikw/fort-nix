@@ -20,7 +20,7 @@ let
   galaxyDataDir = "/var/lib/chore-galaxy";
   chore-galaxy = pkgs.buildGoModule {
     pname = "chore-galaxy";
-    version = "0.1.0-5afb9ec";
+    version = "0.1.0-45b3886";
     src = ./chore-galaxy-src;
     vendorHash = null; # stdlib only
   };
@@ -69,6 +69,7 @@ let
         exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
           --ozone-platform=wayland \
           --kiosk \
+          --start-fullscreen \
           --noerrdialogs \
           --disable-session-crashed-bubble \
           --no-first-run \
