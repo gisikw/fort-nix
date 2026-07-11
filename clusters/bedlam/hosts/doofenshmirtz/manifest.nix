@@ -27,7 +27,24 @@ rec {
     "agent-debug"
   ];
 
-  overlays = { };
+  overlays = {
+    # Backend + launcher for the media-kiosk galaxy session. Published by
+    # infra/chore-galaxy CI (attic + overlay-registry); overlay.nix in that
+    # repo defines the service (runs as kids with the cage session's Wayland
+    # env) and an http health check. Keep port in sync with the media-kiosk
+    # galaxy.port above; dataDir must match the aspect's seed rules.
+    chore-galaxy = {
+      package = "infra/chore-galaxy";
+      config = {
+        port = "8600";
+        dataDir = "/var/lib/chore-galaxy";
+        user = "kids";
+        group = "users";
+        runtimeDir = "/run/user/1000";
+        waylandDisplay = "wayland-0";
+      };
+    };
+  };
 
   module =
     { config, ... }:

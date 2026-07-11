@@ -10,20 +10,17 @@ let
   # galaxy = { port = 8600; stateSeed = ./…/state.json; launchersSeed = ./…; }
   # When set, the TV boots into the chore-galaxy kiosk frontend (chromium in
   # cage) and jellyfin becomes an app the galaxy backend launches; when null,
-  # the classic boot-straight-into-jellyfin behavior is kept. The backend runs
-  # as the session user with the session's Wayland env, so apps it spawns land
-  # on the cage compositor: cage stacks new fullscreen windows on top and
-  # reveals the browser again when they exit — launch/return needs no extra
-  # wiring. Source is vendored (chore-galaxy-src/VENDORED.md): the target
-  # shape is the overlay-manager pipeline once the forge repo exists.
+  # the classic boot-straight-into-jellyfin behavior is kept. The backend
+  # itself is the overlays.chore-galaxy declaration in the host manifest
+  # (fort-overlay-manager pipeline, CI-published from infra/chore-galaxy);
+  # its overlay.nix runs it as the session user with the session's Wayland
+  # env, so apps it spawns land on the cage compositor: cage stacks new
+  # fullscreen windows on top and reveals the browser again when they exit —
+  # launch/return needs no extra wiring. This aspect owns the session, the
+  # seed data, the launchable app packages, and the admin port; keep
+  # galaxy.port in sync with the overlay's config.port.
   galaxyPort = toString galaxy.port;
   galaxyDataDir = "/var/lib/chore-galaxy";
-  chore-galaxy = pkgs.buildGoModule {
-    pname = "chore-galaxy";
-    version = "0.1.0-45b3886";
-    src = ./chore-galaxy-src;
-    vendorHash = null; # stdlib only
-  };
 
   # Wait for the Tailscale mesh before launching the surface. Bounded: the TV
   # must come up (possibly degraded) even with no network.
@@ -156,39 +153,11 @@ in
   # Parent admin surface (/admin/) is reached over the mesh at this port.
   networking.firewall.allowedTCPPorts = lib.optionals (galaxy != null) [ galaxy.port ];
 
+  # The backend service itself is the overlays.chore-galaxy declaration in
+  # the host manifest (its overlay.nix carries user/env/health); this aspect
+  # provides the data dir + one-time seed (C = copy only if the target does
+  # not exist). State stays hand-editable; the backend hot-reloads edits.
   systemd = lib.optionalAttrs (galaxy != null) {
-    services.chore-galaxy = {
-      description = "Chore Galaxy kiosk backend + launcher";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
-      # Launcher argv entries use absolute /run/current-system/sw/bin paths,
-      # but keep it on PATH too for hand-edited relative entries.
-      path = [ chore-galaxy "/run/current-system/sw" ];
-      serviceConfig = {
-        ExecStart = "${chore-galaxy}/bin/chore-galaxy serve --port ${galaxyPort} --data ${galaxyDataDir}";
-        User = user;
-        Group = "users";
-        WorkingDirectory = galaxyDataDir;
-        Restart = "on-failure";
-        RestartSec = 5;
-        # Launched games run in their own session (Setsid) but stay in this
-        # cgroup; KillMode=process keeps a backend restart/redeploy from
-        # killing a game mid-play (crash-only both ways — chore-galaxy WORKLOG).
-        KillMode = "process";
-      };
-      environment = {
-        # Launched children inherit these and connect to the kiosk session's
-        # cage compositor: same user, same runtime dir.
-        XDG_RUNTIME_DIR = "/run/user/1000";
-        WAYLAND_DISPLAY = "wayland-0";
-        QT_QPA_PLATFORM = "wayland";
-        QT_WAYLAND_DISABLE_WINDOWDECORATION = "1";
-        SDL_VIDEODRIVER = "wayland,x11";
-      };
-    };
-
-    # Data dir + one-time seed (C = copy only if the target does not exist).
-    # State stays hand-editable on the host; the backend hot-reloads edits.
     tmpfiles.rules = [
       "d ${galaxyDataDir} 0755 ${user} users -"
       "C ${galaxyDataDir}/state.json 0644 ${user} users - ${galaxy.stateSeed}"
