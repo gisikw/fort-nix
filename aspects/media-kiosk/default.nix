@@ -66,10 +66,15 @@ let
     for i in $(seq 1 60); do
       if ${pkgs.curl}/bin/curl -sf --max-time 2 "http://127.0.0.1:${galaxyPort}/api/state" >/dev/null 2>&1; then
         echo "Chore Galaxy up — launching kiosk browser"
+        # --incognito: greetd restarts kill chromium uncleanly, and crash-
+        # session restore reopens a normal toolbar window that defeats
+        # --kiosk. Incognito never restores (the kiosk holds no client
+        # state — it re-renders from the SSE stream).
         exec ${pkgs.cage}/bin/cage -s -- ${pkgs.chromium}/bin/chromium \
           --ozone-platform=wayland \
           --kiosk \
           --start-fullscreen \
+          --incognito \
           --noerrdialogs \
           --disable-session-crashed-bubble \
           --no-first-run \
