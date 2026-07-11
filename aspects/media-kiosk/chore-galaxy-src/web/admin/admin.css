@@ -1,0 +1,111 @@
+/* Parent controls: plain, boring, phone-first. One column, big tap targets.
+   Deliberately zero relation to the kiosk's look — this is a tool, not a game. */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #14161c;
+  color: #e8e8e8;
+  font-size: 16px;
+}
+#root { max-width: 640px; margin: 0 auto; padding: 12px 12px 48px; }
+
+header {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 4px 2px 10px;
+}
+header h1 { font-size: 20px; margin: 0; }
+header .meta { color: #9aa0ac; font-size: 13px; }
+header .live { color: #7dffb0; }
+header .dead { color: #ff8a5c; }
+
+.card {
+  background: #1d212b;
+  border: 1px solid #2c3140;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.card h2 { font-size: 17px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card h2 .sub { font-weight: normal; font-size: 13px; color: #9aa0ac; }
+.coins { color: #ffd75e; font-weight: bold; }
+
+button {
+  font: inherit;
+  color: #e8e8e8;
+  background: #2c3140;
+  border: 1px solid #3d4356;
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-height: 44px;
+  cursor: pointer;
+}
+button:active { background: #3d4356; }
+button.small { min-height: 36px; padding: 6px 10px; font-size: 14px; }
+button.danger { border-color: #7a3b3b; background: #3a2323; }
+
+input[type="text"], input[type="number"] {
+  font: inherit;
+  color: #e8e8e8;
+  background: #14161c;
+  border: 1px solid #3d4356;
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 44px;
+  width: 100%;
+}
+input[type="checkbox"] { width: 26px; height: 26px; flex: none; }
+
+.chore {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid #2c3140;
+  min-height: 44px;
+}
+.chore:last-of-type { border-bottom: none; }
+.chore label { flex: 1; }
+.chore.done label { color: #9aa0ac; text-decoration: line-through; }
+.chore .val { color: #ffd75e; font-size: 14px; flex: none; }
+.nochores { color: #9aa0ac; padding: 8px 2px; }
+
+.grant-row { display: flex; gap: 8px; margin-top: 10px; }
+.grant-row input[type="number"] { width: 90px; flex: none; }
+
+.edit-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.edit-row input[type="number"] { width: 80px; flex: none; }
+.edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+.app {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 2px;
+  min-height: 44px;
+}
+.app .name { flex: 1; }
+.app .state { font-size: 13px; color: #9aa0ac; flex: none; }
+.app .state.ready { color: #7dffb0; }
+.app .state.stolen { color: #ff8a5c; }
+
+.ledger { font-size: 13px; }
+.ledger .ev {
+  display: flex; gap: 8px;
+  padding: 5px 2px;
+  border-bottom: 1px solid #262b37;
+  color: #c7ccd6;
+}
+.ledger .ev:last-child { border-bottom: none; }
+.ledger .d { color: #9aa0ac; flex: none; }
+.ledger .t { flex: none; min-width: 88px; }
+.ledger .plus { color: #7dffb0; }
+.ledger .minus { color: #ff8a5c; }
+.ledger .note { color: #9aa0ac; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  max-width: 90vw;
+  background: #2c3140; color: #e8e8e8;
+  border: 1px solid #3d4356; border-radius: 8px;
+  padding: 10px 16px;
+  z-index: 10;
+}
+#toast.err { border-color: #7a3b3b; background: #3a2323; }

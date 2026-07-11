@@ -6,7 +6,26 @@ rec {
 
   apps = [ ];
 
-  aspects = [ "mesh" "observable" { name = "gitops"; manualDeploy = true; } "media-kiosk" "agent-debug" ];
+  aspects = [
+    "mesh"
+    "observable"
+    { name = "gitops"; manualDeploy = true; }
+    {
+      # TV boots into the Chore Galaxy kiosk; jellyfin is a planet app the
+      # galaxy backend launches (and the session falls back to directly if
+      # the galaxy is down). Parent admin surface over the mesh:
+      # http://doofenshmirtz.fort.<domain>:8600/admin/. Seeds are one-time
+      # copies; live state in /var/lib/chore-galaxy stays hand-editable
+      # (the backend hot-reloads edits).
+      name = "media-kiosk";
+      galaxy = {
+        port = 8600;
+        stateSeed = ./galaxy-seed/state.json;
+        launchersSeed = ./galaxy-seed/launchers.json;
+      };
+    }
+    "agent-debug"
+  ];
 
   overlays = { };
 

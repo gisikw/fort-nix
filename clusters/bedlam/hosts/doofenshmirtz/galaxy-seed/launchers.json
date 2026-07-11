@@ -1,0 +1,20 @@
+{
+  "jelly": {
+    "argv": ["/run/current-system/sw/bin/jellyfin-desktop", "--tv", "--fullscreen"]
+  },
+  "paint": {
+    "argv": ["/run/current-system/sw/bin/tuxpaint", "--fullscreen"]
+  },
+  "stux": {
+    "argv": ["/run/current-system/sw/bin/supertux2", "--fullscreen"]
+  },
+  "kart": {
+    "argv": ["/run/current-system/sw/bin/supertuxkart", "--fullscreen"]
+  },
+  "stux2": {
+    "argv": ["/run/current-system/sw/bin/supertux2", "--fullscreen"]
+  },
+  "kart2": {
+    "argv": ["/run/current-system/sw/bin/supertuxkart", "--fullscreen"]
+  }
+}

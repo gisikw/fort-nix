@@ -1,0 +1,106 @@
+{
+  "night": 1,
+  "lastTickDate": "",
+  "kids": [
+    {
+      "id": "cian",
+      "name": "Cian",
+      "avatar": "⚔️",
+      "color": "#d4af37",
+      "title": "Paladin",
+      "level": 3,
+      "xp": 120,
+      "xpMax": 400,
+      "coins": 40,
+      "location": "prime",
+      "transit": null,
+      "chores": [
+        { "name": "Clean the room", "coins": 15, "done": false },
+        { "name": "Empty the dishwasher", "coins": 10, "done": false },
+        { "name": "Take out the trash", "coins": 10, "done": false },
+        { "name": "Fold the clothes", "coins": 20, "done": false }
+      ]
+    },
+    {
+      "id": "audie",
+      "name": "Audie",
+      "avatar": "🧑‍🚀",
+      "color": "#23e5ff",
+      "title": "Star Cadet",
+      "level": 2,
+      "xp": 60,
+      "xpMax": 200,
+      "coins": 25,
+      "location": "prime",
+      "transit": null,
+      "chores": [
+        { "name": "Use the potty", "coins": 10, "done": false },
+        { "name": "Clear the table", "coins": 10, "done": false },
+        { "name": "Clean the room", "coins": 15, "done": false }
+      ]
+    }
+  ],
+  "planets": [
+    {
+      "id": "prime",
+      "name": "Castle Prime",
+      "emoji": "🏰",
+      "x": 12,
+      "y": 74,
+      "color": "#d4af37",
+      "castleOwners": ["cian", "audie"],
+      "apps": [
+        { "id": "jelly", "name": "Jellyfin", "icon": "🎬", "state": "ready" },
+        { "id": "paint", "name": "Tux Paint", "icon": "🎨", "state": "locked", "cost": 25 }
+      ]
+    },
+    {
+      "id": "zorp",
+      "name": "Zorp",
+      "emoji": "🟢",
+      "x": 40,
+      "y": 50,
+      "color": "#7dffb0",
+      "castleOwners": [],
+      "apps": [
+        { "id": "stux", "name": "SuperTux", "icon": "🐧", "state": "locked", "cost": 40 }
+      ]
+    },
+    {
+      "id": "blorf",
+      "name": "Blorf",
+      "emoji": "🟠",
+      "x": 66,
+      "y": 28,
+      "color": "#ffb37d",
+      "castleOwners": [],
+      "apps": [
+        { "id": "kart", "name": "SuperTuxKart", "icon": "🏁", "state": "locked", "cost": 60 }
+      ]
+    },
+    {
+      "id": "tux",
+      "name": "Tux Planet",
+      "emoji": "🐧",
+      "x": 86,
+      "y": 16,
+      "color": "#39ff14",
+      "castleOwners": [],
+      "apps": [
+        { "id": "stux2", "name": "SuperTux Story Mode", "icon": "🐧", "state": "locked", "cost": 80 },
+        { "id": "kart2", "name": "SuperTuxKart Grand Prix", "icon": "🏆", "state": "locked", "cost": 80 }
+      ]
+    },
+    {
+      "id": "mars",
+      "name": "Mars",
+      "emoji": "🔴",
+      "x": 86,
+      "y": 66,
+      "color": "#ff8a5c",
+      "castleOwners": [],
+      "undiscovered": true,
+      "apps": []
+    }
+  ]
+}
