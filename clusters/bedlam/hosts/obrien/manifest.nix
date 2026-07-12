@@ -27,6 +27,17 @@ rec {
         owner = "admin";
       };
 
+      # launchd opens Standard{Out,Error}Path as the daemon's UserName, and
+      # /var/log is not admin-writable — without this the spawn itself fails
+      # with EX_CONFIG (78) and no log is ever written. Pre-create the file
+      # root-side so the admin-uid open succeeds and `fort obrien journal`
+      # keeps its /var/log/<name>.log convention.
+      config.system.activationScripts.postActivation.text = ''
+        touch /var/log/muse-serve.log
+        chown admin:staff /var/log/muse-serve.log
+        chmod 0644 /var/log/muse-serve.log
+      '';
+
       config.launchd.daemons.muse-serve = {
         serviceConfig = {
           Label = "network.gisi.muse.serve";
