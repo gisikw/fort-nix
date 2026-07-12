@@ -324,17 +324,20 @@ EOF
     log "Updating ''${DEPLOYED:0:8} -> ''${REMOTE:0:8}"
     git ${darwinGitOpts} reset --hard origin/main
 
-    # Unlike NixOS (detached systemd-run unit, state written up-front), the
-    # switch runs inline: darwin-rebuild is idempotent, so if launchd kills
-    # this script mid-switch the next tick simply retries. deployed-commit
-    # is only written on success.
+    # Write deployed-commit BEFORE rebuild: darwin-rebuild switch reloads the
+    # gitops launchd service as part of activation (plist/script changed), which
+    # kills this script mid-run. Writing first means the self-reload is harmless
+    # — the next tick sees deployed-commit == origin/main and exits early.
+    # If the rebuild fails, we remove the file so the next tick retries.
+    echo "$REMOTE" > "${stateDir}/deployed-commit"
+
     log "Running darwin-rebuild switch"
     if darwin-rebuild switch --flake "./${flakeSubdir}" 2>&1; then
       log "Rebuild succeeded at $REMOTE"
-      echo "$REMOTE" > "${stateDir}/deployed-commit"
       rm -f "${stateDir}/switch-failures" "${stateDir}/last-failure-time" "${stateDir}/failing-commit"
     else
       log "Rebuild failed at $REMOTE"
+      rm -f "${stateDir}/deployed-commit"
       FAILURES=$(cat "${stateDir}/switch-failures" 2>/dev/null || echo "0")
       echo $((FAILURES + 1)) > "${stateDir}/switch-failures"
       date +%s > "${stateDir}/last-failure-time"
