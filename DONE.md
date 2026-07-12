@@ -1,232 +1,109 @@
-# DONE — control-plane decomposition theme
+# DONE — Mobile e2e feedback loop (obrien muse serve + iOS agent loop)
 
-Branch: `burn/control-plane-decomp` (off `burn/darwin-parity`, with
-`burn/cert-lifecycle` merged in as the verification baseline). Nothing
-deployed; no live-host changes; `flake.lock` and all per-host locks
-untouched (`git diff main...HEAD -- '*lock*'` is empty). The parent lanes'
-DONE.md records live on their own branches; this file supersedes the
-concatenated copy from the merge commit.
+Campaign Fable Weekend (c-f4e0eb4f), quest q-6c1fbe34. Date: 2026-07-12.
+Model: Fable. All deliverables from BRIEF.md landed; no blockers remain for
+the hearth-room live-fire, which is Kevin's to fire.
 
-## Base merge (verified before any decomp work)
+## Solved (with verification evidence)
 
-- `e32bff8` merges `burn/cert-lifecycle` into this branch. The predicted
-  conflicts from the cert-lifecycle audit §5 auto-merged cleanly
-  (certificate-broker take-both landed as gate-on-top + new-body-below;
-  control-plane.nix hunks were disjoint). The only manual conflict was an
-  undocumented add/add on `DONE.md` (both lanes wrote one) — resolved by
-  concatenation, superseded by this file.
-- Union verified green: full `just test` (root + 14 host flakes + device
-  flakes) passed on the merge commit.
-- **Verification baseline**: toplevel `drvPath` snapshotted for all 13
-  NixOS hosts + obrien (darwin) at the merge commit. All drv-diff claims
-  below are against this snapshot, not main.
+1. **muse binary on obrien** — muse is pure Go; cross-compiled on ratched
+   (`GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -mod=vendor`, muse repo
+   @ 96cbf59) and installed manually at `/usr/local/bin/muse` (root-owned,
+   0755). Verified: `muse --tools` and `muse serve` run on obrien.
+   Declarative packaging noted as follow-up in the runbook (repo is
+   `git.gisi.network/infra/muse` with vendored deps, so a `pkgs/muse`
+   buildGoModule is tractable once darwin nix builds have forge fetch creds;
+   overlays are Linux-only).
 
-## Quest dispositions
+2. **muse serve as launchd daemon, declared in fort-nix** — obrien's
+   `manifest.nix` now declares `launchd.daemons.muse-serve` (label
+   `network.gisi.muse.serve`, RunAtLoad + KeepAlive, UserName=admin,
+   `--addr 0.0.0.0:4600`) and `sops.secrets.muse-serve-token` (encrypted
+   copy of ratched's `~/.config/cranium/obrien-muse.token`, decrypt
+   roundtrip verified byte-identical before commit). Deployed via gitops
+   (commits ac6c624, 250d94d, 88b8d2d, all flake-checked; ratched drvPath
+   verified byte-identical to main for the shared-file changes).
+   macOS Application Firewall is disabled on obrien — no socketfilterfw
+   allowance was needed (documented in runbook for if it's ever enabled).
 
-### q-d9cba37c — Decompose common/fort.nix — DONE (`b92425e`, [low])
+3. **Transport verified from ratched** (all three, this session):
+   - `GET /healthz` with the cranium token → `{"ok": true}`
+   - wrong token → HTTP 401
+   - `POST /exec {"tool":"bash","input":{"command":"pwd && whoami"},"cwd":"/Users/admin/Projects/hearth"}`
+     → 200, stdout `/Users/admin/Projects/hearth\nadmin`, exit_code 0
 
-`common/fort.nix` (680 lines) split by concern into `common/fort/`:
+4. **Hearth source current on obrien** — `just sync` from
+   `~/Projects/hearth` on ratched → `/Users/admin/Projects/hearth`.
+   (Note: `just` needs `XDG_RUNTIME_DIR` overridden in this sandbox —
+   `/run/user/0` is unwritable.)
 
-| File | Concern |
-|------|---------|
-| `services.nix` | host-manifest generation + discovery needs (proxy, dns-headscale, dns-coredns) |
-| `nginx.nix` | realip/geo/hop-header plumbing + per-service virtual hosts + firewall |
-| `auth.nix` | oauth2-proxy instances, identity-proxy, token secret, oidc-register needs |
-| `ssl.nix` | placeholder certs + ssl-cert need with freshness probe |
-| `service-lib.nix` | shared pure helpers (subdomainOf, hostManifestContentFor) |
+5. **One full iOS loop cycle, demonstrated headless over ssh**:
+   xcodebuild for simulator (BUILD SUCCEEDED) → `simctl boot "iPhone 17
+   Pro"` → install → launch (`network.gisi.hearth`, pid 24244) → `simctl io
+   booted screenshot` → 10s `log stream` sample. Screenshot pulled back to
+   ratched and visually confirmed: Hearth chat UI (MAW `#roost` room)
+   rendered. **The GUI-session concern did not materialize** — the whole
+   loop ran with nobody logged in at the console (`/dev/console` owned by
+   root) on macOS 26.2. Bonus e2e: a second screenshot was taken *through*
+   `POST /exec` (the exact hearth-room call path), exit 0.
+   Artifacts on obrien: `/Users/admin/artifacts/2026-07-12-muse-loop/`
+   (`xcodebuild.log`, `hearth-launch.png`, `hearth-via-exec.png`,
+   `log-stream-sample.txt`).
 
-Naming note: the quest suggested `services/nginx/auth`; `ssl.nix` was added
-as a fourth concern (the quest listed SSL cert handling as a mixed concern)
-and "service exposure" landed as manifest+discovery bookkeeping in
-`services.nix`.
+6. **Runbook** — `docs/obrien-muse-serve.md`: declarative vs. manual split,
+   exact rebuild/reinstall commands, verification commands, the headless
+   simctl loop, and every rough edge found.
 
-**Design constraint discovered**: the aggregator composes the concern
-modules *functionally* (one module, configs merged in pre-split order)
-rather than via `imports`. The module system expands `imports`
-breadth-first (`genericClosure`), which pushes imported definitions AFTER
-the host's aspect/app modules and reorders list-typed option merges —
-observed concretely as nginx `ReadWritePaths` flipping order with
-`aspects/host-status`, changing the unit file. The functional composition
-preserves definition order byte-for-byte; the header comment in fort.nix
-documents why.
+## Fixed along the way (darwin-parity runtime findings, as predicted)
 
-Verified: full-fleet drv sweep after the commit — **all 14 hosts
-byte-identical to baseline**.
+- **`pmset -a RestartAfterFreeze 1` fails on macOS 26.2** (usage error) —
+  it was in the mac-mini profile's postActivation and killed **every**
+  darwin activation at the last step. Verified manually (autorestart and
+  womp succeed; RestartAfterFreeze does not); dropped it. (250d94d)
+- **Darwin gitops ownership check used BSD `stat -f` with GNU coreutils
+  first in PATH** — misfired and `chown -R`'d the repo every 30s poll.
+  Pinned to `/usr/bin/stat`. (250d94d)
+- **launchd opens Standard{Out,Error}Path as the daemon's UserName** —
+  an admin-uid daemon pointed at `/var/log/x.log` fails to spawn at all
+  (EX_CONFIG 78, zero log output, 73 silent retries). Fixed by pre-creating
+  the log root-side at activation. (88b8d2d)
 
-### q-1f08acd9 — Factor shared control-plane logic — DONE, honest-remainder scope (`5c4008b`, [low])
+## Known open issue (ticketed, not blocking)
 
-The honest answer the brief anticipated: **darwin-parity (and the work it
-built on) already did most of this.** `common/fort/control-plane.nix` is
-already a single shared module — both platform builders import it (darwin
-with `platform = "darwin"`), and all handlers/consumer/GC logic is shared
-with explicit `isDarwin` branches. There was no NixOS-only module left
-holding hostage logic that darwin needs, with one small exception (below).
+- **q-a54f7e19**: the darwin gitops daemon runs `darwin-rebuild switch`
+  inline; when a commit changes the gitops daemon's own plist, activation's
+  launchd-services step reloads it and kills its own in-flight rebuild —
+  activation silently truncates (later steps incl. sops secrets never run)
+  while `deployed-commit` claims success. Hit this live deploying 250d94d;
+  recovered with `sudo /nix/var/nix/profiles/system/activate` (documented in
+  the runbook). Proper fix needs the switch detached from the daemon's
+  process group (no setsid/systemd-run on macOS → transient `launchctl
+  submit` job or double-fork wrapper).
 
-Remainder actually done:
+## Manual steps taken (all in the runbook)
 
-- Structural decomposition of the 1783-line file into
-  `common/fort/control-plane/`: `handlers.nix` (the 8 mandatory capability
-  handlers + sanitizeJournalOutput), `options.nix` (need/capability option
-  types), `fulfill.nix` (the consumer fulfill loop). The top-level
-  `control-plane.nix` (624 lines) is now data derivation (hosts.json, RBAC,
-  needs.json) + platform wiring (systemd vs launchd) — the shared/platform
-  boundary is now file-level, not buried in a monolith.
-- The one real duplication: host-manifest.json construction existed twice
-  (NixOS in `fort.nix`, darwin in `control-plane.nix`). Both now share
-  `service-lib.nix#hostManifestContentFor`; each platform keeps its own
-  byte-identical wrapper (`builtins.toFile` vs `pkgs.writeText`) because
-  changing either wrapper would change that platform's drv.
+1. Cross-compiled muse on ratched, scp'd, `sudo install` to
+   `/usr/local/bin/muse` on obrien.
+2. `just sync` of hearth from ratched.
+3. One recovery `sudo /nix/var/nix/profiles/system/activate` on obrien
+   (the q-a54f7e19 truncation).
+4. One `launchctl bootout` + `bootstrap` of muse-serve to clear the stale
+   EX_CONFIG last-exit code so host-status stops counting it failed
+   (daemon was already healthy; healthz re-verified after).
+5. Ran the iOS loop over ssh (commands in the runbook).
 
-Verified: full-fleet drv sweep after the commit — **all 14 hosts (incl.
-obrien darwin) byte-identical to baseline**. Tier-1 boundary `just test`
-green.
+## What the hearth-room live-fire still needs
 
-### q-1e0a32ed — Declared overlay dependencies — DONE (`af64648`, [med])
+Nothing on the infrastructure side. Cranium's `hearth` profile resolves the
+token per call and the endpoint answers with exactly that token, so a
+message in the `hearth` room should execute on obrien as-is. Kevin fires it.
 
-- Host manifests: `overlays.<name>.dependsOn = [ "other-overlay" ]`,
-  validated at eval time (throws if the dep isn't declared on the host).
-- Manager (`pkgs/fort-overlay-manager`): activation processes overlays in
-  dependency order (deterministic DFS topo sort, name-ordered ties,
-  cycle-tolerant with a logged warning) in both `check` and `boot`.
-- systemd-level guarantee: the overlay's target gets `Wants=`/`After=` on
-  each dependency's target, and each *service* unit gets `After=` on them
-  too (a target's own `After=` does not order its wanted services). Target
-  units implicitly order `After=` their `Wants=`, so a dependency's
-  services have started before the dependent target activates.
-- First user: `discovery-zone.dependsOn = [ "knockout" ]` on ratched (the
-  quest's own example — previously an implicit /run/overlays/bin PATH dep).
-- Scope note: ordering is start-ordering, not health-gating — a dependent
-  starts once the dependency's services have *started*, not once healthy.
-  Health-gated deps would need the manager to consult health state across
-  overlays; not needed for the current dep (CLI on PATH) so not built.
-- Includes a `gofmt` pass over main.go (pre-existing misalignment).
-
-### q-9f7a3b5b — Drain hooks — DONE, propose-and-implement (`df3cf1f`, [med])
-
-Body was empty; scoped minimally. **Design decision**: the drain hook is
-systemd's native drain point, `ExecStop=`. overlay.nix services gain an
-optional `drain` (string command) written into the generated unit; systemd
-runs it while the service is still up and only signals remaining processes
-after it exits, bounded by the existing `timeoutStopSec`. Why this shape:
-
-- Stop, replace, and rollback all drain via the same path with zero manager
-  orchestration — no new states in the activation state machine.
-- The *running* unit file carries its own version's drain command, so a
-  replace drains the old process with the drain logic matching the old
-  binary (a manager-side hook would have run the new version's drain
-  against the old process).
-- Rejected alternatives: a manager-executed pre-stop command (wrong-version
-  problem above, plus duplicate timeout bookkeeping); a health-type-like
-  drain endpoint (HTTP-only, and ExecStop can curl an endpoint anyway).
-
-No current overlay declares `drain`; it becomes available to project repos'
-overlay.nix immediately after deploy (no fort-nix change needed per-project).
-
-### q-b5f9ad4b — Flatten overlay unit naming — DONE (`dbfb163`, [med], intentionally last/droppable)
-
-New scheme: a service named after its overlay generates
-`overlay-<name>.service` (was `overlay-<name>-<name>.service`); distinct
-service names keep the namespaced `overlay-<overlay>-<service>.service`
-(full flattening was rejected — two overlays could both define a service
-named e.g. `web` and collide). Targets unchanged (`overlay-<name>.target`).
-
-**Renamed units** (enumerated from live `/run/systemd/system` on the
-overlay hosts via `fort read-file`):
-
-| Host | Renamed | Unchanged |
-|------|---------|-----------|
-| ratched | overlay-{cranium,cupola,discovery-zone,headjack,knockout,kobold,lair,litmus,questbook}.service (9) | — |
-| lordhenry | overlay-{grotto,tiamat}.service (2) | overlay-kobold-worker.service (service `worker` ≠ overlay `kobold`) |
-| frankenstein | — (unkork has no generated service units yet) | — |
-| (ratched) muse, phylactery | — (targets only, no service units) | — |
-
-**Migration** is self-contained in the manager: when a pre-flattening unit
-file exists, `generateUnits` stops that unit *before* removing it (so the
-renamed unit doesn't double-run into port conflicts when
-`fort-overlay-manager-boot` regenerates after the deploy), and
-`stopServices` also stops the legacy name as belt-and-braces. Expect one
-brief stop/start per renamed service on the first activation after deploy.
-
-**References audited and updated** (repo-wide grep over nix/md/go/js/sh/yml):
-
-- `clusters/bedlam/hosts/lordhenry/manifest.nix` — tiamat anthropic-secret
-  drop-in dir (`overlay-tiamat.service.d/`, with `rm -rf` of the stale
-  pre-rename dir) and `tiamat-profiles-provision.before`.
-- `AGENTS.md` — unit-naming line rewritten for the new scheme.
-- `pkgs/fort-overlay-manager/main.go` — all generation/stop sites go
-  through `serviceUnitName`/`legacyServiceUnitName`.
-- No other in-repo references exist (fort capabilities take unit names as
-  request parameters; nothing hardcodes overlay unit names).
-
-## Verification record
-
-Executed on this branch (Linux dev sandbox; no darwin hardware):
-
-1. **Baseline**: merge commit `e32bff8` — `just test` green; drvPath
-   snapshot for all 14 hosts (13 NixOS + obrien darwin).
-2. **After factoring tier** (q-d9cba37c, then again after q-1f08acd9):
-   full-fleet drv sweep — **zero changes**; every host's toplevel drvPath
-   byte-identical to baseline, including obrien's darwinConfigurations
-   (which also keeps the CI darwin force-eval covered — the release.yml
-   step from darwin-parity is untouched). `just test` green at the tier
-   boundary.
-3. **After overlay tier** (q-1e0a32ed + q-9f7a3b5b): `just test` green.
-   Drv sweep — exactly three hosts changed, all mapped:
-   - ratched, lordhenry, frankenstein → fort-overlay-manager rebuild
-     (refresh handler in /etc + manager units) and /etc/fort/overlays.json
-     gaining `dependsOn`; ratched additionally the discovery-zone
-     declaration. All are overlay hosts; doofenshmirtz (empty `overlays =
-     {}`) correctly unchanged; the other 10 NixOS hosts + obrien
-     byte-identical. Nothing unmapped.
-4. **After rename tier** (q-b5f9ad4b): `just test` green. Drv sweep vs
-   tier-2: same three hosts changed (manager rebuild; lordhenry also the
-   tiamat drop-in path + activation script). All other hosts byte-identical
-   to baseline. Nothing unmapped.
-5. `go build ./...` + `go vet` + `gofmt -l` clean in
-   `pkgs/fort-overlay-manager` at every commit touching it (no test files
-   exist in the package — pre-existing).
-6. `git diff main...HEAD` touches no lockfile.
-
-## Questbook true-up notes (for merge review)
-
-- **q-d9cba37c**: close on merge. Note for the record: aggregation must
-  stay functional-composition, not `imports` (ordering hazard documented in
-  `common/fort.nix` header).
-- **q-1f08acd9**: close on merge, with the honest note that darwin-parity
-  had already done the platform-sharing substance; this quest's residue was
-  file-level decomposition + the host-manifest dedup. If the quest's intent
-  was something larger (e.g. extracting a reusable control-plane library
-  for non-fort consumers), it should be re-scoped as a new quest.
-- **q-1e0a32ed**: close on merge. Follow-on candidate if ever needed:
-  health-gated dependencies (start-ordering only today).
-- **q-9f7a3b5b**: close on merge. The `drain` field is live but unused;
-  first consumer should be whichever overlay next needs graceful shutdown
-  (litmus/tiamat are the likely candidates).
-- **q-b5f9ad4b**: close on merge **after** the Kevin-side follow-ups below
-  are triaged, since the rename is visible outside this repo.
-
-## Kevin-side follow-ups (out of repo — deliberately not chased)
-
-1. **Other repos / muscle memory that reference old unit names** in
-   `fort <host> journal/systemd` calls (e.g.
-   `{"unit":"overlay-knockout-knockout"}`) — anything scripted in project
-   repos' CI, runbooks, dashboards, or shell history. In-repo audit found
-   nothing, but litmus/knockout/headjack/tiamat repos and any monitoring
-   config were out of scope.
-2. **Deploy sequencing for the rename**: on each overlay host the rename
-   lands at the first `fort-overlay-manager-boot` run after switch, with
-   one stop/start per renamed service. If tiamat mid-run interruption is
-   costly, deploy lordhenry at a quiet moment.
-3. **Stale drop-in dir on lordhenry** is cleaned by the activation script;
-   if the deploy is ever rolled back past this branch, the old
-   `overlay-tiamat-tiamat.service.d` would need restoring by re-activation.
-4. **Merge order** stands as briefed: darwin-parity → cert-lifecycle →
-   this branch. Both parents were frozen; if merge review trims them, this
-   branch rebases through the certificate-broker header and
-   control-plane.nix hunks (now split across `common/fort/control-plane/`).
-5. **Runtime verification after deploy** (nothing was deployed from this
-   branch): `fort ratched status`, `systemctl status overlay-knockout` on
-   ratched, one `fort ratched refresh '{"overlay":"discovery-zone"}'` to
-   watch the ordered activation, and `journalctl -u overlay-tiamat` on
-   lordhenry to confirm the drop-in still applies (Environment from
-   10-anthropic-secret-file.conf).
+Notes:
+- I attempted the sanctioned milestone ping via `muse --room hearth` — the
+  auto-approval classifier denied it (external-write). Skipped rather than
+  worked around; this file is the record.
+- `fort obrien status` still says "degraded": the one remaining failed unit
+  is Apple's `com.apple.iomfb_fdr_loader`, pre-existing and unrelated (plus
+  a `"Label"` header artifact in the failed-units parser — cosmetic bug in
+  the darwin systemd handler, noted for whoever next touches it).
+- AXe was not brew-installed; `simctl` alone covered v1 per the brief.
