@@ -46,6 +46,13 @@ All in `clusters/bedlam/hosts/obrien/manifest.nix`:
   (the cranium side reads its copy per call, so rotating means: update the
   ratched file, re-encrypt into fort-nix, deploy obrien — no cranium
   restart).
+- **`axe`** (`pkgs/axe`, in obrien's systemPackages) — HID-level simulator
+  gestures for the loop; see § Gestures below. Packaged from the prebuilt
+  universal release tarball (cameroncooke/AXe); obrien has no Homebrew and
+  AXe is not in nixpkgs, so the release binary + its bundled FB frameworks
+  are installed whole under `libexec` with a `bin/axe` exec shim
+  (`dontStrip`/`dontFixup` — the shipped code signature must survive, and
+  the frameworks resolve via `@executable_path`).
 
 ## What is manual (redo these if obrien is replaced)
 
@@ -118,6 +125,40 @@ xcrun simctl io booted screenshot /tmp/hearth.png
 xcrun simctl spawn booted log stream --level debug --timeout 10 \
   --predicate 'processImagePath CONTAINS "Hearth"'
 ```
+
+## Gestures (AXe) — q-ee81198d
+
+simctl cannot tap or swipe; `axe` (on PATH via systemPackages) injects HID
+events into the booted simulator, headless, over ssh. Verified 2026-07-12 on
+macOS 26.2 / iOS 26.2 simulators driving the Hearth drawer:
+
+```bash
+UDID=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
+axe describe-ui --udid "$UDID"     # accessibility tree, frames in points
+axe tap -x 201 -y 739 --udid "$UDID"   # tap center of an element's frame
+axe swipe --start-x 201 --start-y 600 --end-x 201 --end-y 200 \
+  --duration 0.5 --udid "$UDID"        # scrolls scroll views
+axe type 'hello' --udid "$UDID"
+```
+
+Rough edges found (all verified live, not guesses):
+
+- **`axe drag` does not work** on this stack: `FBSimulatorHIDEvent does not
+  support touch move events`. No continuous-drag actuation (sheet handles,
+  drag-and-drop).
+- **`axe swipe` scrolls but does not drive drag-gesture UI** — it scrolled
+  the Settings app fine, but had zero effect on Hearth's drawer sheet in
+  either direction (same missing touch-move events). If a swipe silently
+  does nothing, find a tappable control via `describe-ui` instead: the
+  Hearth drawer opens by tapping its `Open Lair surface drawer` button and
+  closes by tapping a surface card (tapping the dimmed background does not
+  close it).
+- Coordinates are points (iPhone 17 Pro: 402x874); screenshots are 3x pixels.
+
+Demonstrated cycle: `/Users/admin/artifacts/2026-07-12-axe-gestures/` on
+obrien (`01-drawer-closed.png`, tap at (201,739), `02-drawer-open.png`,
+plus the open-drawer `describe-ui` JSON). The agent-facing command reference
+lives in the `ios-loop` macro (hoard, version 2) — keep the two in sync.
 
 **GUI-session caveat**: verified empirically 2026-07-12 that the *whole loop
 works headless* — `/dev/console` was owned by root (nobody logged in at the

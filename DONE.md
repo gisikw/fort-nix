@@ -1,109 +1,87 @@
-# DONE — Mobile e2e feedback loop (obrien muse serve + iOS agent loop)
+# DONE — iOS loop phase 2: gesture actuation on obrien (AXe)
 
-Campaign Fable Weekend (c-f4e0eb4f), quest q-6c1fbe34. Date: 2026-07-12.
-Model: Fable. All deliverables from BRIEF.md landed; no blockers remain for
-the hearth-room live-fire, which is Kevin's to fire.
+Quest q-ee81198d (Fable Weekend c-f4e0eb4f), follow-up to q-6c1fbe34.
+Date: 2026-07-12. All acceptance criteria met; no blockers.
 
-## Solved (with verification evidence)
+## What was done
 
-1. **muse binary on obrien** — muse is pure Go; cross-compiled on ratched
-   (`GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -mod=vendor`, muse repo
-   @ 96cbf59) and installed manually at `/usr/local/bin/muse` (root-owned,
-   0755). Verified: `muse --tools` and `muse serve` run on obrien.
-   Declarative packaging noted as follow-up in the runbook (repo is
-   `git.gisi.network/infra/muse` with vendored deps, so a `pkgs/muse`
-   buildGoModule is tractable once darwin nix builds have forge fetch creds;
-   overlays are Linux-only).
+1. **AXe 1.7.1 installed declaratively via nix** (commit `22cd9e5`, deployed
+   by gitops). Preference order from the brief resolved as follows:
+   - nix-darwin homebrew module: **rejected** — obrien has no Homebrew at
+     all (`which brew` → nothing, no `/opt/homebrew`), and the module does
+     not bootstrap brew itself. Installing Homebrew to get one formula would
+     restructure obrien beyond what AXe needs.
+   - nixpkgs: **not packaged** (checked; `axe`/`axel` hits are unrelated).
+   - Chosen: **`pkgs/axe/default.nix`** — the repo's existing
+     custom-derivation pattern (cf. `pkgs/zot`), fetching the prebuilt
+     universal release tarball from cameroncooke/AXe. The binary + its
+     bundled FB frameworks (FBSimulatorControl et al) install whole under
+     `libexec/axe/` with a `bin/axe` exec shim; `dontStrip`/`dontFixup`
+     preserve the shipped code signature (frameworks resolve via
+     `@executable_path`, which is why a symlink or a re-signed tree would
+     break). Wired into obrien's `systemPackages` in
+     `clusters/bedlam/hosts/obrien/manifest.nix`.
 
-2. **muse serve as launchd daemon, declared in fort-nix** — obrien's
-   `manifest.nix` now declares `launchd.daemons.muse-serve` (label
-   `network.gisi.muse.serve`, RunAtLoad + KeepAlive, UserName=admin,
-   `--addr 0.0.0.0:4600`) and `sops.secrets.muse-serve-token` (encrypted
-   copy of ratched's `~/.config/cranium/obrien-muse.token`, decrypt
-   roundtrip verified byte-identical before commit). Deployed via gitops
-   (commits ac6c624, 250d94d, 88b8d2d, all flake-checked; ratched drvPath
-   verified byte-identical to main for the shared-file changes).
-   macOS Application Firewall is disabled on obrien — no socketfilterfw
-   allowance was needed (documented in runbook for if it's ever enabled).
+2. **Gesture cycle demonstrated on Hearth** (headless, over ssh, nobody at
+   the console). Artifacts in
+   `/Users/admin/artifacts/2026-07-12-axe-gestures/` on obrien:
+   - `01-drawer-closed.png` — fresh launch of network.gisi.hearth
+   - `02-drawer-open.png` — after `axe tap -x 201 -y 739` on the
+     `Open Lair surface drawer` button; THE LAIR drawer with Maw / Log /
+     Questbook / Cupola / Discovery cards visible
+   - `describe-ui-drawer-open.json`, `NOTES.txt`
+   These were produced with the **deployed** system axe
+   (`/run/current-system/sw/bin/axe`), not the scratch copy used for
+   initial validation.
 
-3. **Transport verified from ratched** (all three, this session):
-   - `GET /healthz` with the cranium token → `{"ok": true}`
-   - wrong token → HTTP 401
-   - `POST /exec {"tool":"bash","input":{"command":"pwd && whoami"},"cwd":"/Users/admin/Projects/hearth"}`
-     → 200, stdout `/Users/admin/Projects/hearth\nadmin`, exit_code 0
+3. **Macro updated**: `~/Projects/hoard/macros/ios-loop.json` → version 2,
+   new "Gestures (axe)" section (UDID lookup, describe-ui → tap-center
+   workflow, swipe-for-scroll, type/button, verified limitations, Hearth
+   drawer specifics). Self-contained; JSON validated with jq.
 
-4. **Hearth source current on obrien** — `just sync` from
-   `~/Projects/hearth` on ratched → `/Users/admin/Projects/hearth`.
-   (Note: `just` needs `XDG_RUNTIME_DIR` overridden in this sandbox —
-   `/run/user/0` is unwritable.)
+4. **Runbook updated**: `docs/obrien-muse-serve.md` — axe added to the
+   "What is declarative" list, new "Gestures (AXe)" section with commands
+   and rough edges.
 
-5. **One full iOS loop cycle, demonstrated headless over ssh**:
-   xcodebuild for simulator (BUILD SUCCEEDED) → `simctl boot "iPhone 17
-   Pro"` → install → launch (`network.gisi.hearth`, pid 24244) → `simctl io
-   booted screenshot` → 10s `log stream` sample. Screenshot pulled back to
-   ratched and visually confirmed: Hearth chat UI (MAW `#roost` room)
-   rendered. **The GUI-session concern did not materialize** — the whole
-   loop ran with nobody logged in at the console (`/dev/console` owned by
-   root) on macOS 26.2. Bonus e2e: a second screenshot was taken *through*
-   `POST /exec` (the exact hearth-room call path), exit 0.
-   Artifacts on obrien: `/Users/admin/artifacts/2026-07-12-muse-loop/`
-   (`xcodebuild.log`, `hearth-launch.png`, `hearth-via-exec.png`,
-   `log-stream-sample.txt`).
+## Findings / rough edges (all verified live)
 
-6. **Runbook** — `docs/obrien-muse-serve.md`: declarative vs. manual split,
-   exact rebuild/reinstall commands, verification commands, the headless
-   simctl loop, and every rough edge found.
+- **`axe drag` does not work** on macOS 26.2:
+  `FBSimulatorHIDEvent does not support touch move events`. No
+  continuous-drag actuation is possible (sheet drag-handles, drag-and-drop).
+- **`axe swipe` scrolls but cannot drive drag-gesture UI.** It scrolled the
+  Settings app (screenshot-verified) but had zero effect on Hearth's drawer
+  sheet in either direction — consistent with the missing touch-move events.
+  The practical rule (now in the macro): if a swipe silently does nothing,
+  find a tappable control via `describe-ui`.
+- Hearth drawer semantics: opens by tapping the handle **button**; closes by
+  tapping a surface card; tapping the dimmed background does not close it.
+- Tap/type/button/describe-ui all work headless via CoreSimulator with no
+  GUI session, same as the phase-1 loop.
 
-## Fixed along the way (darwin-parity runtime findings, as predicted)
+## How it was verified
 
-- **`pmset -a RestartAfterFreeze 1` fails on macOS 26.2** (usage error) —
-  it was in the mac-mini profile's postActivation and killed **every**
-  darwin activation at the last step. Verified manually (autorestart and
-  womp succeed; RestartAfterFreeze does not); dropped it. (250d94d)
-- **Darwin gitops ownership check used BSD `stat -f` with GNU coreutils
-  first in PATH** — misfired and `chown -R`'d the repo every 30s poll.
-  Pinned to `/usr/bin/stat`. (250d94d)
-- **launchd opens Standard{Out,Error}Path as the daemon's UserName** —
-  an admin-uid daemon pointed at `/var/log/x.log` fails to spawn at all
-  (EX_CONFIG 78, zero log output, 73 silent retries). Fixed by pre-creating
-  the log root-side at activation. (88b8d2d)
+- Recipe validated before committing: derivation test-built **on obrien**
+  (`nix build --impure --expr 'import /tmp/axe-drv.nix ...'`) and the store
+  path ran `describe-ui` + a live tap successfully.
+- `nix flake check ./clusters/bedlam/hosts/obrien` green before push
+  (change is obrien-scoped: new `pkgs/axe/` + obrien manifest only).
+- Post-deploy: `fort obrien status` shows commit `22cd9e5`; over ssh
+  `which axe` → `/run/current-system/sw/bin/axe`, `axe --version` → 1.7.1.
+  (obrien's one failed unit is `com.apple.iomfb_fdr_loader`, an Apple
+  daemon, pre-existing and unrelated.)
+- Consumer path proven: `POST /exec` to muse serve from ratched with
+  `{"tool":"bash","input":{"command":"axe --version && which axe"}}` →
+  `1.7.1`, `/run/current-system/sw/bin/axe`, exit 0 — hearth-room agents
+  get axe on PATH with no muse changes.
+- Both screenshots pulled back to ratched and visually inspected: 01 shows
+  the chat with the drawer handle at bottom; 02 shows THE LAIR drawer open
+  with all five surface cards. (The prior live-fire "LIVE-FIRE" label was
+  not present — not chased, per brief.)
 
-## Known open issue (ticketed, not blocking)
+## Not done (deliberately)
 
-- **q-a54f7e19**: the darwin gitops daemon runs `darwin-rebuild switch`
-  inline; when a commit changes the gitops daemon's own plist, activation's
-  launchd-services step reloads it and kills its own in-flight rebuild —
-  activation silently truncates (later steps incl. sops secrets never run)
-  while `deployed-commit` claims success. Hit this live deploying 250d94d;
-  recovered with `sudo /nix/var/nix/profiles/system/activate` (documented in
-  the runbook). Proper fix needs the switch detached from the daemon's
-  process group (no setsid/systemd-run on macOS → transient `launchctl
-  submit` job or double-fork wrapper).
-
-## Manual steps taken (all in the runbook)
-
-1. Cross-compiled muse on ratched, scp'd, `sudo install` to
-   `/usr/local/bin/muse` on obrien.
-2. `just sync` of hearth from ratched.
-3. One recovery `sudo /nix/var/nix/profiles/system/activate` on obrien
-   (the q-a54f7e19 truncation).
-4. One `launchctl bootout` + `bootstrap` of muse-serve to clear the stale
-   EX_CONFIG last-exit code so host-status stops counting it failed
-   (daemon was already healthy; healthz re-verified after).
-5. Ran the iOS loop over ssh (commands in the runbook).
-
-## What the hearth-room live-fire still needs
-
-Nothing on the infrastructure side. Cranium's `hearth` profile resolves the
-token per call and the endpoint answers with exactly that token, so a
-message in the `hearth` room should execute on obrien as-is. Kevin fires it.
-
-Notes:
-- I attempted the sanctioned milestone ping via `muse --room hearth` — the
-  auto-approval classifier denied it (external-write). Skipped rather than
-  worked around; this file is the record.
-- `fort obrien status` still says "degraded": the one remaining failed unit
-  is Apple's `com.apple.iomfb_fdr_loader`, pre-existing and unrelated (plus
-  a `"Label"` header artifact in the failed-units parser — cosmetic bug in
-  the darwin systemd handler, noted for whoever next touches it).
-- AXe was not brew-installed; `simctl` alone covered v1 per the brief.
+- No credential hygiene (rotation ticketed separately, per brief).
+- No Questbook quest closed — Kevin verifies manually.
+- Homebrew not installed on obrien; its brew-less state is unchanged.
+- `idb` fallback not needed — AXe covers tap/type/scroll; the drag
+  limitation is a framework-level constraint documented in macro + runbook.
