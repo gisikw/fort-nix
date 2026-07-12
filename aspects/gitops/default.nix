@@ -276,6 +276,14 @@ EOF
       git ${darwinGitOpts} clone --branch main "${repoUrl}" "${darwinRepoDir}"
     fi
 
+    # Ensure repo is owned by root — nix's libgit2 flake fetcher refuses to open
+    # repos not owned by the calling user (CVE-2022-24765 equivalent). The initial
+    # clone may have been done as the admin user; the daemon runs as root.
+    if [ "$(stat -f '%u' "${darwinRepoDir}")" != "0" ]; then
+      log "Fixing repo ownership (was $(stat -f '%Su' "${darwinRepoDir}"), need root)"
+      chown -R root:wheel "${darwinRepoDir}"
+    fi
+
     cd "${darwinRepoDir}"
 
     if ! git ${darwinGitOpts} fetch origin main 2>&1; then
