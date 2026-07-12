@@ -17,12 +17,13 @@
         dock.autohide = true;
       };
 
-      # pmset settings nix-darwin doesn't expose natively
+      # pmset settings nix-darwin doesn't expose natively.
+      # NOTE: `RestartAfterFreeze` is rejected by pmset on macOS 26.2
+      # (prints usage, exits 1) and was failing every activation — do not
+      # re-add it without verifying pmset accepts it on the target OS.
       system.activationScripts.postActivation.text = ''
         # Restart on power failure
         /usr/bin/pmset -a autorestart 1
-        # Restart on freeze (kernel watchdog)
-        /usr/bin/pmset -a RestartAfterFreeze 1
         # Wake on network access (remote management)
         /usr/bin/pmset -a womp 1
       '';

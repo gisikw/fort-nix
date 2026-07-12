@@ -279,8 +279,11 @@ EOF
     # Ensure repo is owned by root — nix's libgit2 flake fetcher refuses to open
     # repos not owned by the calling user (CVE-2022-24765 equivalent). The initial
     # clone may have been done as the admin user; the daemon runs as root.
-    if [ "$(stat -f '%u' "${darwinRepoDir}")" != "0" ]; then
-      log "Fixing repo ownership (was $(stat -f '%Su' "${darwinRepoDir}"), need root)"
+    # /usr/bin/stat explicitly: PATH above puts GNU coreutils first, where
+    # `stat -f` means --file-system and the BSD format string is treated as
+    # a filename — the check then misfires (and chowns) every poll.
+    if [ "$(/usr/bin/stat -f '%u' "${darwinRepoDir}")" != "0" ]; then
+      log "Fixing repo ownership (was $(/usr/bin/stat -f '%Su' "${darwinRepoDir}"), need root)"
       chown -R root:wheel "${darwinRepoDir}"
     fi
 
