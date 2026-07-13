@@ -94,6 +94,8 @@ rec {
                 provider: anthropic
                 model: claude-opus-4-6
                 supports_vision: true
+                backend_config:
+                  strip_continuation_artifacts: true
                 system_prompt:
                   - id: exo-opus-behavioral
                     file: exo-opus.md
