@@ -108,6 +108,8 @@ rec {
                 provider: anthropic
                 model: claude-opus-4-6
                 supports_vision: true
+                backend_config:
+                  strip_continuation_artifacts: true
                 system_prompt:
                   - id: exo-opus-behavioral
                     file: exo-opus.md
@@ -120,6 +122,8 @@ rec {
                 provider: anthropic
                 model: claude-fable-5
                 supports_vision: true
+                backend_config:
+                  strip_continuation_artifacts: true
                 system_prompt:
                   - id: fable-arm-steering
                     text: |
@@ -206,6 +210,8 @@ rec {
                 provider: anthropic
                 model: claude-opus-4-6
                 supports_vision: true
+                backend_config:
+                  strip_continuation_artifacts: true
 
 
           cc-sonnet-5:
@@ -216,6 +222,8 @@ rec {
                 provider: anthropic
                 model: claude-sonnet-5
                 supports_vision: true
+                backend_config:
+                  strip_continuation_artifacts: true
 
 
           exo-qwen-local:
