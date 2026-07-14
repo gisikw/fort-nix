@@ -521,6 +521,30 @@ _deploy-gitops host addr:
     fi
   done
 
+# Build and safely write the reusable unattended provisioning USB
+boot-drive device:
+  ./provisioning/write-drive.sh {{device}}
+
+# Build the unattended installer ISO (requires fleet secret path)
+build-boot-image:
+  nix build --impure ./provisioning/boot#default
+
+# Boot the actual installer ISO under QEMU and require the client marker
+test-boot-image:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  : "${FORT_BOOTSTRAP_SECRET_FILE:?Set FORT_BOOTSTRAP_SECRET_FILE}"
+  iso_result=$(nix build --impure ./provisioning/boot#default --no-link --print-out-paths)
+  iso=$(printf '%s\n' "$iso_result"/iso/*.iso)
+  nix shell nixpkgs#qemu --command ./provisioning/vm-smoke.sh "$iso"
+
+# Unit and race tests for the provisioning broker
+test-provisioner:
+  cd pkgs/provisioner && go test -race ./...
+
+# Apply a broker completion artifact to the Git checkout
+register-provisioned host:
+  ./provisioning/register-completion.sh {{host}}
 rekey path="":
   #!/usr/bin/env bash
   nix-shell -p sops ssh-to-age jq --run "bash scripts/rekey.sh '{{path}}'"

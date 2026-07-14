@@ -9,6 +9,7 @@ rec {
     "homepage"
     "overlay-registry"
     "pocket-id"
+    "provisioner"
   ];
 
   aspects = [
