@@ -49,15 +49,15 @@ Review, commit, and push the generated device and host changes. Remove the host 
 
 - The USB fleet secret proves that a claimant has the controlled boot medium. It is necessary but insufficient: no machine receives source or an identity unless a human has armed a host.
 - The dashboard is protected by Fort identity SSO and the `admin` group. The service also refuses browser actions without the trusted identity header and rejects cross-origin mutations.
-- Exactly one global lease exists. It expires after five minutes, and claim is serialized under the broker lock before a one-time 256-bit token is returned.
-- The source archive and completion API require that claim token. Completion consumes it.
+- Exactly one global arm lease exists. It expires after five minutes and gates claiming only; a successful claim receives an independent two-hour TTL. Claim is serialized under the broker lock before a one-time 256-bit token is returned.
+- The prepared source archive and completion API require that claim token. Preparation runs outside the broker state lock; the client polls until the host-specific archive is ready. There is no generic-source fallback.
 - TLS terminates through the normal Fort public service path. The machine endpoints bypass browser SSO but authenticate at the application layer.
 - Host SSH keys are generated on the booted device and never traverse the network privately.
 - The static secret prevents random internet callers from consuming armed leases. It does **not** distinguish two copies of the authorized USB; the one-device property comes from the narrow, one-shot lease.
 
 ## Failure behavior
 
-Before disk partitioning, failures are retried or stop visibly on tty1. A lease claim remains consumed to avoid letting a second machine inherit the identity after an ambiguous partial failure; disarm and re-arm explicitly to retry. The client reports its hardware metadata before destructive work. The controller then inserts the device and generated public key into a private source copy and reruns `rekey`, ensuring the installed host can decrypt its assigned secrets on first boot; the registrar artifact normally exists even if installation later fails.
+Before disk partitioning, failures are retried or stop visibly on tty1. A lease claim remains consumed to avoid letting a second machine inherit the identity after an ambiguous partial failure; disarm and re-arm explicitly to retry. The client reports its hardware metadata before destructive work. The controller asynchronously inserts the device and generated public key into a private source copy and reruns `rekey`, ensuring the installed host can decrypt its assigned secrets on first boot; the registrar artifact normally exists even if installation later fails.
 
 ## Validation
 

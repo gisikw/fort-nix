@@ -24,27 +24,31 @@ type Target struct {
 	Profile string `json:"profile"`
 }
 type Lease struct {
-	Host        string     `json:"host"`
-	Profile     string     `json:"profile"`
-	ArmedBy     string     `json:"armed_by"`
-	ArmedAt     time.Time  `json:"armed_at"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	ClaimedAt   *time.Time `json:"claimed_at,omitempty"`
-	ClaimToken  string     `json:"claim_token,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Host           string     `json:"host"`
+	Profile        string     `json:"profile"`
+	ArmedBy        string     `json:"armed_by"`
+	ArmedAt        time.Time  `json:"armed_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	ClaimedAt      *time.Time `json:"claimed_at,omitempty"`
+	ClaimToken     string     `json:"claim_token,omitempty"`
+	ClaimExpiresAt *time.Time `json:"claim_expires_at,omitempty"`
+	DMIUUID        string     `json:"dmi_uuid,omitempty"`
+	PreparingAt    *time.Time `json:"preparing_at,omitempty"`
+	PrepareError   string     `json:"prepare_error,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
 }
 type State struct {
 	Lease *Lease `json:"lease,omitempty"`
 }
 type Server struct {
-	mu                                                     sync.Mutex
-	targets                                                []Target
-	state                                                  State
-	statePath, archivePath, completionsDir, prepareCommand string
-	secret                                                 []byte
-	now                                                    func() time.Time
-	requireUser                                            bool
-	tmpl                                                   *template.Template
+	mu                                        sync.Mutex
+	targets                                   []Target
+	state                                     State
+	statePath, completionsDir, prepareCommand string
+	secret                                    []byte
+	now                                       func() time.Time
+	requireUser                               bool
+	tmpl                                      *template.Template
 }
 
 func main() {
@@ -75,10 +79,10 @@ func newServerFromEnv() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newServer(targets, strings.TrimSpace(string(secret)), getenv("STATE_PATH", "/var/lib/fort-provisioner/state.json"), os.Getenv("SOURCE_ARCHIVE_PATH"), getenv("COMPLETIONS_DIR", "/var/lib/fort-provisioner/completions")), nil
+	return newServer(targets, strings.TrimSpace(string(secret)), getenv("STATE_PATH", "/var/lib/fort-provisioner/state.json"), getenv("COMPLETIONS_DIR", "/var/lib/fort-provisioner/completions")), nil
 }
-func newServer(targets []Target, secret, statePath, archivePath, completions string) *Server {
-	s := &Server{targets: targets, secret: []byte(secret), statePath: statePath, archivePath: archivePath, completionsDir: completions, prepareCommand: os.Getenv("PREPARE_COMMAND"), now: time.Now, requireUser: getenv("REQUIRE_PROXY_USER", "true") != "false"}
+func newServer(targets []Target, secret, statePath, completions string) *Server {
+	s := &Server{targets: targets, secret: []byte(secret), statePath: statePath, completionsDir: completions, prepareCommand: os.Getenv("PREPARE_COMMAND"), now: time.Now, requireUser: getenv("REQUIRE_PROXY_USER", "true") != "false"}
 	if b, err := os.ReadFile(statePath); err == nil {
 		_ = json.Unmarshal(b, &s.state)
 	}
@@ -128,6 +132,8 @@ func (s *Server) arm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown host", 404)
 		return
 	}
+	_ = os.Remove(filepath.Join(s.completionsDir, target.Host+".tar.gz"))
+	_ = os.Remove(filepath.Join(s.completionsDir, target.Host+".json"))
 	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -154,6 +160,10 @@ func (s *Server) activate(w http.ResponseWriter, r *http.Request) {
 	if !s.machine(w, r, "") {
 		return
 	}
+	var activation struct {
+		DMIUUID string `json:"dmi_uuid"`
+	}
+	_ = json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&activation)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	l := s.state.Lease
@@ -173,11 +183,14 @@ func (s *Server) activate(w http.ResponseWriter, r *http.Request) {
 	}
 	l.ClaimedAt = &now
 	l.ClaimToken = token
+	claimExpires := now.Add(2 * time.Hour)
+	l.ClaimExpiresAt = &claimExpires
+	l.DMIUUID = activation.DMIUUID
 	if err = s.save(); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	writeJSON(w, map[string]any{"host": l.Host, "profile": l.Profile, "claim_token": token, "source_archive_url": "/bootstrap/" + token, "expires_at": l.ExpiresAt})
+	writeJSON(w, map[string]any{"host": l.Host, "profile": l.Profile, "claim_token": token, "source_archive_url": "/bootstrap/" + token, "claim_expires_at": claimExpires})
 }
 func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
@@ -185,26 +198,23 @@ func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
-	valid := s.state.Lease != nil && s.state.Lease.ClaimToken == token && s.state.Lease.ClaimedAt != nil && s.now().Before(s.state.Lease.ExpiresAt)
+	lease := s.state.Lease
+	valid := lease != nil && lease.ClaimToken == token && lease.ClaimedAt != nil && lease.ClaimExpiresAt != nil && s.now().Before(*lease.ClaimExpiresAt)
+	prepared := ""
+	if valid {
+		prepared = filepath.Join(s.completionsDir, lease.Host+".tar.gz")
+	}
 	s.mu.Unlock()
 	if !valid {
 		http.Error(w, "invalid or expired claim", 403)
 		return
 	}
-	prepared := ""
-	if s.state.Lease != nil {
-		prepared = filepath.Join(s.completionsDir, s.state.Lease.Host+".tar.gz")
-	}
-	if _, err := os.Stat(prepared); err == nil {
-		http.ServeFile(w, r, prepared)
-		return
-	}
-	if s.archivePath == "" {
-		http.Error(w, "archive unavailable", 503)
+	if _, err := os.Stat(prepared); err != nil {
+		http.Error(w, "host source is still preparing", 503)
 		return
 	}
 	w.Header().Set("Content-Type", "application/gzip")
-	http.ServeFile(w, r, s.archivePath)
+	http.ServeFile(w, r, prepared)
 }
 
 type completion struct {
@@ -230,39 +240,75 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "uuid, pubkey and hardware_configuration required", 400)
 		return
 	}
+	now := s.now()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	l := s.state.Lease
-	if l == nil || l.ClaimToken != token || l.ClaimedAt == nil || l.CompletedAt != nil || !s.now().Before(l.ExpiresAt) {
-		http.Error(w, "invalid or expired claim", 403)
+	if l == nil || l.ClaimToken != token || l.ClaimedAt == nil || l.ClaimExpiresAt == nil || !now.Before(*l.ClaimExpiresAt) || l.CompletedAt != nil || l.PreparingAt != nil {
+		s.mu.Unlock()
+		http.Error(w, "invalid, expired, or already preparing claim", 403)
 		return
 	}
 	c.Host = l.Host
 	c.Profile = l.Profile
-	c.CompletedAt = s.now()
+	c.CompletedAt = now
 	b, _ := json.MarshalIndent(c, "", "  ")
 	if err := os.MkdirAll(s.completionsDir, 0700); err != nil {
+		s.mu.Unlock()
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	completionPath := filepath.Join(s.completionsDir, c.Host+".json")
 	if err := atomicWrite(completionPath, b, 0600); err != nil {
+		s.mu.Unlock()
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if s.prepareCommand != "" {
-		cmd := exec.Command(s.prepareCommand, completionPath)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			http.Error(w, fmt.Sprintf("prepare failed: %v: %s", err, out), 500)
-			return
-		}
+	l.PreparingAt = &now
+	l.PrepareError = ""
+	if err := s.save(); err != nil {
+		l.PreparingAt = nil
+		s.mu.Unlock()
+		http.Error(w, err.Error(), 500)
+		return
 	}
-	completed := s.now()
-	l.CompletedAt = &completed
-	_ = s.save()
-	writeJSON(w, map[string]string{"status": "recorded"})
+	s.mu.Unlock()
+
+	go s.prepare(token, completionPath)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, map[string]string{"status": "preparing"})
 }
 
+func (s *Server) prepare(token, completionPath string) {
+	var prepareErr error
+	if s.prepareCommand == "" {
+		prepareErr = errors.New("PREPARE_COMMAND is not configured")
+	} else {
+		cmd := exec.Command(s.prepareCommand, completionPath)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			prepareErr = fmt.Errorf("prepare failed: %w: %s", err, out)
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l := s.state.Lease
+	if l == nil || l.ClaimToken != token {
+		return
+	}
+	l.PreparingAt = nil
+	if prepareErr != nil {
+		l.PrepareError = prepareErr.Error()
+		log.Printf("%s", prepareErr)
+	} else {
+		completed := s.now()
+		l.CompletedAt = &completed
+		l.PrepareError = ""
+	}
+	if err := s.save(); err != nil {
+		log.Printf("saving prepare result: %v", err)
+	}
+}
 func (s *Server) human(w http.ResponseWriter, r *http.Request, mutate bool) bool {
 	if s.requireUser && user(r) == "" {
 		http.Error(w, "authenticated proxy identity required", 401)
@@ -348,6 +394,4 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 const dashboardHTML = `<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Fort Foundry</title><style>
-:root{--ink:#161916;--paper:#e9e2d2;--rust:#a84227;--acid:#c5d86d;--line:#5d6258}*{box-sizing:border-box}body{margin:0;background:var(--ink);color:var(--paper);font-family:"IBM Plex Mono","Courier New",monospace;background-image:repeating-linear-gradient(135deg,#1b1e1b 0,#1b1e1b 2px,#161916 2px,#161916 13px)}main{max-width:1050px;margin:auto;padding:5vw 24px}.eyebrow{color:var(--acid);letter-spacing:.22em;font-size:.72rem}h1{font-family:Georgia,serif;font-weight:400;font-style:italic;font-size:clamp(3rem,9vw,7rem);line-height:.8;margin:.25em 0}.rule{height:6px;background:var(--rust);margin:2rem 0}.lease{border:1px solid var(--line);padding:18px;margin-bottom:24px;background:#20241f}.lease strong{color:var(--acid)}table{width:100%;border-collapse:collapse;background:#e9e2d2;color:#161916;box-shadow:12px 12px 0 var(--rust)}th,td{text-align:left;padding:16px;border-bottom:1px solid #aaa391}th{font-size:.7rem;letter-spacing:.15em;background:#d5cbb7}.host{font-family:Georgia,serif;font-size:1.4rem}.tag{font-size:.7rem;border:1px solid;padding:4px 7px}button{border:0;background:var(--ink);color:var(--paper);font:700 .75rem inherit;padding:11px 14px;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}button:hover{background:var(--rust)}button.kill{background:var(--rust)}footer{margin-top:40px;color:#92978c;font-size:.72rem}@media(max-width:600px){th:nth-child(2),td:nth-child(2){display:none}td,th{padding:12px}}</style></head><body><main><div class=eyebrow>BEDLAM / PROVISIONING AUTHORITY</div><h1>Fort<br>Foundry</h1><div class=rule></div>{{if .Lease}}<div class=lease><strong>{{.Lease.Host}}</strong> armed by {{.Lease.ArmedBy}} until {{.Lease.ExpiresAt.Format "15:04:05 MST"}}. {{if .Lease.ClaimedAt}}CLAIMED at {{.Lease.ClaimedAt.Format "15:04:05"}}{{else}}Awaiting one boot device.{{end}} <form style="display:inline" method=post action="/api/leases/{{.Lease.Host}}?_method=DELETE"><button class=kill formmethod=post onclick="this.form.method='post';this.form.action='/api/leases/{{.Lease.Host}}/disarm'">Disarm</button></form></div>{{else}}<div class=lease>No active lease. The foundry is cold.</div>{{end}}<table><thead><tr><th>Assigned host</th><th>Device profile</th><th>Five-minute ignition</th></tr></thead><tbody>{{range .Targets}}<tr><td class=host>{{.Host}}</td><td><span class=tag>{{.Profile}}</span></td><td><form method=post action="/api/leases/{{.Host}}"><button>Arm {{.Host}}</button></form></td></tr>{{end}}</tbody></table><footer>One global lease. One claimant. Possession of the fleet USB credential is necessary but not sufficient.</footer></main></body></html>`
-
-var _ = fmt.Sprintf
+:root{--ink:#161916;--paper:#e9e2d2;--rust:#a84227;--acid:#c5d86d;--line:#5d6258}*{box-sizing:border-box}body{margin:0;background:var(--ink);color:var(--paper);font-family:"IBM Plex Mono","Courier New",monospace;background-image:repeating-linear-gradient(135deg,#1b1e1b 0,#1b1e1b 2px,#161916 2px,#161916 13px)}main{max-width:1050px;margin:auto;padding:5vw 24px}.eyebrow{color:var(--acid);letter-spacing:.22em;font-size:.72rem}h1{font-family:Georgia,serif;font-weight:400;font-style:italic;font-size:clamp(3rem,9vw,7rem);line-height:.8;margin:.25em 0}.rule{height:6px;background:var(--rust);margin:2rem 0}.lease{border:1px solid var(--line);padding:18px;margin-bottom:24px;background:#20241f}.lease strong{color:var(--acid)}table{width:100%;border-collapse:collapse;background:#e9e2d2;color:#161916;box-shadow:12px 12px 0 var(--rust)}th,td{text-align:left;padding:16px;border-bottom:1px solid #aaa391}th{font-size:.7rem;letter-spacing:.15em;background:#d5cbb7}.host{font-family:Georgia,serif;font-size:1.4rem}.tag{font-size:.7rem;border:1px solid;padding:4px 7px}button{border:0;background:var(--ink);color:var(--paper);font:700 .75rem inherit;padding:11px 14px;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}button:hover{background:var(--rust)}button.kill{background:var(--rust)}footer{margin-top:40px;color:#92978c;font-size:.72rem}@media(max-width:600px){th:nth-child(2),td:nth-child(2){display:none}td,th{padding:12px}}</style></head><body><main><div class=eyebrow>BEDLAM / PROVISIONING AUTHORITY</div><h1>Fort<br>Foundry</h1><div class=rule></div>{{if .Lease}}<div class=lease><strong>{{.Lease.Host}}</strong> armed by {{.Lease.ArmedBy}} until {{.Lease.ExpiresAt.Format "15:04:05 MST"}}. {{if .Lease.ClaimedAt}}CLAIMED at {{.Lease.ClaimedAt.Format "15:04:05"}}{{else}}Awaiting one boot device.{{end}} <form style="display:inline" method=post action="/api/leases/{{.Lease.Host}}/disarm"><button class=kill>Disarm</button></form></div>{{else}}<div class=lease>No active lease. The foundry is cold.</div>{{end}}<table><thead><tr><th>Assigned host</th><th>Device profile</th><th>Five-minute ignition</th></tr></thead><tbody>{{range .Targets}}<tr><td class=host>{{.Host}}</td><td><span class=tag>{{.Profile}}</span></td><td><form method=post action="/api/leases/{{.Host}}"><button>Arm {{.Host}}</button></form></td></tr>{{end}}</tbody></table><footer>One global lease. One claimant. Possession of the fleet USB credential is necessary but not sufficient.</footer></main></body></html>`

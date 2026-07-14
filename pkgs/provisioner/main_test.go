@@ -15,10 +15,14 @@ import (
 func fixture(t *testing.T) *Server {
 	t.Helper()
 	d := t.TempDir()
-	archive := filepath.Join(d, "source.tgz")
-	os.WriteFile(archive, []byte("archive"), 0600)
-	s := newServer([]Target{{Host: "newbox", Profile: "beelink"}}, "fleet-secret", filepath.Join(d, "state.json"), archive, filepath.Join(d, "complete"))
+	completions := filepath.Join(d, "complete")
+	_ = os.MkdirAll(completions, 0700)
+	_ = os.WriteFile(filepath.Join(completions, "newbox.tar.gz"), []byte("archive"), 0600)
+	s := newServer([]Target{{Host: "newbox", Profile: "beelink"}}, "fleet-secret", filepath.Join(d, "state.json"), completions)
 	s.requireUser = true
+	prepare := filepath.Join(d, "prepare")
+	_ = os.WriteFile(prepare, []byte("#!/bin/sh\nexit 0\n"), 0700)
+	s.prepareCommand = prepare
 	s.now = func() time.Time { return time.Date(2026, 7, 14, 14, 0, 0, 0, time.UTC) }
 	return s
 }
@@ -106,6 +110,51 @@ func TestLeaseExpiry(t *testing.T) {
 		t.Fatalf("got %d", code)
 	}
 }
+func TestClaimSurvivesArmWindow(t *testing.T) {
+	s := fixture(t)
+	arm(t, s)
+	base := s.now()
+	_, v := activate(t, s)
+	token := v["claim_token"].(string)
+	s.now = func() time.Time { return base.Add(30 * time.Minute) }
+	_ = os.WriteFile(filepath.Join(s.completionsDir, "newbox.tar.gz"), []byte("archive"), 0600)
+	if got := request(s, "GET", "/bootstrap/"+token, token, "", nil).Code; got != 200 {
+		t.Fatalf("bootstrap after arm expiry: %d", got)
+	}
+}
+
+func TestClaimExpiresIndependently(t *testing.T) {
+	s := fixture(t)
+	arm(t, s)
+	base := s.now()
+	_, v := activate(t, s)
+	token := v["claim_token"].(string)
+	s.now = func() time.Time { return base.Add(2 * time.Hour) }
+	if got := request(s, "GET", "/bootstrap/"+token, token, "", nil).Code; got != 403 {
+		t.Fatalf("bootstrap after claim expiry: %d", got)
+	}
+}
+
+func TestActivationRecordsDMIUUID(t *testing.T) {
+	s := fixture(t)
+	arm(t, s)
+	w := request(s, "POST", "/activate", "fleet-secret", "", []byte(`{"dmi_uuid":"machine-123"}`))
+	if w.Code != 200 || s.state.Lease.DMIUUID != "machine-123" {
+		t.Fatalf("status=%d dmi=%q", w.Code, s.state.Lease.DMIUUID)
+	}
+}
+
+func TestDisarmFormTargetsDisarmRoute(t *testing.T) {
+	s := fixture(t)
+	arm(t, s)
+	w := request(s, "GET", "/", "", "kevin", nil)
+	if !bytes.Contains(w.Body.Bytes(), []byte(`action="/api/leases/newbox/disarm"`)) || bytes.Contains(w.Body.Bytes(), []byte("onclick=")) {
+		t.Fatalf("unsafe disarm form: %s", w.Body.String())
+	}
+	if got := request(s, "POST", "/api/leases/newbox/disarm", "", "kevin", nil).Code; got != 303 || s.state.Lease != nil {
+		t.Fatalf("disarm status=%d lease=%#v", got, s.state.Lease)
+	}
+}
 func TestCompletionIsRecordedAndConsumed(t *testing.T) {
 	s := fixture(t)
 	arm(t, s)
@@ -113,7 +162,7 @@ func TestCompletionIsRecordedAndConsumed(t *testing.T) {
 	token := v["claim_token"].(string)
 	body := []byte(`{"uuid":"abc","pubkey":"ssh-ed25519 xxx","hardware_configuration":"{}"}`)
 	w := request(s, "POST", "/complete/"+token, token, "", body)
-	if w.Code != 200 {
+	if w.Code != http.StatusAccepted {
 		t.Fatalf("%d %s", w.Code, w.Body.String())
 	}
 	b, err := os.ReadFile(filepath.Join(s.completionsDir, "newbox.json"))
@@ -141,6 +190,7 @@ func TestBootstrapRequiresClaimToken(t *testing.T) {
 	arm(t, s)
 	_, v := activate(t, s)
 	token := v["claim_token"].(string)
+	_ = os.WriteFile(filepath.Join(s.completionsDir, "newbox.tar.gz"), []byte("archive"), 0600)
 	if got := request(s, "GET", "/bootstrap/"+token, "wrong", "", nil).Code; got != 401 {
 		t.Fatalf("wrong %d", got)
 	}
@@ -149,5 +199,3 @@ func TestBootstrapRequiresClaimToken(t *testing.T) {
 		t.Fatalf("%d %q", w.Code, w.Body.String())
 	}
 }
-
-var _ = http.MethodGet
