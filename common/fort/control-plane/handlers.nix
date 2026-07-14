@@ -183,6 +183,7 @@ in
       max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 500')
       grep_pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.grep // empty')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
+      until=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.until // empty')
 
       if [ -z "$unit" ] && [ -z "$identifier" ]; then
         echo '{"error": "unit or identifier parameter required"}'
@@ -257,6 +258,9 @@ in
         if [ -n "$since" ]; then
           args=("--predicate" "$predicate" "--style" "compact" "--info" "--debug" "--start" "$since")
         fi
+        if [ -n "$until" ]; then
+          args+=("--end" "$until")
+        fi
 
         if [ -n "$grep_pattern" ]; then
           /usr/bin/log show "''${args[@]}" 2>&1 | ${pkgs.gnugrep}/bin/grep -E -i -- "$grep_pattern" | ${pkgs.coreutils}/bin/tail -n "$lines" > "$raw_file" || true
@@ -280,6 +284,7 @@ in
       max_line_chars_raw=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.max_line_chars // 500')
       grep_pattern=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.grep // empty')
       since=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.since // empty')
+      until=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.until // empty')
 
       if [ -z "$unit" ] && [ -z "$identifier" ]; then
         echo '{"error": "unit or identifier parameter required"}'
@@ -330,6 +335,9 @@ in
       args+=("-n" "$lines" "--no-pager" "-o" "short-iso")
       if [ -n "$since" ]; then
         args+=("--since" "$since")
+      fi
+      if [ -n "$until" ]; then
+        args+=("--until" "$until")
       fi
       if [ -n "$grep_pattern" ]; then
         args+=("--grep" "$grep_pattern")
