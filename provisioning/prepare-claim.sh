@@ -18,7 +18,7 @@ mkdir -p "$dev"
 jq -er .hardware_configuration "$completion" > "$dev/hardware-configuration.nix"
 cp "$work/provisioning/device-flake.nix" "$dev/flake.nix"
 state=$(nix eval --raw nixpkgs#lib.version | cut -d. -f1,2)
-printf '{ uuid = "%s"; profile = "%s"; pubkey = '\'''%s'\''; stateVersion = "%s"; }\n' "$uuid" "$profile" "$pubkey" "$state" > "$dev/manifest.nix"
+printf "{ uuid = \"%s\"; profile = \"%s\"; pubkey = ''%s''; stateVersion = \"%s\"; }\n" "$uuid" "$profile" "$pubkey" "$state" > "$dev/manifest.nix"
 python3 - "$manifest" "$uuid" <<'PY'
 import pathlib, sys
 p=pathlib.Path(sys.argv[1]); s=p.read_text(); old='device = "pending";'
