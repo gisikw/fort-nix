@@ -62,6 +62,9 @@ rec {
         # CI publishes to the overlay registry; doofenshmirtz cuts over from
         # the vendored aspects/media-kiosk build once the pipeline is green.
         "chore-galaxy" = { };
+        # Coffer (secrets broker). No mirror while the design settles;
+        # revisit once v0 stabilizes.
+        "coffer" = { };
         "fort-nix" = {
           mirrors = {
             github = {

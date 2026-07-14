@@ -12,6 +12,18 @@ rec {
     "provisioner"
   ];
 
+  overlays = {
+    # Coffer secrets broker (server role: coffer-server + coffer-web).
+    # CI registers the overlay on push to main once go.mod exists.
+    coffer = {
+      package = "infra/coffer";
+      config = {
+        role = "server";
+        port = "7787";
+        webPort = "7788";
+      };
+    };
+  };
   aspects = [
     "mesh"
     "observable"
