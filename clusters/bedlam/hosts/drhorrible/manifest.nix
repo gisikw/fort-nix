@@ -67,6 +67,11 @@ rec {
       '';
       config.systemd.tmpfiles.rules = [
         "d /var/lib/coffer 0750 coffer coffer -"
+        # Operator-minted TLS material is created as root (the coffer user
+        # does not exist until this generation activates); fix ownership so
+        # coffer-server can read its key. z = adjust existing, no-op if absent.
+        "z /var/lib/coffer/server.crt 0644 coffer coffer -"
+        "z /var/lib/coffer/server.key 0600 coffer coffer -"
         "L+ /var/lib/coffer/server.toml - - - - /etc/coffer/server.toml"
       ];
     };
