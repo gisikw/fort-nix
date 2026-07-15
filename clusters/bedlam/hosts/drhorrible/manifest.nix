@@ -65,6 +65,20 @@ rec {
         recovery_recipient = "age17naqzhmwxza5mkzss0v2ytzwge209awezfrw6u6pvtug5t68zp7shgrvr8"
         grant_key = "/var/lib/coffer/grant.key"
       '';
+      # coffer-web is a client of the audited core, onboarded like any
+      # machine (OPERATIONS.md runbook): its own self-signed client cert
+      # wrapping its own ed25519 key (web.crt/web.key, operator-minted),
+      # trust_anchors pointing at the server's own cert, and a human-scoped
+      # grant token (web.grant, minted via coffer-admin) — then one explicit
+      # POST /v1/register + admin approval pins its key. The server URL dials
+      # "drhorrible" (in the server cert's SAN set); 127.0.0.1 is not a SAN.
+      config.environment.etc."coffer/web.toml".text = ''
+        server = "https://drhorrible:7787"
+        tls_cert = "/var/lib/coffer/web.crt"
+        tls_key = "/var/lib/coffer/web.key"
+        trust_anchors = "/var/lib/coffer/server.crt"
+        grant_file = "/var/lib/coffer/web.grant"
+      '';
       config.systemd.tmpfiles.rules = [
         "d /var/lib/coffer 0750 coffer coffer -"
         # Operator-minted TLS material is created as root (the coffer user
@@ -72,7 +86,11 @@ rec {
         # coffer-server can read its key. z = adjust existing, no-op if absent.
         "z /var/lib/coffer/server.crt 0644 coffer coffer -"
         "z /var/lib/coffer/server.key 0600 coffer coffer -"
+        "z /var/lib/coffer/web.crt 0644 coffer coffer -"
+        "z /var/lib/coffer/web.key 0600 coffer coffer -"
+        "z /var/lib/coffer/web.grant 0600 coffer coffer -"
         "L+ /var/lib/coffer/server.toml - - - - /etc/coffer/server.toml"
+        "L+ /var/lib/coffer/web.toml - - - - /etc/coffer/web.toml"
       ];
     };
 }
