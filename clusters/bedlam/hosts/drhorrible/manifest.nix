@@ -22,6 +22,17 @@ rec {
         port = "7787";
         webPort = "7788";
       };
+      # coffer-web at https://coffer.<domain>, VPN-only (default visibility).
+      # identity mode has nginx auth_request inject X-Forwarded-User — exactly
+      # the header coffer-web trusts (auth_header default). coffer-web itself
+      # refuses requests without it, so nothing reaches the core unauthenticated
+      # even if nginx is misconfigured. The mTLS machine API on :7787 is
+      # untouched — this fronts only the human surface on :7788.
+      expose = {
+        subdomain = "coffer";
+        port = 7788;
+        sso = { mode = "identity"; groups = [ "admin" ]; };
+      };
     };
   };
   aspects = [
