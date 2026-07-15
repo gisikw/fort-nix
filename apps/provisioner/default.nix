@@ -36,7 +36,7 @@ in {
       StateDirectory = "fort-provisioner";
       UMask = "0077";
       Environment = [
-        "LISTEN_ADDR=127.0.0.1:9480"
+        "LISTEN_ADDR=127.0.0.1:9482"
         "REGISTRY_PATH=${registry}"
         "BOOTSTRAP_SECRET_FILE=/var/lib/fort-provisioner/bootstrap-secret"
         "STATE_PATH=/var/lib/fort-provisioner/state.json"
@@ -49,7 +49,7 @@ in {
   fort.cluster.services = [{
     name = "provisioner";
     subdomain = "provision";
-    port = 9480;
+    port = 9482;
     visibility = "public";
     maxBodySize = "3m";
     sso = { mode = "identity"; groups = [ "admin" ]; };
@@ -58,8 +58,8 @@ in {
   # Machine endpoints authenticate themselves with the fleet secret / claim token,
   # bypassing browser SSO while the dashboard remains identity-protected.
   services.nginx.virtualHosts."provision.${domain}" = {
-    locations."= /activate" = { proxyPass = "http://127.0.0.1:9480"; };
-    locations."~ ^/bootstrap/" = { proxyPass = "http://127.0.0.1:9480"; };
-    locations."~ ^/complete/" = { proxyPass = "http://127.0.0.1:9480"; extraConfig = "client_max_body_size 3m;"; };
+    locations."= /activate" = { proxyPass = "http://127.0.0.1:9482"; };
+    locations."~ ^/bootstrap/" = { proxyPass = "http://127.0.0.1:9482"; };
+    locations."~ ^/complete/" = { proxyPass = "http://127.0.0.1:9482"; extraConfig = "client_max_body_size 3m;"; };
   };
 }
