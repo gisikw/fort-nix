@@ -242,7 +242,7 @@ rec {
       # one commit here, every consumer host converges via gitops.
       config.environment.etc."cofferd/server.crt".source = ../../coffer-server.crt;
       # Config, not Coffer state: client.crt/client.key are minted on-box by
-      # the oneshot below; agent.grant is placed by the operator after the
+      # the oneshot below; lair.grant is placed by the operator after the
       # TOFU machine approval (see coffer DONE.md runbook).
       config.environment.etc."cofferd/config.toml".text = ''
         server = "https://drhorrible.fort.gisi.network:7787"
@@ -252,8 +252,8 @@ rec {
         trust_anchors = "/etc/cofferd/server.crt"
 
         [[workload]]
-        name = "agent"
-        grant_file = "/var/lib/cofferd/agent.grant"
+        name = "lair"
+        grant_file = "/var/lib/cofferd/lair.grant"
         uid = 494
       '';
 
