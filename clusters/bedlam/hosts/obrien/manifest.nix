@@ -4,9 +4,14 @@ rec {
 
   roles = [ ];
 
-  apps = [ ];
+  # apple-dist: the iOS ad-hoc distribution endpoint lives here so the CI
+  # runner's publish step is a local copy (IPA + manifest plist land in
+  # /var/lib/apple-dist/ipas, served at https://apple.<domain>).
+  apps = [ "apple-dist" ];
 
-  aspects = [ "observable" ];
+  # ci-runner: Forgejo Actions runner (darwin branch — launchd daemon as
+  # admin, labels macos:host + ios:host) for the hearth build pipeline.
+  aspects = [ "observable" "ci-runner" ];
 
   module =
     { config, pkgs, lib, ... }:

@@ -1,6 +1,7 @@
-{ ... }:
+{ deviceProfileManifest ? { }, ... }:
 { pkgs, config, lib, ... }:
 let
+  isDarwin = (deviceProfileManifest.platform or "nixos") == "darwin";
   domain = config.fort.cluster.settings.domain;
   dataDir = "/var/lib/apple-dist";
   port = 8710;
@@ -123,16 +124,13 @@ let
     mkdir -p $out
     cp ${indexHtml} $out/index.html
   '';
-in
-{
-  systemd.tmpfiles.rules = [
-    "d ${dataDir} 0755 dev users -"
-    "d ${dataDir}/ipas 0755 dev users -"
-  ];
 
   # Internal nginx server block as the backend for the gatekeeper proxy.
-  # Serves static index.html at / and autoindex JSON at /ipas/.
-  services.nginx.appendHttpConfig = ''
+  # Serves static index.html at / and autoindex JSON at /ipas/ — the
+  # index.html JS depends on the autoindex JSON contract (name, mtime).
+  # Shared verbatim between platforms (NixOS appendHttpConfig / darwin
+  # fort.darwin.nginxExtraHttpConfig).
+  backendServer = ''
     server {
       listen 127.0.0.1:${toString port};
       root ${staticRoot};
@@ -153,7 +151,7 @@ in
     }
   '';
 
-  fort.cluster.services = [
+  serviceDecl = [
     {
       name = "apple-dist";
       subdomain = "apple";
@@ -163,4 +161,29 @@ in
       health.enabled = false;
     }
   ];
+in
+if isDarwin then
+{
+  # Data dir owned by admin: the CI runner (admin) drops IPAs in, nginx
+  # workers (nobody) read them.
+  system.activationScripts.preActivation.text = lib.mkAfter ''
+    mkdir -p ${dataDir}/ipas
+    chown admin:staff ${dataDir} ${dataDir}/ipas
+    chmod 755 ${dataDir} ${dataDir}/ipas
+  '';
+
+  fort.darwin.nginxExtraHttpConfig = backendServer;
+
+  fort.cluster.services = serviceDecl;
+}
+else
+{
+  systemd.tmpfiles.rules = [
+    "d ${dataDir} 0755 dev users -"
+    "d ${dataDir}/ipas 0755 dev users -"
+  ];
+
+  services.nginx.appendHttpConfig = backendServer;
+
+  fort.cluster.services = serviceDecl;
 }

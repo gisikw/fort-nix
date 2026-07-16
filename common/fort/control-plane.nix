@@ -410,13 +410,18 @@ in
         };
       };
     } else {
-      # Darwin: launchd services (direct HTTPS, no nginx)
+      # Darwin: launchd services. Default is direct HTTPS on 443 (no nginx).
+      # When the host declares fort.cluster.services, nginx (see
+      # fort/darwin-services.nix) takes over 443 to serve those vhosts and
+      # proxies /fort/ here — the provider then binds loopback:8444 so both
+      # can coexist. The fort CLI contract (https://<host>.fort.<domain>/fort/)
+      # is preserved in both shapes.
       launchd.daemons.fort-provider = {
         serviceConfig = {
           Label = "network.gisi.fort.provider";
           ProgramArguments = [
             "${fortProvider}/bin/fort-provider"
-            "--listen" "0.0.0.0:443"
+            "--listen" (if config.fort.cluster.services != [] then "127.0.0.1:8444" else "0.0.0.0:443")
             "--tls-cert" "/var/lib/fort/tls/cert.pem"
             "--tls-key" "/var/lib/fort/tls/key.pem"
           ];

@@ -69,6 +69,11 @@ in
         inherit rootManifest cluster;
         platform = "darwin";
       })
+      # Service exposure for darwin hosts (nginx on 443, identity SSO,
+      # proxy/dns/ssl needs) — no-op unless fort.cluster.services is set
+      (import ../fort/darwin-services.nix {
+        inherit rootManifest cluster;
+      })
       {
         config.fort = {
           clusterName = cluster.clusterName;

@@ -447,8 +447,13 @@ func (c *WhoisCache) Lookup(ip string, doc *IdentityDoc) (*resolvedUser, error) 
 	return user, err
 }
 
+// tailscaledSocket is the tailscaled local API socket. The default is the
+// Linux path; darwin's tailscaled listens at /var/run/tailscaled.socket
+// (set TAILSCALED_SOCKET there).
+var tailscaledSocket = envOr("TAILSCALED_SOCKET", "/var/run/tailscale/tailscaled.sock")
+
 func tailscaleWhois(ip string, doc *IdentityDoc) (*resolvedUser, error) {
-	conn, err := net.Dial("unix", "/var/run/tailscale/tailscaled.sock")
+	conn, err := net.Dial("unix", tailscaledSocket)
 	if err != nil {
 		return nil, fmt.Errorf("connect tailscaled: %w", err)
 	}
@@ -460,7 +465,7 @@ func tailscaleWhois(ip string, doc *IdentityDoc) (*resolvedUser, error) {
 	resp, err := (&http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", "/var/run/tailscale/tailscaled.sock")
+				return net.Dial("unix", tailscaledSocket)
 			},
 		},
 	}).Do(req)
