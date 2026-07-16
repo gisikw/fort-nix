@@ -111,6 +111,28 @@ if isDarwin then
     touch /var/log/ci-runner.log
     chown admin:staff /var/log/ci-runner.log
     chmod 0644 /var/log/ci-runner.log
+
+    # Loopback ssh key for codesigning jobs: the runner daemon lives in the
+    # System security session where trust evaluation of the signing identity
+    # fails (find-identity reports 0 valid). sshd-spawned sessions get a
+    # proper security session (this is how the pre-CI ssh build flow worked),
+    # so workflows wrap xcodebuild archive/export in
+    # `ssh -i /var/lib/ci-runner/selfssh admin@localhost`. Verified that
+    # `sudo login -f` does NOT escape the System session — real sshd is
+    # required.
+    if [ ! -f ${runnerDir}/selfssh ]; then
+      ${pkgs.openssh}/bin/ssh-keygen -t ed25519 -N "" -C "ci-runner-selfssh" -f ${runnerDir}/selfssh
+    fi
+    chown admin:staff ${runnerDir}/selfssh ${runnerDir}/selfssh.pub
+    chmod 0400 ${runnerDir}/selfssh
+  '';
+
+  # Authorize the loopback key. Must run after the platform's postActivation
+  # overwrites authorized_keys from rootAuthorizedKeys.
+  system.activationScripts.postActivation.text = lib.mkAfter ''
+    if ! grep -qF "$(cat ${runnerDir}/selfssh.pub)" /Users/admin/.ssh/authorized_keys 2>/dev/null; then
+      cat ${runnerDir}/selfssh.pub >> /Users/admin/.ssh/authorized_keys
+    fi
     cat > ${runnerDir}/config.yml <<'YAML'
 runner:
   labels:
