@@ -139,6 +139,16 @@ rec {
       # No expose block — localhost only until shadow-mode gates pass.
       config.port = "9879";
     };
+    # Coffer client daemon: leases secrets from drhorrible's coffer-server and
+    # serves them to same-host workloads over a peer-credential unix socket
+    # (SO_PEERCRED uid -> workload -> grant, AMENDMENT 1). Users, config TOML,
+    # trust anchor, and the root-side client-cert mint live in the module
+    # block below. cofferd restarts on-failure until the minted cert and the
+    # operator-placed grant exist — convergence, not orchestration.
+    coffer = {
+      package = "infra/coffer";
+      config.role = "daemon";
+    };
     discovery-zone = {
       package = "infra/discovery-zone";
       # Uses knockout's ko binary from /run/overlays/bin — declared so
@@ -197,8 +207,82 @@ rec {
       # Grotto shared-write group: agents and dev user can read/write
       # materialized trees once plane-2 materialize mappings are configured.
       config.users.groups.grotto = { };
-      config.users.users.dev.extraGroups = [ "grotto" ];
+      config.users.users.dev.extraGroups = [
+        "grotto"
+        # coffer: lets dev connect to the cofferd socket for verification. The
+        # socket mode is a coarse gate; the peer-credential workload mapping is
+        # the real boundary (dev maps to no workload and is denied).
+        "coffer"
+      ];
       config.environment.systemPackages = [ pkgs.inotify-tools ];
+
+      # ---- Coffer client daemon (cofferd) ----
+      # The cofferd overlay unit runs unprivileged as coffer:coffer. lair is
+      # pinned to uid 494 so the [[workload]] peer-credential mapping below is
+      # stable across rebuilds; lair joins the coffer group to reach the
+      # socket (0660 coffer:coffer).
+      config.users.users.coffer = {
+        isSystemUser = true;
+        group = "coffer";
+        home = "/var/lib/cofferd";
+      };
+      config.users.groups.coffer = { };
+      config.users.users.lair = {
+        isSystemUser = true;
+        uid = 494;
+        group = "lair";
+        extraGroups = [ "coffer" ];
+      };
+      config.users.groups.lair = { };
+
+      # trust_anchors is the committed coffer-server PUBLIC cert
+      # (clusters/bedlam/coffer-server.crt) — public key material, not a
+      # secret; the private key never leaves drhorrible and the pinned client
+      # key is the real security boundary. Rotation = re-mint on drhorrible,
+      # one commit here, every consumer host converges via gitops.
+      config.environment.etc."cofferd/server.crt".source = ../../coffer-server.crt;
+      # Config, not Coffer state: client.crt/client.key are minted on-box by
+      # the oneshot below; agent.grant is placed by the operator after the
+      # TOFU machine approval (see coffer DONE.md runbook).
+      config.environment.etc."cofferd/config.toml".text = ''
+        server = "https://drhorrible.fort.gisi.network:7787"
+        socket = "/run/cofferd/coffer.sock"
+        tls_cert = "/var/lib/cofferd/client.crt"
+        tls_key = "/var/lib/cofferd/client.key"
+        trust_anchors = "/etc/cofferd/server.crt"
+
+        [[workload]]
+        name = "agent"
+        grant_file = "/var/lib/cofferd/agent.grant"
+        uid = 494
+      '';
+
+      # Root-side client-cert mint: wraps ratched's ed25519 ssh host key in a
+      # self-signed client cert (SPKI == host key, so the server's TOFU pin
+      # ties to host identity; idempotent — re-mint keeps the same pin). The
+      # overlay unit cannot do this itself: reading the host key is root-only.
+      # Waits for the overlay-managed binary to appear on first deploy.
+      config.systemd.services.cofferd-mint-client-cert = {
+        description = "Mint cofferd client certificate from the host ssh key";
+        wantedBy = [ "multi-user.target" ];
+        path = [ pkgs.coreutils ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          for _ in $(seq 1 120); do
+            [ -x /run/overlays/bin/cofferd ] && break
+            sleep 5
+          done
+          /run/overlays/bin/cofferd --mint-client-cert \
+            --ssh-key /etc/ssh/ssh_host_ed25519_key \
+            --out-cert /var/lib/cofferd/client.crt \
+            --out-key /var/lib/cofferd/client.key \
+            --san ratched
+          chown coffer:coffer /var/lib/cofferd/client.crt /var/lib/cofferd/client.key
+        '';
+      };
 
       # Gee bridge publisher: the SINGLE writer to the gee belief ledger.
       # `gee eval` appends mechanical status transitions on every run, so
@@ -243,6 +327,14 @@ rec {
         # knockout overlay QQL-shim usage log dir (KO_SHIM_LOG). Owned by dev,
         # the user the knockout overlay runs as. Persisted under /var/lib.
         "d /var/lib/knockout 0755 dev users -"
+        # cofferd state (client cert/key, operator-placed grant) and socket
+        # dir. Group coffer traverses; the socket itself is 0660 coffer:coffer.
+        "d /var/lib/cofferd 0750 coffer coffer -"
+        "d /run/cofferd 0750 coffer coffer -"
+        # lair traversal ACL: execute-only on /home/dev (no read/list) so the
+        # lair service user can reach the world-readable while-you-slept feed
+        # under ~/Projects/hoard without loosening /home/dev's 0700 mode.
+        "a+ /home/dev - - - - u:lair:--x"
       ];
     };
 }

@@ -85,6 +85,12 @@ rec {
       # "drhorrible" (in the server cert's SAN set); 127.0.0.1 is not a SAN.
       config.environment.etc."coffer/web.toml".text = ''
         server = "https://drhorrible:7787"
+        # Belt-and-suspenders for q-5cedc922: the overlay exec already passes
+        # --listen 127.0.0.1:7788; pinning it here too keeps coffer-web off
+        # the mesh even if the overlay flag is ever dropped. coffer-web trusts
+        # X-Forwarded-User from the host-local identity proxy, so a mesh-
+        # reachable bind would let any mesh process forge it.
+        listen = "127.0.0.1:7788"
         tls_cert = "/var/lib/coffer/web.crt"
         tls_key = "/var/lib/coffer/web.key"
         trust_anchors = "/var/lib/coffer/server.crt"
