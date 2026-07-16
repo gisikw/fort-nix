@@ -425,6 +425,12 @@ in
             "--tls-cert" "/var/lib/fort/tls/cert.pem"
             "--tls-key" "/var/lib/fort/tls/key.pem"
           ];
+          # Anchor relative paths (state/handles) regardless of launchd's
+          # default cwd. Also: any plist change makes nix-darwin re-bootstrap
+          # the daemon on switch — relevant because `fort <host> systemd
+          # restart` on darwin boots the service out without restoring it
+          # (q-410f4bd6) and a plain rebuild won't reload an unchanged plist.
+          WorkingDirectory = "/var/lib/fort";
           KeepAlive = true;
           RunAtLoad = true;
           # Respawn quickly after a crash instead of launchd's default 10s
