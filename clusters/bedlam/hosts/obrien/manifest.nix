@@ -9,17 +9,29 @@ rec {
   aspects = [ "observable" ];
 
   module =
-    { config, pkgs, ... }:
+    { config, pkgs, lib, ... }:
     let
+      domain = config.fort.cluster.settings.domain;
+
       # HID-level simulator interaction (tap/swipe/type/describe-ui) for the
       # hearth-room iOS loop — see docs/obrien-muse-serve.md § Gestures.
       axe = import ../../../../pkgs/axe { inherit pkgs; };
       claude-code = import ../../../../pkgs/claude-code { inherit pkgs; };
+
+      # Git token handler: extracts token from JSON response and stores it
+      gitTokenDir = "/var/lib/fort-git";
+      gitTokenHandler = pkgs.writeShellScript "git-token-handler" ''
+        ${pkgs.coreutils}/bin/mkdir -p ${gitTokenDir}
+        ${pkgs.jq}/bin/jq -r '.token' > ${gitTokenDir}/dev-token
+        ${pkgs.coreutils}/bin/chmod 644 ${gitTokenDir}/dev-token
+      '';
     in
     {
       config.environment.systemPackages = [
         pkgs.xcodes
         pkgs.tmux
+        pkgs.git
+        pkgs.jq
         axe
         claude-code
       ];
@@ -76,6 +88,36 @@ rec {
             PATH = "/usr/local/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin";
           };
         };
+      };
+
+      # Git credential helper for Forgejo access
+      config.environment.etc."fort-git-credential-helper".source = pkgs.writeShellScript "fort-git-credential-helper" ''
+        case "$1" in
+          get)
+            if [ -s "${gitTokenDir}/dev-token" ]; then
+              TOKEN=$(cat "${gitTokenDir}/dev-token")
+            else
+              exit 0
+            fi
+            echo "username=forge-admin"
+            echo "password=$TOKEN"
+            ;;
+        esac
+      '';
+
+      # Configure git to use the credential helper for the forge
+      config.environment.etc."gitconfig".text = ''
+        [credential "https://git.${domain}"]
+          helper = /etc/fort-git-credential-helper
+        [init]
+          defaultBranch = main
+      '';
+
+      # Request RW git token from forge via control plane
+      config.fort.host.needs.git-token.dev = {
+        from = "drhorrible";
+        request = { access = "rw"; };
+        handler = gitTokenHandler;
       };
 
       config.fort.host = { inherit roles apps aspects; };

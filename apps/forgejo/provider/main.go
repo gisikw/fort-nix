@@ -109,9 +109,10 @@ func processEntries(client *ForgejoClient, input HandlerInput) (HandlerOutput, e
 			continue
 		}
 
-		// RBAC: Only dev-sandbox host (ratched) can request rw access
-		if access == "rw" && origin != "ratched" {
-			resp := TokenResponse{Error: "rw access requires dev-sandbox host (ratched)"}
+		// RBAC: Only approved hosts can request rw access
+		rwHosts := map[string]bool{"ratched": true, "obrien": true}
+		if access == "rw" && !rwHosts[origin] {
+			resp := TokenResponse{Error: "rw access not permitted for this host"}
 			respBytes, _ := json.Marshal(resp)
 			output[key] = OutputEntry{
 				Request:  entry.Request,
