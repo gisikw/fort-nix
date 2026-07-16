@@ -68,6 +68,10 @@ rec {
         # Scholia (epistemic ledger / marginalia). No mirror: internal
         # continuity infrastructure; revisit once the design stabilizes.
         "scholia" = { };
+        # Spyglass (outbound discovery engine, ex-"eyes"). No mirror:
+        # personal taste/config baked into the corpus. Prototype — CI is
+        # test-only until the deployment shape settles.
+        "spyglass" = { };
         "fort-nix" = {
           mirrors = {
             github = {
