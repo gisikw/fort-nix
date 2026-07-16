@@ -239,6 +239,11 @@ let
   identityProxyWrapper = pkgs.writeShellScript "identity-proxy-darwin" ''
     set -euo pipefail
     mkdir -p /var/run/identity-proxy
+    # BSD semantics: files inherit the parent directory's group. The socket
+    # must come up root:nobody so nginx workers (nobody) can connect — group
+    # the dir accordingly (the daemon's 0660 chmod does the rest).
+    chown root:nobody /var/run/identity-proxy
+    chmod 750 /var/run/identity-proxy
     mkdir -p /var/lib/identity-proxy /var/lib/fort-auth/identity-proxy
     if [ ! -s /var/lib/identity-proxy/cookie-key ]; then
       head -c32 /dev/urandom | base64 > /var/lib/identity-proxy/cookie-key
@@ -388,6 +393,8 @@ in
         KeepAlive = true;
         # Certs/dirs appear via activation; retry fast until they do.
         ThrottleInterval = 5;
+        # launchd's default 256-fd soft limit is below worker_connections
+        SoftResourceLimits.NumberOfFiles = 4096;
         StandardOutPath = "/var/log/fort-nginx.log";
         StandardErrorPath = "/var/log/fort-nginx.log";
       };
