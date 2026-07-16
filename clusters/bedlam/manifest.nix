@@ -65,6 +65,9 @@ rec {
         # Coffer (secrets broker). No mirror while the design settles;
         # revisit once v0 stabilizes.
         "coffer" = { };
+        # Scholia (epistemic ledger / marginalia). No mirror: internal
+        # continuity infrastructure; revisit once the design stabilizes.
+        "scholia" = { };
         "fort-nix" = {
           mirrors = {
             github = {

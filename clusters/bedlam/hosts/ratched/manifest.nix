@@ -132,6 +132,13 @@ rec {
         port = 4200;
       };
     };
+    scholia = {
+      package = "infra/scholia";
+      # Epistemic ledger + marginalia service (v0 shadow mode). Mesh-internal:
+      # HTTP is canonical but consumers are local (cranium, CLI, kobold jobs).
+      # No expose block — localhost only until shadow-mode gates pass.
+      config.port = "9879";
+    };
     discovery-zone = {
       package = "infra/discovery-zone";
       # Uses knockout's ko binary from /run/overlays/bin — declared so
