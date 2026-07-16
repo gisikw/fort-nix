@@ -7,7 +7,6 @@ rec {
   apps = [
     "vdirsyncer-auth"
     "radicale"
-    "apple-dist"
     "conduit"
     "cdn"
     "capstone"
