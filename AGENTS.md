@@ -356,6 +356,45 @@ fort.cluster.services = [{
 
 The host must have the `egress-vpn` aspect enabled.
 
+### Darwin Hosts (nix-darwin)
+
+Darwin hosts (device profile `mac-mini`, e.g. obrien) participate in the
+cluster with launchd instead of systemd. Key seams:
+
+- **Service exposure works on darwin** via `common/fort/darwin-services.nix`:
+  declaring `fort.cluster.services` starts nginx on 443 (launchd, TLS via the
+  `ssl-cert` need, identity SSO via identity-proxy) and moves `fort-provider`
+  to `127.0.0.1:8444` behind an nginx `/fort/` proxy — the fort CLI contract
+  is unchanged. Only `sso.mode = "none" | "identity"` is supported (asserted);
+  `dns-coredns` needs are not generated (LAN clients hairpin via the public
+  edge because `lan-ip` is a NixOS-only capability).
+- **App modules can branch on platform** via the `deviceProfileManifest`
+  context arg — see `apps/apple-dist/` (systemd/tmpfiles vs launchd/activation
+  variants sharing the nginx backend config). http-level nginx snippets go in
+  `fort.darwin.nginxExtraHttpConfig` (the `appendHttpConfig` equivalent).
+- **ci-runner aspect has a darwin branch**: forgejo-runner as a launchd daemon
+  (user `admin`), labels `macos:host` + `ios:host`. Workflows target
+  `runs-on: macos`.
+- **Codesigning in CI requires an ssh session**: the runner daemon lives in
+  launchd's System security session where signing identities fail trust
+  evaluation (`security find-identity -v` → 0 valid; the same keychain shows
+  1 valid over ssh, and `sudo login -f` does NOT escape the session). The
+  aspect provisions `/var/lib/ci-runner/selfssh`; workflows wrap
+  `xcodebuild archive/-exportArchive` in
+  `ssh -i /var/lib/ci-runner/selfssh admin@localhost`. See
+  `hearth:.forgejo/workflows/build.yml` for the working pattern.
+- **Do not use `fort <host> systemd '{"action":"restart"}'` on darwin** —
+  it boots the launchd service out without restoring it (q-410f4bd6), and a
+  rebuild only re-bootstraps daemons whose plists changed. Recovery: make a
+  plist-changing commit, or reboot.
+- **launchd log convention**: daemons log to `/var/log/<name>.log`; when the
+  daemon runs as `admin`, pre-create the file root-side in an activation
+  script (launchd opens the log as the service user; `/var/log` is not
+  admin-writable).
+- **BSD group semantics**: new files inherit the parent directory's group —
+  chown a unix-socket dir before the daemon creates the socket in it if
+  nginx workers (`nobody`) must connect.
+
 ### Forge Configuration
 
 The cluster manifest can declare forge-specific settings for the git infrastructure:
