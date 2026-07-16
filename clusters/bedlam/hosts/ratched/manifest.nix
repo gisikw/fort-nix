@@ -261,21 +261,33 @@ rec {
       # self-signed client cert (SPKI == host key, so the server's TOFU pin
       # ties to host identity; idempotent — re-mint keeps the same pin). The
       # overlay unit cannot do this itself: reading the host key is root-only.
-      # Waits for the overlay-managed binary to appear on first deploy.
+      # The binary is resolved from the overlay unit's ExecStart, NOT from
+      # /run/overlays/bin: that symlink only appears once the overlay passes
+      # health, and health cannot pass without this cert — keying on the
+      # symlink deadlocks first deploy. Falls back to the symlink for the
+      # steady state where it does exist.
       config.systemd.services.cofferd-mint-client-cert = {
         description = "Mint cofferd client certificate from the host ssh key";
         wantedBy = [ "multi-user.target" ];
-        path = [ pkgs.coreutils ];
+        path = [ pkgs.coreutils pkgs.systemd pkgs.gnugrep ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
         };
         script = ''
+          bin=""
           for _ in $(seq 1 120); do
-            [ -x /run/overlays/bin/cofferd ] && break
+            bin=$(systemctl show -p ExecStart overlay-coffer-cofferd.service 2>/dev/null \
+              | grep -o '/nix/store/[^ ;]*/bin/cofferd' | head -1 || true)
+            if [ -z "$bin" ] && [ -x /run/overlays/bin/cofferd ]; then
+              bin=/run/overlays/bin/cofferd
+            fi
+            [ -n "$bin" ] && [ -x "$bin" ] && break
+            bin=""
             sleep 5
           done
-          /run/overlays/bin/cofferd --mint-client-cert \
+          [ -n "$bin" ] || { echo "cofferd binary never appeared" >&2; exit 1; }
+          "$bin" --mint-client-cert \
             --ssh-key /etc/ssh/ssh_host_ed25519_key \
             --out-cert /var/lib/cofferd/client.crt \
             --out-key /var/lib/cofferd/client.key \
