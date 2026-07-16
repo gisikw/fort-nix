@@ -14,11 +14,14 @@ rec {
       # HID-level simulator interaction (tap/swipe/type/describe-ui) for the
       # hearth-room iOS loop — see docs/obrien-muse-serve.md § Gestures.
       axe = import ../../../../pkgs/axe { inherit pkgs; };
+      claude-code = import ../../../../pkgs/claude-code { inherit pkgs; };
     in
     {
       config.environment.systemPackages = [
         pkgs.xcodes
+        pkgs.tmux
         axe
+        claude-code
       ];
 
       # muse serve: HTTP exec transport so cranium (ratched) can run tool
