@@ -315,6 +315,14 @@ rec {
       # per-source (exit 0), so on-failure retry loops are unnecessary.
       config.systemd.services.spyglass-cycle = {
         description = "Spyglass discovery cycle (ingest, score, wiki)";
+        # Guard: the overlay binary only exists after the spyglass overlay
+        # deploys, which itself requires this switch to SUCCEED. Without
+        # the condition, the timer fires immediately at activation
+        # (OnBootSec is monotonic; 10m from boot already elapsed), the
+        # EXEC fails, and the switch rolls back — a convergence deadlock
+        # (hit live Jul 17: six rollbacks before diagnosis). A failed
+        # condition is a clean skip, not a unit failure.
+        unitConfig.ConditionPathExists = "/run/overlays/bin/spyglass";
         serviceConfig = {
           Type = "oneshot";
           User = "dev";
