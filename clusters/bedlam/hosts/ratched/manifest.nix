@@ -11,14 +11,6 @@ rec {
     "cdn"
     "capstone"
     "vault"
-    {
-      name = "sse-probe";
-      mode = "monitor";
-      targets = [
-        "joker=http://joker.fort.gisi.network:9400/events"
-        "raishan=http://raishan.fort.gisi.network:9400/events"
-      ];
-    }
   ];
 
   overlays = {
@@ -142,8 +134,9 @@ rec {
     # serves them to same-host workloads over a peer-credential unix socket
     # (SO_PEERCRED uid -> workload -> grant, AMENDMENT 1). Users, config TOML,
     # trust anchor, and the root-side client-cert mint live in the module
-    # block below. cofferd restarts on-failure until the minted cert and the
-    # operator-placed grant exist — convergence, not orchestration.
+    # block below. cofferd restarts on-failure until the minted cert exists;
+    # the grant is filed and delivered by cofferd itself (request → approve →
+    # deliver) — convergence, not orchestration.
     coffer = {
       package = "infra/coffer";
       config.role = "daemon";
@@ -241,8 +234,9 @@ rec {
       # one commit here, every consumer host converges via gitops.
       config.environment.etc."cofferd/server.crt".source = ../../coffer-server.crt;
       # Config, not Coffer state: client.crt/client.key are minted on-box by
-      # the oneshot below; lair.grant is placed by the operator after the
-      # TOFU machine approval (see coffer DONE.md runbook).
+      # the oneshot below; lair's grant is requested by cofferd (grant_shape
+      # below) and delivered by its poll loop once approved in coffer-web —
+      # the scp/hand-placed workflow is dead (see coffer OPERATIONS.md).
       config.environment.etc."cofferd/config.toml".text = ''
         server = "https://drhorrible.fort.gisi.network:7787"
         socket = "/run/cofferd/coffer.sock"
@@ -252,8 +246,12 @@ rec {
 
         [[workload]]
         name = "lair"
-        grant_file = "/var/lib/cofferd/lair.grant"
+        grant_file = "/var/lib/cofferd/grants/lair.grant"
         uid = 494
+        prewarm = [ { namespace = "fort/openai", name = "cred" } ]
+        # grant_shape makes cofferd file the grant request itself; secrets
+        # default to prewarm, verbs to ["read"], ttl to 720h.
+        grant_shape = { }
       '';
 
       # Root-side client-cert mint: wraps ratched's ed25519 ssh host key in a
@@ -338,7 +336,7 @@ rec {
         # knockout overlay QQL-shim usage log dir (KO_SHIM_LOG). Owned by dev,
         # the user the knockout overlay runs as. Persisted under /var/lib.
         "d /var/lib/knockout 0755 dev users -"
-        # cofferd state (client cert/key, operator-placed grant) and socket
+        # cofferd state (client cert/key, delivered grants) and socket
         # dir. Group coffer traverses; the socket itself is 0660 coffer:coffer.
         "d /var/lib/cofferd 0750 coffer coffer -"
         "d /run/cofferd 0750 coffer coffer -"
