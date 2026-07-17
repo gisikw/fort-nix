@@ -263,4 +263,3 @@ IoT device manifests are encrypted and support both Zigbee (IEEE address) and Z-
 # Z-Wave devices
 00000-00000-00000-00000-00000-00000-00000-00000:script_name:FriendlyName
 ```
-
