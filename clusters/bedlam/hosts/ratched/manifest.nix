@@ -141,6 +141,13 @@ rec {
       package = "infra/coffer";
       config.role = "daemon";
     };
+    spyglass = {
+      package = "infra/spyglass";
+      # Outbound discovery engine: serve unit here; the ingest/score/wiki
+      # cycle runs via the spyglass-cycle timer in the module block below.
+      # Mesh-internal for now — Lair will consume it via relay; no expose.
+      config.port = "8377";
+    };
     discovery-zone = {
       package = "infra/discovery-zone";
       # Uses knockout's ko binary from /run/overlays/bin — declared so
@@ -248,7 +255,13 @@ rec {
         name = "lair"
         grant_file = "/var/lib/cofferd/grants/lair.grant"
         uid = 494
-        prewarm = [ { namespace = "fort/openai", name = "cred" } ]
+        prewarm = [
+          { namespace = "fort/openai", name = "cred" },
+          # anthropic cred unblocks lair's usage-monitoring wiring; needs
+          # fort/anthropic/cred created + the widened grant approved in
+          # coffer-web (cofferd re-files the request from grant_shape).
+          { namespace = "fort/anthropic", name = "cred" },
+        ]
         # grant_shape makes cofferd file the grant request itself; secrets
         # default to prewarm, verbs to ["read"], ttl to 720h.
         grant_shape = { }
@@ -291,6 +304,33 @@ rec {
             --san ratched
           chown coffer:coffer /var/lib/cofferd/client.crt /var/lib/cofferd/client.key
         '';
+      };
+
+      # Spyglass cycle: ingest → score → wiki on a timer. Runs as dev from
+      # the repo working copy (spyglass resolves config/TASTE.md/wiki/data
+      # relative to cwd; TASTE.md edits and wiki accretion are part of the
+      # product loop). Binary via /run/overlays/bin — present once the
+      # spyglass overlay passes health; timer's OnBootSec outlives that.
+      # Scoring calls Ollama on lordhenry; feed failures are tolerated
+      # per-source (exit 0), so on-failure retry loops are unnecessary.
+      config.systemd.services.spyglass-cycle = {
+        description = "Spyglass discovery cycle (ingest, score, wiki)";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "dev";
+          Group = "users";
+          WorkingDirectory = "/home/dev/Projects/spyglass";
+          Environment = [ "HOME=/home/dev" ];
+          ExecStart = "/run/overlays/bin/spyglass cycle";
+        };
+      };
+
+      config.systemd.timers.spyglass-cycle = {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "10m";
+          OnUnitActiveSec = "2h";
+        };
       };
 
       # Gee bridge publisher: the SINGLE writer to the gee belief ledger.
