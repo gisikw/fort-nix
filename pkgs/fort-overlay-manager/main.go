@@ -389,6 +389,8 @@ func cmdBoot(cfg Config) {
 		}
 
 		updateBinSymlinks(cfg.BinDir, manifest.Bins)
+		stateDir := filepath.Join(cfg.StateDir, name)
+		updateGCRoot(stateDir, "gc-root-current", current.StorePath)
 		log.Printf("[%s] boot: regenerated units for %s", name, current.StorePath)
 	}
 
