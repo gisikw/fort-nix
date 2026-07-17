@@ -211,8 +211,11 @@ func cmdCheck(cfg Config, overlayFilter string) {
 
 		current := loadCurrentState(cfg.StateDir, name)
 		if current != nil && current.StorePath == entry.StorePath {
-			log.Printf("[%s] up to date (%s)", name, entry.StorePath)
-			continue
+			if _, err := os.Stat(current.StorePath); err == nil {
+				log.Printf("[%s] up to date (%s)", name, entry.StorePath)
+				continue
+			}
+			log.Printf("[%s] store path missing, re-fetching: %s", name, current.StorePath)
 		}
 
 		log.Printf("[%s] new version available: %s", name, entry.StorePath)
@@ -812,7 +815,13 @@ func updateBinSymlinks(binDir string, bins []string) {
 func updateGCRoot(stateDir, name, storePath string) {
 	link := filepath.Join(stateDir, name)
 	os.Remove(link)
-	os.Symlink(storePath, link)
+	cmd := exec.Command("nix-store", "--realise", "--add-root", link, "--indirect", storePath)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Printf("gc root registration failed for %s: %v", link, err)
+		os.Symlink(storePath, link)
+	}
 }
 
 // State file helpers
@@ -867,7 +876,13 @@ func rotatePrevious(stateDir string) {
 		if target, err := os.Readlink(currentRoot); err == nil {
 			previousRoot := filepath.Join(stateDir, "gc-root-previous")
 			os.Remove(previousRoot)
-			os.Symlink(target, previousRoot)
+			cmd := exec.Command("nix-store", "--realise", "--add-root", previousRoot, "--indirect", target)
+			cmd.Stdout = os.Stderr
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				log.Printf("gc root rotation failed for %s: %v", previousRoot, err)
+				os.Symlink(target, previousRoot)
+			}
 		}
 	}
 }
