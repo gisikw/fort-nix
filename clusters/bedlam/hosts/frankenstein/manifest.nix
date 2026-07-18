@@ -18,7 +18,8 @@ rec {
     "qwen-tts"
   ];
 
-  aspects = [ "observable" "nvidia-gpu" "gitops" ];
+  # agent-debug: temporary for wyvern campaign (c-713b2161) unkork runs — remove with qwen-tts
+  aspects = [ "observable" "nvidia-gpu" "gitops" "agent-debug" ];
 
   overlays = {
     unkork = {
