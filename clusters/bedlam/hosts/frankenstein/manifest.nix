@@ -13,6 +13,9 @@ rec {
         sha256 = "eacf610d1ee4bd5ed0197a0777dd8f4fceb8eefa27009067c7d496cb68fbde45";
       };
     }
+    # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.
+    # Stop llama-server before generating (both won't fit in 24GB VRAM).
+    "qwen-tts"
   ];
 
   aspects = [ "observable" "nvidia-gpu" "gitops" ];
