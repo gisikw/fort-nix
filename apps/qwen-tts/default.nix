@@ -30,7 +30,7 @@ let
         hf_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
         type: base
     optimization:
-      attention: flash_attention_2
+      attention: sdpa
       compile_mode: max-autotune
       use_compile: true
       use_cuda_graphs: false
@@ -93,8 +93,8 @@ in
         "/venv/bin/pip install --cache-dir /pip-cache torch torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -1"
         # Clone or update the optimized server
         "test -d /app/repo/.git && (cd /app/repo && git pull -q) || git clone -q https://github.com/groxaxo/Qwen3-TTS-Openai-Fastapi.git /app/repo"
-        # Install project with API deps + gradio for voice studio + Flash Attention 2
-        "/venv/bin/pip install --cache-dir /pip-cache -e '/app/repo[api]' gradio flash-attn --no-build-isolation 2>&1 | tail -1"
+        # Install project with API deps + gradio for voice studio + soundfile for voice-design
+        "/venv/bin/pip install --cache-dir /pip-cache -e '/app/repo[api]' gradio soundfile 2>&1 | tail -5"
         # Start voice design server in background (subshell so & doesn't affect the && chain)
         "(/venv/bin/python /app/voice-design.py &)"
         # Run main TTS server
