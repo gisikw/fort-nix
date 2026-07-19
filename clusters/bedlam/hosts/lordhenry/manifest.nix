@@ -544,14 +544,16 @@ rec {
       config.users.groups.tiamat = { };
       config.users.users.tiamat = {
         isSystemUser = true;
-        # Pinned uid so the coffer [[workload]] peer-credential mapping below
+        # Pinned uid (at its pre-existing value: NixOS refuses uid changes on
+        # existing users, so the pin must match reality — 992 was tiamat's
+        # allocated uid before pinning) so the coffer [[workload]] peer-credential mapping below
         # is stable across rebuilds (deployment-config discipline: every
         # workload pins at least its uid, the way lair is pinned to 494 on
         # ratched). The "Z /var/lib/tiamat" tmpfiles rule below re-chowns
         # tiamat's state to this uid on activation, so pinning does not orphan
         # existing files. tiamat joins the coffer group to reach the socket
         # (0660 coffer:coffer).
-        uid = 491;
+        uid = 992;
         group = "tiamat";
         extraGroups = [ "coffer" ];
         description = "Tiamat service user";
@@ -562,7 +564,7 @@ rec {
 
       # ---- Coffer client daemon (cofferd) ----
       # The cofferd overlay unit runs unprivileged as coffer:coffer. tiamat is
-      # pinned (uid 491, above) so the [[workload]] peer-credential mapping is
+      # pinned (uid 992, above) so the [[workload]] peer-credential mapping is
       # stable; tiamat joins the coffer group to reach the socket.
       config.users.users.coffer = {
         isSystemUser = true;
@@ -590,7 +592,7 @@ rec {
         [[workload]]
         name = "tiamat"
         grant_file = "/var/lib/cofferd/grants/tiamat.grant"
-        uid = 491
+        uid = 992
         prewarm = [
           { namespace = "fort/openai", name = "cred" },
         ]
