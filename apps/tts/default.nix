@@ -43,6 +43,9 @@ in
     };
     volumes = [
       "/var/lib/kokoro-tts/voices/af_exo.pt:/app/api/src/voices/v1_0/af_exo.pt:ro"
+      "${./voices/bm_wyvern_herald.pt}:/app/api/src/voices/v1_0/bm_wyvern_herald.pt:ro"
+      "${./voices/bm_wyvern_butler.pt}:/app/api/src/voices/v1_0/bm_wyvern_butler.pt:ro"
+      "${./voices/am_wyvern_conductor.pt}:/app/api/src/voices/v1_0/am_wyvern_conductor.pt:ro"
     ];
   };
 
