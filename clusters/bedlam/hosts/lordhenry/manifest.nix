@@ -72,6 +72,18 @@ rec {
         };
       };
     };
+    # Coffer client daemon: leases secrets from drhorrible's coffer-server and
+    # serves them to same-host workloads over a peer-credential unix socket
+    # (SO_PEERCRED uid -> workload -> grant, AMENDMENT 1). Users, config TOML,
+    # trust anchor, and the root-side client-cert mint live in the module block
+    # below. cofferd restarts on-failure until the minted cert exists; the
+    # grant is filed and delivered by cofferd itself (request → approve →
+    # deliver) — convergence, not orchestration. Here it serves fort/openai/cred
+    # to tiamat's Sol/GPT arms (mirrors ratched's lair wiring).
+    coffer = {
+      package = "infra/coffer";
+      config.role = "daemon";
+    };
   };
 
   aspects = [
@@ -159,7 +171,25 @@ rec {
                 backend_config:
                   endpoint: https://chatgpt.com/backend-api/codex
                   auth: oauth
-                  oauth_token_file: /var/lib/tiamat/openai_oauth.json
+                  # Sol/GPT OAuth via coffer: coffer-server (drhorrible) owns
+                  # rotation; the local cofferd daemon serves the raw access
+                  # token over its peer-credential socket (default
+                  # /run/cofferd/coffer.sock). Tiamat reads it per dispatch and
+                  # NEVER refreshes or persists — a client-side refresh against
+                  # the server-side rotator invalidates the token family
+                  # (two-refreshers hazard, coffer MIGRATION.md). Replaces the
+                  # old self-refreshing oauth_token_file.
+                  oauth_source: cofferd
+                  oauth_secret_path: fort/openai/cred
+                  # oauth_account_id: PLACEHOLDER — recover from lordhenry's
+                  #   expired /var/lib/tiamat/openai_oauth.json (account_id
+                  #   field) or from coffer-web, then uncomment to pin. Left
+                  #   UNSET on purpose: coffer serves only the token, but that
+                  #   token is a JWT carrying the account_id claim, which tiamat
+                  #   extracts into the chatgpt-account-id header exactly as
+                  #   lair's usage collector does. So Sol works without it; pin
+                  #   only if the codex endpoint rejects the derived value.
+                  #   Flagged in NEEDS-KEVIN.md.
 
           exo-gpt-sol:
             default_arm: gpt-oauth
@@ -176,7 +206,25 @@ rec {
                 backend_config:
                   endpoint: https://chatgpt.com/backend-api/codex
                   auth: oauth
-                  oauth_token_file: /var/lib/tiamat/openai_oauth.json
+                  # Sol/GPT OAuth via coffer: coffer-server (drhorrible) owns
+                  # rotation; the local cofferd daemon serves the raw access
+                  # token over its peer-credential socket (default
+                  # /run/cofferd/coffer.sock). Tiamat reads it per dispatch and
+                  # NEVER refreshes or persists — a client-side refresh against
+                  # the server-side rotator invalidates the token family
+                  # (two-refreshers hazard, coffer MIGRATION.md). Replaces the
+                  # old self-refreshing oauth_token_file.
+                  oauth_source: cofferd
+                  oauth_secret_path: fort/openai/cred
+                  # oauth_account_id: PLACEHOLDER — recover from lordhenry's
+                  #   expired /var/lib/tiamat/openai_oauth.json (account_id
+                  #   field) or from coffer-web, then uncomment to pin. Left
+                  #   UNSET on purpose: coffer serves only the token, but that
+                  #   token is a JWT carrying the account_id claim, which tiamat
+                  #   extracts into the chatgpt-account-id header exactly as
+                  #   lair's usage collector does. So Sol works without it; pin
+                  #   only if the codex endpoint rejects the derived value.
+                  #   Flagged in NEEDS-KEVIN.md.
 
           anthropic-opus-4-6:
             default_arm: opus-api
@@ -496,11 +544,98 @@ rec {
       config.users.groups.tiamat = { };
       config.users.users.tiamat = {
         isSystemUser = true;
+        # Pinned uid so the coffer [[workload]] peer-credential mapping below
+        # is stable across rebuilds (deployment-config discipline: every
+        # workload pins at least its uid, the way lair is pinned to 494 on
+        # ratched). The "Z /var/lib/tiamat" tmpfiles rule below re-chowns
+        # tiamat's state to this uid on activation, so pinning does not orphan
+        # existing files. tiamat joins the coffer group to reach the socket
+        # (0660 coffer:coffer).
+        uid = 491;
         group = "tiamat";
+        extraGroups = [ "coffer" ];
         description = "Tiamat service user";
         home = "/var/lib/tiamat";
         createHome = true;
         shell = pkgs.bashInteractive;
+      };
+
+      # ---- Coffer client daemon (cofferd) ----
+      # The cofferd overlay unit runs unprivileged as coffer:coffer. tiamat is
+      # pinned (uid 491, above) so the [[workload]] peer-credential mapping is
+      # stable; tiamat joins the coffer group to reach the socket.
+      config.users.users.coffer = {
+        isSystemUser = true;
+        group = "coffer";
+        home = "/var/lib/cofferd";
+      };
+      config.users.groups.coffer = { };
+
+      # trust_anchors is the committed coffer-server PUBLIC cert
+      # (clusters/bedlam/coffer-server.crt) — public key material, not a
+      # secret; the private key never leaves drhorrible and the pinned client
+      # key is the real security boundary. Rotation = re-mint on drhorrible,
+      # one commit here, every consumer host converges via gitops.
+      config.environment.etc."cofferd/server.crt".source = ../../coffer-server.crt;
+      # Config, not Coffer state: client.crt/client.key are minted on-box by
+      # the oneshot below; tiamat's grant is requested by cofferd (grant_shape
+      # below) and delivered by its poll loop once approved in coffer-web.
+      config.environment.etc."cofferd/config.toml".text = ''
+        server = "https://drhorrible.fort.gisi.network:7787"
+        socket = "/run/cofferd/coffer.sock"
+        tls_cert = "/var/lib/cofferd/client.crt"
+        tls_key = "/var/lib/cofferd/client.key"
+        trust_anchors = "/etc/cofferd/server.crt"
+
+        [[workload]]
+        name = "tiamat"
+        grant_file = "/var/lib/cofferd/grants/tiamat.grant"
+        uid = 491
+        prewarm = [
+          { namespace = "fort/openai", name = "cred" },
+        ]
+        # grant_shape makes cofferd file the grant request itself; secrets
+        # default to prewarm, verbs to ["read"], ttl to 720h.
+        grant_shape = { }
+      '';
+
+      # Root-side client-cert mint: wraps lordhenry's ed25519 ssh host key in a
+      # self-signed client cert (SPKI == host key, so the server's TOFU pin
+      # ties to host identity; idempotent — re-mint keeps the same pin). The
+      # overlay unit cannot do this itself: reading the host key is root-only.
+      # The binary is resolved from the overlay unit's ExecStart, NOT from
+      # /run/overlays/bin: that symlink only appears once the overlay passes
+      # health, and health cannot pass without this cert — keying on the
+      # symlink deadlocks first deploy. Falls back to the symlink for the
+      # steady state where it does exist.
+      config.systemd.services.cofferd-mint-client-cert = {
+        description = "Mint cofferd client certificate from the host ssh key";
+        wantedBy = [ "multi-user.target" ];
+        path = [ pkgs.coreutils pkgs.systemd pkgs.gnugrep ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          bin=""
+          for _ in $(seq 1 120); do
+            bin=$(systemctl show -p ExecStart overlay-coffer-cofferd.service 2>/dev/null \
+              | grep -o '/nix/store/[^ ;]*/bin/cofferd' | head -1 || true)
+            if [ -z "$bin" ] && [ -x /run/overlays/bin/cofferd ]; then
+              bin=/run/overlays/bin/cofferd
+            fi
+            [ -n "$bin" ] && [ -x "$bin" ] && break
+            bin=""
+            sleep 5
+          done
+          [ -n "$bin" ] || { echo "cofferd binary never appeared" >&2; exit 1; }
+          "$bin" --mint-client-cert \
+            --ssh-key /etc/ssh/ssh_host_ed25519_key \
+            --out-cert /var/lib/cofferd/client.crt \
+            --out-key /var/lib/cofferd/client.key \
+            --san lordhenry
+          chown coffer:coffer /var/lib/cofferd/client.crt /var/lib/cofferd/client.key
+        '';
       };
 
       config.systemd.tmpfiles.rules = [
@@ -515,6 +650,10 @@ rec {
         # /var/lib/private/tiamat state. Preserve existing file modes.
         "Z /var/lib/tiamat - tiamat tiamat -"
         "d /home/dev/.local/share/grotto 0750 grotto grotto -"
+        # cofferd state (client cert/key, delivered grants) and socket dir.
+        # Group coffer traverses; the socket itself is 0660 coffer:coffer.
+        "d /var/lib/cofferd 0750 coffer coffer -"
+        "d /run/cofferd 0750 coffer coffer -"
       ];
 
       config.sops.secrets.tiamat-exo-opus-prompt = {
