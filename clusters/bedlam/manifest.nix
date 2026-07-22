@@ -72,6 +72,8 @@ rec {
         # personal taste/config baked into the corpus. Prototype — CI is
         # test-only until the deployment shape settles.
         "spyglass" = { };
+        # Wings (coding harness supervision). Internal until the fleet design settles.
+        "wings" = { };
         "fort-nix" = {
           mirrors = {
             github = {
