@@ -11,11 +11,15 @@ rec {
     "observable"
     "gitops"
     "ci-runner"
+    "agent-debug"
   ];
 
   module =
-    { config, ... }:
+    { config, pkgs, ... }:
     {
       config.fort.host = { inherit roles apps aspects; };
+      config.environment.systemPackages = [
+        (import ../../../../pkgs/claude-code { inherit pkgs; })
+      ];
     };
 }

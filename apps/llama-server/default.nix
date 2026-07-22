@@ -146,6 +146,7 @@ in
         "--host 0.0.0.0"
         "--port ${toString port}"
         "--model ${modelStore}/${model.file}"
+        "--jinja"
         "--parallel 1"
         "--ctx-size ${toString contextSize}"
         "--cache-type-k q8_0"
