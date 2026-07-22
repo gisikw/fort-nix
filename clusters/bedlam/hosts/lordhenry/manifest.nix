@@ -114,6 +114,7 @@ rec {
                 supports_vision: true
                 backend_config:
                   strip_continuation_artifacts: true
+                  oauth_secret_path: fort/anthropic/cred
                 system_prompt:
                   - id: exo-opus-behavioral
                     file: exo-opus.md
@@ -128,6 +129,7 @@ rec {
                 supports_vision: true
                 backend_config:
                   strip_continuation_artifacts: true
+                  oauth_secret_path: fort/anthropic/cred
                 system_prompt:
                   - id: exo-opus-behavioral
                     file: exo-opus.md
@@ -142,6 +144,7 @@ rec {
                 supports_vision: true
                 backend_config:
                   strip_continuation_artifacts: true
+                  oauth_secret_path: fort/anthropic/cred
                 system_prompt:
                   - id: fable-arm-steering
                     text: |
@@ -266,6 +269,7 @@ rec {
                 supports_vision: true
                 backend_config:
                   strip_continuation_artifacts: true
+                  oauth_secret_path: fort/anthropic/cred
 
 
           cc-sonnet-5:
@@ -278,6 +282,7 @@ rec {
                 supports_vision: true
                 backend_config:
                   strip_continuation_artifacts: true
+                  oauth_secret_path: fort/anthropic/cred
 
 
           exo-qwen-local:
