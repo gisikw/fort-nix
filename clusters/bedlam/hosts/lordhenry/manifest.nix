@@ -83,8 +83,9 @@ rec {
     # trust anchor, and the root-side client-cert mint live in the module block
     # below. cofferd restarts on-failure until the minted cert exists; the
     # grant is filed and delivered by cofferd itself (request → approve →
-    # deliver) — convergence, not orchestration. Here it serves fort/openai/cred
-    # to tiamat's Sol/GPT arms (mirrors ratched's lair wiring).
+    # deliver) — convergence, not orchestration. Here it serves
+    # fort/openai/cred to Tiamat's Sol/GPT arms and fort/anthropic/cred to the
+    # persistent Claude gateway (mirrors ratched's lair wiring).
     coffer = {
       package = "infra/coffer";
       config.role = "daemon";
@@ -613,6 +614,7 @@ rec {
         uid = 992
         prewarm = [
           { namespace = "fort/openai", name = "cred" },
+          { namespace = "fort/anthropic", name = "cred" },
         ]
         # grant_shape makes cofferd file the grant request itself; secrets
         # default to prewarm, verbs to ["read"], ttl to 720h.
