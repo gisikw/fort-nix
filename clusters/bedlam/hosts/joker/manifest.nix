@@ -14,10 +14,16 @@ rec {
     "agent-debug"
   ];
 
+  overlays = {
+    wings = {
+      package = "infra/wings";
+    };
+  };
+
   module =
     { config, pkgs, ... }:
     {
-      config.fort.host = { inherit roles apps aspects; };
+      config.fort.host = { inherit roles apps aspects overlays; };
       config.environment.systemPackages = [
         (import ../../../../pkgs/claude-code { inherit pkgs; })
       ];
