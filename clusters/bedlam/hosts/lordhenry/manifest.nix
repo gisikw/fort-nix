@@ -34,20 +34,25 @@ rec {
     };
     kobold = {
       package = "infra/kobold";
-      # Pull-based worker only (role=worker): claims shell nodes tagged
-      # "lordhenry" from the coordinator on ratched. Runs as the tiamat
-      # service user so claimed work (nightly labeler) can read/write
-      # tiamat's data dir. No expose — the worker is outbound-only.
+      # Chieftain (role=chieftain): the per-host resident — presence
+      # heartbeat + assignment reconcile + ABSORBED batch worker (claims
+      # shell nodes tagged "lordhenry", exactly the old worker semantics).
+      # Runs as tiamat so claimed work (nightly labeler) keeps read/write
+      # on tiamat's data dir — NOT the chieftain default of root. This
+      # means it cannot write /run/systemd/system runtime units; fine
+      # today (no placed workloads target lordhenry), but the first
+      # placement here needs a privilege arrangement. Outbound-only, no
+      # expose. Old worker.json + escript remain as changeover fallback.
       config = {
-        role = "worker";
-        workerConfigFile = "/etc/kobold/worker.json";
-        workerUser = "tiamat";
-        workerGroup = "tiamat";
+        role = "chieftain";
+        chieftainConfigFile = "/etc/kobold/chieftain.json";
+        chieftainUser = "tiamat";
+        chieftainGroup = "tiamat";
       };
       secrets = {
-        # KOBOLD_WORKER_TOKEN=… env file; must match the coordinator's
-        # token on ratched (/home/dev/.config/kobold/worker-token).
-        workerTokenEnvFile = ./kobold-worker-token-env.sops;
+        # KOBOLD_WORKER_TOKEN=… env file (chieftain protocol calls use the
+        # worker token); must match the coordinator's token on ratched.
+        chieftainTokenEnvFile = ./kobold-worker-token-env.sops;
       };
     };
     tiamat = {
@@ -524,6 +529,19 @@ rec {
       # Kobold worker settings (no secrets here — the bearer token arrives
       # via the overlay's workerTokenEnvFile). work_root lives under
       # tiamat's home so the worker (running as tiamat) can create it.
+      # Chieftain settings (no secrets — token via chieftainTokenEnvFile).
+      # batch section = the absorbed worker: same tags/concurrency/paths.
+      config.environment.etc."kobold/chieftain.json".text = builtins.toJSON {
+        url = "https://kobold.gisi.network";
+        chieftain_id = "lordhenry";
+        labels = [ "lordhenry" ];
+        batch = {
+          tags = [ "lordhenry" ];
+          concurrency = 1;
+          shell_path = "/run/overlays/bin:/run/current-system/sw/bin";
+          work_root = "/var/lib/tiamat/kobold-worker";
+        };
+      };
       config.environment.etc."kobold/worker.json".text = builtins.toJSON {
         url = "https://kobold.gisi.network";
         worker_id = "lordhenry";
