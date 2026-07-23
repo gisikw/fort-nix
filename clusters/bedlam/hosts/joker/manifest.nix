@@ -15,6 +15,13 @@ rec {
   ];
 
   overlays = {
+    # Joker-local signer bootstrap for the standalone Wings warden. The
+    # signing authority is logically fort:wings; Joker is only its temporary
+    # placement while the end-to-end flight path is proven.
+    coffer = {
+      package = "infra/coffer";
+      config.role = "daemon";
+    };
     wings = {
       package = "infra/wings";
     };
@@ -24,8 +31,90 @@ rec {
     { config, pkgs, ... }:
     {
       config.fort.host = { inherit roles apps aspects overlays; };
+
       config.environment.systemPackages = [
         (import ../../../../pkgs/claude-code { inherit pkgs; })
+      ];
+
+      # The standalone warden must not run as root: Claude Code refuses
+      # bypassPermissions under uid 0. Pin the uid because cofferd authorizes
+      # local workloads from SO_PEERCRED.
+      config.users.groups.wings.gid = 991;
+      config.users.users.wings = {
+        isSystemUser = true;
+        uid = 991;
+        group = "wings";
+        extraGroups = [ "coffer" ];
+        home = "/var/lib/wings";
+        createHome = true;
+        description = "Wings standalone warden";
+      };
+
+      # ---- Coffer client daemon (cofferd) ----
+      # This requests read-only access to the temporary Joker-local signing
+      # key. The key signs short-lived flight capabilities; provider credentials
+      # remain exclusively on lordhenry behind Tiamat.
+      config.users.users.coffer = {
+        isSystemUser = true;
+        group = "coffer";
+        home = "/var/lib/cofferd";
+      };
+      config.users.groups.coffer = { };
+
+      config.environment.etc."cofferd/server.crt".source = ../../coffer-server.crt;
+      config.environment.etc."cofferd/config.toml".text = ''
+        server = "https://drhorrible.fort.gisi.network:7787"
+        socket = "/run/cofferd/coffer.sock"
+        tls_cert = "/var/lib/cofferd/client.crt"
+        tls_key = "/var/lib/cofferd/client.key"
+        trust_anchors = "/etc/cofferd/server.crt"
+
+        [[workload]]
+        name = "wings"
+        grant_file = "/var/lib/cofferd/grants/wings.grant"
+        uid = 991
+        prewarm = [
+          { namespace = "fort/wings", name = "signing-key" },
+        ]
+        grant_shape = { }
+      '';
+
+      # Root must wrap Joker's existing ed25519 host key in the self-signed
+      # client certificate. cofferd itself remains unprivileged.
+      config.systemd.services.cofferd-mint-client-cert = {
+        description = "Mint cofferd client certificate from the host ssh key";
+        wantedBy = [ "multi-user.target" ];
+        path = [ pkgs.coreutils pkgs.systemd pkgs.gnugrep ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          bin=""
+          for _ in $(seq 1 120); do
+            bin=$(systemctl show -p ExecStart overlay-coffer-cofferd.service 2>/dev/null \
+              | grep -o '/nix/store/[^ ;]*/bin/cofferd' | head -1 || true)
+            if [ -z "$bin" ] && [ -x /run/overlays/bin/cofferd ]; then
+              bin=/run/overlays/bin/cofferd
+            fi
+            [ -n "$bin" ] && [ -x "$bin" ] && break
+            bin=""
+            sleep 5
+          done
+          [ -n "$bin" ] || { echo "cofferd binary never appeared" >&2; exit 1; }
+          "$bin" --mint-client-cert \
+            --ssh-key /etc/ssh/ssh_host_ed25519_key \
+            --out-cert /var/lib/cofferd/client.crt \
+            --out-key /var/lib/cofferd/client.key \
+            --san joker
+          chown coffer:coffer /var/lib/cofferd/client.crt /var/lib/cofferd/client.key
+        '';
+      };
+
+      config.systemd.tmpfiles.rules = [
+        "d /var/lib/wings 0750 wings wings -"
+        "d /var/lib/cofferd 0750 coffer coffer -"
+        "d /run/cofferd 0750 coffer coffer -"
       ];
     };
 }
