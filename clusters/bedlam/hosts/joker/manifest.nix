@@ -111,6 +111,44 @@ rec {
         '';
       };
 
+      # Manual vertical-slice acceptance. The warden owns the PTY and capability;
+      # this unit only supplies deterministic operator input (wait, then quit).
+      config.systemd.services.wings-acceptance = {
+        description = "Run Wings delegated Tiamat acceptance flight";
+        path = [ pkgs.coreutils (import ../../../../pkgs/claude-code { inherit pkgs; }) ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "wings";
+          Group = "wings";
+          WorkingDirectory = "/var/lib/wings";
+          TimeoutStartSec = "15min";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ReadWritePaths = [ "/var/lib/wings" ];
+        };
+        script = ''
+          workdir=/var/lib/wings/acceptance-positive
+          rm -rf "$workdir"
+          mkdir -p "$workdir"
+          printf 'wait\nquit\n' | /run/overlays/bin/wings-warden \
+            -workdir "$workdir" \
+            -base-url http://lordhenry:8900 \
+            -model claude-opus-4-6 \
+            -claude ${(import ../../../../pkgs/claude-code { inherit pkgs; })}/bin/claude \
+            -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it, then create DONE.md containing a brief completion note.' \
+            -flight-id acceptance-positive-2026-07-23 \
+            -issuer fort:wings \
+            -key-id bootstrap-2026-07-23 \
+            -capability-ttl 15m \
+            -signing-key-path fort/wings/signing-key \
+            -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+          test "$(cat "$workdir/X.txt")" = Y
+          test -s "$workdir/DONE.md"
+        '';
+      };
+
       # Manual bootstrap probe: run only when deriving verification material.
       # SO_PEERCRED maps this process to the narrowly scoped "wings" workload;
       # stdout contains only the base64url Ed25519 public key.
