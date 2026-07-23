@@ -30,7 +30,14 @@ rec {
   module =
     { config, pkgs, ... }:
     {
-      config.fort.host = { inherit roles apps aspects overlays; };
+      config.fort.host = {
+        inherit
+          roles
+          apps
+          aspects
+          overlays
+          ;
+      };
 
       config.environment.systemPackages = [
         (import ../../../../pkgs/claude-code { inherit pkgs; })
@@ -84,7 +91,11 @@ rec {
       config.systemd.services.cofferd-mint-client-cert = {
         description = "Mint cofferd client certificate from the host ssh key";
         wantedBy = [ "multi-user.target" ];
-        path = [ pkgs.coreutils pkgs.systemd pkgs.gnugrep ];
+        path = [
+          pkgs.coreutils
+          pkgs.systemd
+          pkgs.gnugrep
+        ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -115,7 +126,10 @@ rec {
       # this unit only supplies deterministic operator input (wait, then quit).
       config.systemd.services.wings-acceptance = {
         description = "Run Wings delegated Tiamat acceptance flight";
-        path = [ pkgs.coreutils (import ../../../../pkgs/claude-code { inherit pkgs; }) ];
+        path = [
+          pkgs.coreutils
+          (import ../../../../pkgs/claude-code { inherit pkgs; })
+        ];
         serviceConfig = {
           Type = "oneshot";
           User = "wings";
@@ -132,20 +146,19 @@ rec {
           workdir=/var/lib/wings/acceptance-positive
           rm -rf "$workdir"
           mkdir -p "$workdir"
-          { sleep 20; echo status; echo screen; sleep 20; echo status; echo screen; echo kill; echo quit; } | /run/overlays/bin/wings-warden \
+          { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden \
             -workdir "$workdir" \
             -base-url http://lordhenry:8900 \
             -model claude-opus-4-6 \
             -claude ${(import ../../../../pkgs/claude-code { inherit pkgs; })}/bin/claude \
-            -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it, then create DONE.md containing a brief completion note.' \
-            -flight-id acceptance-positive-2026-07-23 \
+            -mcp /run/overlays/bin/wings-mcp \
+            -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' \
+            -flight-id "acceptance-positive-$(date +%s)" \
             -issuer fort:wings \
             -key-id bootstrap-2026-07-23 \
             -capability-ttl 15m \
             -signing-key-path fort/wings/signing-key \
             -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
-          # Diagnostic operator script above intentionally kills after screen capture.
-          true
         '';
       };
 
