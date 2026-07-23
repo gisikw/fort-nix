@@ -111,6 +111,22 @@ rec {
         '';
       };
 
+      # Manual bootstrap probe: run only when deriving verification material.
+      # SO_PEERCRED maps this process to the narrowly scoped "wings" workload;
+      # stdout contains only the base64url Ed25519 public key.
+      config.systemd.services.wings-key-public = {
+        description = "Derive Wings public verification key through cofferd";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "wings";
+          Group = "wings";
+          ExecStart = "/run/overlays/bin/wings-key-public -signing-key-path fort/wings/signing-key";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+        };
+      };
       config.systemd.tmpfiles.rules = [
         "d /var/lib/wings 0750 wings wings -"
         "d /var/lib/cofferd 0750 coffer coffer -"
