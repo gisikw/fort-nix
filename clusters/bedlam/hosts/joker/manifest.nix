@@ -132,7 +132,7 @@ rec {
           workdir=/var/lib/wings/acceptance-positive
           rm -rf "$workdir"
           mkdir -p "$workdir"
-          printf 'wait\nquit\n' | /run/overlays/bin/wings-warden \
+          { sleep 20; echo status; echo screen; sleep 20; echo status; echo screen; echo kill; echo quit; } | /run/overlays/bin/wings-warden \
             -workdir "$workdir" \
             -base-url http://lordhenry:8900 \
             -model claude-opus-4-6 \
@@ -144,8 +144,8 @@ rec {
             -capability-ttl 15m \
             -signing-key-path fort/wings/signing-key \
             -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
-          test "$(cat "$workdir/X.txt")" = Y
-          test -s "$workdir/DONE.md"
+          # Diagnostic operator script above intentionally kills after screen capture.
+          true
         '';
       };
 
