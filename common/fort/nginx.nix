@@ -192,6 +192,7 @@ in
                 locations."= /_identity/validate" = lib.mkIf isIdentityMode {
                   extraConfig = ''
                     internal;
+                    client_max_body_size 0;
                     proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
                     proxy_pass_request_body off;
                     proxy_set_header Content-Length "";
