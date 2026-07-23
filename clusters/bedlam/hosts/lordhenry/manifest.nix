@@ -63,6 +63,7 @@ rec {
         group = "tiamat";
         home = "/var/lib/tiamat";
         grottoUrl = "https://grotto.gisi.network";
+        gatewayWingsConfig = "/etc/tiamat/wings-gateway.json";
       };
       expose = {
         port = 8900;
@@ -101,6 +102,27 @@ rec {
   module =
     { config, pkgs, ... }:
     let
+      tiamatWingsGatewayJson = pkgs.writeText "tiamat-wings-gateway.json" (
+        builtins.toJSON {
+          audience = "tiamat-claude-gateway";
+          issuers = [
+            {
+              issuer = "fort:wings";
+              policy = "credential-only";
+              keys.bootstrap-2026-07-23 = "fxUfsXeo3CSNXNQi-i9DiHJ7_uaKxW4cU6Eav1DPO04";
+              max_ttl_seconds = 3600;
+              clock_skew_seconds = 10;
+              cofferd_socket = "/run/cofferd/coffer.sock";
+              cofferd_secret_path = "fort/anthropic/cred";
+              capture = false;
+              max_body_bytes = 52428800;
+              max_concurrent = 2;
+              requests_per_minute = 60;
+              request_timeout_seconds = 900;
+            }
+          ];
+        }
+      );
       tiamatProfilesYaml = pkgs.writeText "tiamat-profiles.yaml" ''
         prompt_root: /var/lib/tiamat/prompts
         profiles:
@@ -519,6 +541,8 @@ rec {
       '';
     in
     {
+      config.environment.etc."tiamat/wings-gateway.json".source = tiamatWingsGatewayJson;
+
       # Disable Compute Wave Store and Resume — MES firmware bug on gfx1151
       # causes GPU hangs under ROCm workloads (ROCm #5590)
       config.boot.kernelParams = [ "amdgpu.cwsr_enable=0" ];
