@@ -110,6 +110,7 @@ let
         subdomain = ov.expose.subdomain or null;
         port = ov.expose.port;
         visibility = ov.expose.visibility or "vpn";
+        maxBodySize = ov.expose.maxBodySize or null;
         sso = ov.expose.sso or {};
       }]
     else acc
