@@ -64,6 +64,7 @@ rec {
         home = "/var/lib/tiamat";
         grottoUrl = "https://grotto.gisi.network";
         gatewayWingsConfig = "/etc/tiamat/wings-gateway.json";
+        gatewayRoutesConfig = "/etc/tiamat/gateway-routes.json";
       };
       expose = {
         port = 8900;
@@ -114,6 +115,11 @@ rec {
               clock_skew_seconds = 10;
               cofferd_socket = "/run/cofferd/coffer.sock";
               cofferd_secret_path = "fort/anthropic/cred";
+              allowed_routes = [
+                "anthropic-opus"
+                "openai-sol"
+                "local-default"
+              ];
               capture = false;
               max_body_bytes = 52428800;
               max_concurrent = 2;
@@ -121,6 +127,51 @@ rec {
               request_timeout_seconds = 900;
             }
           ];
+        }
+      );
+      tiamatGatewayRoutesJson = pkgs.writeText "tiamat-gateway-routes.json" (
+        builtins.toJSON {
+          routes = {
+            anthropic-opus = {
+              backend = "anthropic-messages";
+              adapter = "passthrough";
+              upstream_base = "https://api.anthropic.com";
+              model = "claude-opus-4-6";
+              credential = {
+                kind = "cofferd";
+                path = "fort/anthropic/cred";
+              };
+              behavior = "translation-only";
+              max_context_tokens = 200000;
+              max_output_tokens = 32000;
+            };
+            openai-sol = {
+              backend = "openai-responses";
+              adapter = "anthropic-to-openai-responses";
+              upstream_base = "https://chatgpt.com/backend-api/codex";
+              model = "gpt-5.6-sol";
+              credential = {
+                kind = "cofferd";
+                path = "fort/openai/cred";
+                oauth = true;
+              };
+              behavior = "translation-only";
+              max_context_tokens = 272000;
+              max_output_tokens = 128000;
+            };
+            local-default = {
+              backend = "anthropic-messages";
+              adapter = "passthrough";
+              upstream_base = "http://frankenstein:8012";
+              model = "Qwen3.6-27B-Q8_0.gguf";
+              credential = {
+                kind = "none";
+              };
+              behavior = "translation-only";
+              max_context_tokens = 200000;
+              max_output_tokens = 32768;
+            };
+          };
         }
       );
       tiamatProfilesYaml = pkgs.writeText "tiamat-profiles.yaml" ''
@@ -542,6 +593,7 @@ rec {
     in
     {
       config.environment.etc."tiamat/wings-gateway.json".source = tiamatWingsGatewayJson;
+      config.environment.etc."tiamat/gateway-routes.json".source = tiamatGatewayRoutesJson;
 
       # Disable Compute Wave Store and Resume — MES firmware bug on gfx1151
       # causes GPU hangs under ROCm workloads (ROCm #5590)
@@ -662,7 +714,11 @@ rec {
       config.systemd.services.cofferd-mint-client-cert = {
         description = "Mint cofferd client certificate from the host ssh key";
         wantedBy = [ "multi-user.target" ];
-        path = [ pkgs.coreutils pkgs.systemd pkgs.gnugrep ];
+        path = [
+          pkgs.coreutils
+          pkgs.systemd
+          pkgs.gnugrep
+        ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;

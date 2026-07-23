@@ -122,10 +122,11 @@ rec {
         '';
       };
 
-      # Manual vertical-slice acceptance. The warden owns the PTY and capability;
-      # this unit only supplies deterministic operator input (wait, then quit).
-      config.systemd.services.wings-acceptance = {
-        description = "Run Wings delegated Tiamat acceptance flight";
+      # Manual vertical-slice acceptance. Route registration is an operator-side
+      # control-plane step and completes before Warden starts; neither Warden nor
+      # Claude Code receives route authority or upstream topology.
+      config.systemd.services.wings-acceptance-anthropic = {
+        description = "Run Wings acceptance through Tiamat (Anthropic route)";
         path = [
           pkgs.coreutils
           (import ../../../../pkgs/claude-code { inherit pkgs; })
@@ -143,22 +144,74 @@ rec {
           ReadWritePaths = [ "/var/lib/wings" ];
         };
         script = ''
-          workdir=/var/lib/wings/acceptance-positive
-          rm -rf "$workdir"
-          mkdir -p "$workdir"
-          { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden \
-            -workdir "$workdir" \
-            -base-url http://lordhenry:8900 \
-            -model claude-opus-4-6 \
-            -claude ${(import ../../../../pkgs/claude-code { inherit pkgs; })}/bin/claude \
-            -mcp /run/overlays/bin/wings-mcp \
-            -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' \
-            -flight-id "acceptance-positive-$(date +%s)" \
-            -issuer fort:wings \
-            -key-id bootstrap-2026-07-23 \
-            -capability-ttl 15m \
-            -signing-key-path fort/wings/signing-key \
-            -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+          route=anthropic-opus
+          flight="acceptance-anthropic-$(date +%s)"
+          workdir=/var/lib/wings/acceptance-anthropic
+          rm -rf "$workdir"; mkdir -p "$workdir"
+          /run/overlays/bin/wings-register -grant-url http://lordhenry:8900/v1/tiamat/grants -route "$route" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key
+          { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden -workdir "$workdir" -base-url http://lordhenry:8900 -model routed -claude ${
+            (import ../../../../pkgs/claude-code { inherit pkgs; })
+          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -capability-ttl 15m -signing-key-path fort/wings/signing-key -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+        '';
+      };
+
+      config.systemd.services.wings-acceptance-openai = {
+        description = "Run Wings acceptance through Tiamat (OpenAI route)";
+        path = [
+          pkgs.coreutils
+          (import ../../../../pkgs/claude-code { inherit pkgs; })
+        ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "wings";
+          Group = "wings";
+          WorkingDirectory = "/var/lib/wings";
+          TimeoutStartSec = "15min";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ReadWritePaths = [ "/var/lib/wings" ];
+        };
+        script = ''
+          route=openai-sol
+          flight="acceptance-openai-$(date +%s)"
+          workdir=/var/lib/wings/acceptance-openai
+          rm -rf "$workdir"; mkdir -p "$workdir"
+          /run/overlays/bin/wings-register -grant-url http://lordhenry:8900/v1/tiamat/grants -route "$route" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key
+          { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden -workdir "$workdir" -base-url http://lordhenry:8900 -model routed -claude ${
+            (import ../../../../pkgs/claude-code { inherit pkgs; })
+          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Inspect the workdir, create routed.txt containing exactly openai followed by a newline, verify it through Bash, then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -capability-ttl 15m -signing-key-path fort/wings/signing-key -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+        '';
+      };
+
+      config.systemd.services.wings-acceptance-local = {
+        description = "Run Wings acceptance through Tiamat (local route)";
+        path = [
+          pkgs.coreutils
+          (import ../../../../pkgs/claude-code { inherit pkgs; })
+        ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "wings";
+          Group = "wings";
+          WorkingDirectory = "/var/lib/wings";
+          TimeoutStartSec = "15min";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ReadWritePaths = [ "/var/lib/wings" ];
+        };
+        script = ''
+          route=local-default
+          flight="acceptance-local-$(date +%s)"
+          workdir=/var/lib/wings/acceptance-local
+          rm -rf "$workdir"; mkdir -p "$workdir"
+          /run/overlays/bin/wings-register -grant-url http://lordhenry:8900/v1/tiamat/grants -route "$route" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key
+          { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden -workdir "$workdir" -base-url http://lordhenry:8900 -model routed -claude ${
+            (import ../../../../pkgs/claude-code { inherit pkgs; })
+          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -capability-ttl 15m -signing-key-path fort/wings/signing-key -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
         '';
       };
 
