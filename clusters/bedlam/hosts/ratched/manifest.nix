@@ -99,6 +99,20 @@ rec {
       #   stabilize = 15;
       # };
     };
+    # Family Hub — touch-first wall-tablet surface (Skylight) at
+    # https://hub.<domain>. Token mode with LAN+VPN bypass: the sandboxed
+    # tablet (LAN, no practical login UI) and family devices on the mesh
+    # reach it directly; anything else hits the token wall.
+    family-hub = {
+      package = "infra/family-hub";
+      config.port = "4300";
+      expose = {
+        subdomain = "hub";
+        port = 4300;
+        visibility = "public";
+        sso = { mode = "token"; vpnBypass = true; localBypass = true; };
+      };
+    };
     lair = {
       package = "infra/lair";
       config.port = "4002";
