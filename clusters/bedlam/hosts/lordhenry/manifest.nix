@@ -183,7 +183,7 @@ rec {
               claude_code:
                 backend: claude_code
                 provider: anthropic
-                model: claude-opus-4-6
+                model: claude-opus-5
                 supports_vision: true
                 backend_config:
                   strip_continuation_artifacts: true
@@ -426,6 +426,22 @@ rec {
                 refresh_on_hit = true;
               };
               notes = "Served by BOTH the CC subscription arm and the metered opus-api arm; card keys cannot split by backend, so mode follows the dominant (sub) traffic. The API overflow valve is tracked separately by the backend-scoped anthropic-api-monthly constraint. Published Opus 4.6 rates $5/$25.";
+            };
+            "anthropic/claude-opus-5" = {
+              pricing_mode = "subscription";
+              input_per_mtok = 5;
+              output_per_mtok = 25;
+              cache = {
+                mode = "explicit";
+                read_multiplier = 0.1;
+                write_multipliers = {
+                  "5m" = 1.25;
+                  "1h" = 2.0;
+                };
+                default_write_ttl = "5m";
+                refresh_on_hit = true;
+              };
+              notes = "Opus 5 via the CC subscription arm (exo profile cutover 2026-07-24). Published rates $5/$25, same as Opus 4.6.";
             };
             "anthropic/claude-fable-5" = {
               pricing_mode = "subscription";
