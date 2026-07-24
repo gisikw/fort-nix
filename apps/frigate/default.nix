@@ -97,12 +97,23 @@ in
     }
   ];
 
-  services.nginx.virtualHosts.${hostname}.locations."/" = lib.mkForce {
-    root = "${config.services.frigate.package.web}";
-    tryFiles = "$uri $uri.html $uri/ /index.html";
-    extraConfig = ''
-      add_header Cache-Control "no-store";
-      expires off;
-    '';
+  # Fort adds a server-level CSP (frame-ancestors) add_header to every vhost.
+  # The upstream Frigate module generates location blocks with their own
+  # add_header lines (Set-Cookie, Cache-Control, ...), and nginx semantics
+  # make any child-level add_header drop ALL parent headers — gixy's
+  # add_header_redefinition check rightly fails the config build. Frigate is
+  # LAN/VPN-only, never public, and never embedded in an iframe (family-hub
+  # consumes streams via server-side proxy), so drop the server-level CSP
+  # here instead of fighting the upstream module's locations.
+  services.nginx.virtualHosts.${hostname} = {
+    extraConfig = lib.mkForce "";
+    locations."/" = lib.mkForce {
+      root = "${config.services.frigate.package.web}";
+      tryFiles = "$uri $uri.html $uri/ /index.html";
+      extraConfig = ''
+        add_header Cache-Control "no-store";
+        expires off;
+      '';
+    };
   };
 }
