@@ -21,6 +21,14 @@ let
   dnsCorednsHandler = pkgs.writeShellScript "handler-dns-coredns" ''
     set -euo pipefail
 
+    # The provider invokes handlers with FORT_ORIGIN=<caller> (protocol: who
+    # called us). The fort CLI *also* reads FORT_ORIGIN as an identity
+    # override, so nested fort calls below would claim the caller's identity
+    # while signing with this host's key -> 401 signature verification
+    # failure -> "ERROR: no LAN IP" for every origin. Unset so nested calls
+    # sign as ourselves. (Same for FORT_SSH_KEY, defensively.)
+    unset FORT_ORIGIN FORT_SSH_KEY
+
     input=$(${pkgs.coreutils}/bin/cat)
     HOSTS_FILE="${fortHostsPath}"
     LOCAL_HOSTNAME="${localHostname}"
@@ -47,7 +55,7 @@ let
           else
             lan_ip_cache[$origin]="NOROUTE"
           fi
-        elif result=$(${fortCli}/bin/fort "$origin" lan-ip '{}' 2>/dev/null); then
+        elif result=$(${fortCli}/bin/fort "$origin" lan-ip '{}'); then
           # Remote lookup: query origin's lan-ip capability
           lan_ip=$(echo "$result" | ${pkgs.jq}/bin/jq -r '.body.lan_ip // empty')
           if [ -n "$lan_ip" ]; then
