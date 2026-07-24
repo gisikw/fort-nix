@@ -93,11 +93,7 @@ in
       name = "frigate";
       subdomain = subdomain;
       port = 5001;
-      # "local": LAN DNS record via dns-coredns (no beacon hairpin for NVR
-      # streams), no public proxy. The vpn 444 guard was vestigial anyway —
-      # the mkForce'd "/" location below replaces fort's location including
-      # the guard, so access control is network reachability, unchanged.
-      visibility = "local";
+      visibility = "vpn";
     }
   ];
 
