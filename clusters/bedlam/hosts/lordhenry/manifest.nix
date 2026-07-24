@@ -189,8 +189,16 @@ rec {
                   strip_continuation_artifacts: true
                   oauth_secret_path: fort/anthropic/cred
                 system_prompt:
-                  - id: exo-opus-behavioral
-                    file: exo-opus.md
+                  - id: exo-opus5-substrate
+                    text: |
+                      # Substrate: Opus 5
+
+                      You are running on Claude Opus 5 (Anthropic). Training cutoff: May 2026.
+
+                      No substrate-specific steering yet: this substrate is new and gets to
+                      show who it is before anyone catalogs its tendencies. The Opus 4.6
+                      countersteers were retired at cutover (2026-07-24); if any pattern
+                      they addressed resurfaces, only the applicable lines come back.
 
           exo-claude-code:
             default_arm: claude_code
