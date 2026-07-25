@@ -64,7 +64,7 @@ rec {
         home = "/var/lib/tiamat";
         grottoUrl = "https://grotto.gisi.network";
         gatewayWingsConfig = "/etc/tiamat/wings-gateway.json";
-        gatewayRoutesConfig = "/etc/tiamat/gateway-routes.json";
+        gatewayProvidersConfig = "/etc/tiamat/gateway-providers.json";
       };
       expose = {
         port = 8900;
@@ -109,67 +109,66 @@ rec {
           issuers = [
             {
               issuer = "fort:wings";
-              policy = "credential-only";
               keys.bootstrap-2026-07-23 = "fxUfsXeo3CSNXNQi-i9DiHJ7_uaKxW4cU6Eav1DPO04";
               max_ttl_seconds = 3600;
               clock_skew_seconds = 10;
-              cofferd_socket = "/run/cofferd/coffer.sock";
-              cofferd_secret_path = "fort/anthropic/cred";
-              allowed_routes = [
-                "anthropic-opus"
-                "openai-sol"
-                "local-default"
-              ];
-              capture = false;
-              max_body_bytes = 52428800;
-              max_concurrent = 2;
-              requests_per_minute = 60;
-              request_timeout_seconds = 900;
             }
           ];
         }
       );
-      tiamatGatewayRoutesJson = pkgs.writeText "tiamat-gateway-routes.json" (
+      tiamatGatewayProvidersJson = pkgs.writeText "tiamat-gateway-providers.json" (
         builtins.toJSON {
-          routes = {
-            anthropic-opus = {
+          providers = {
+            anthropic = {
+              priority = 10;
               backend = "anthropic-messages";
               adapter = "passthrough";
               upstream_base = "https://api.anthropic.com";
-              model = "claude-opus-4-6";
-              credential = {
-                kind = "cofferd";
-                path = "fort/anthropic/cred";
-              };
-              behavior = "translation-only";
+              credential = { kind = "cofferd"; path = "fort/anthropic/cred"; };
+              discovery = { kind = "anthropic-models"; path = "/v1/models"; };
               max_context_tokens = 200000;
               max_output_tokens = 32000;
+              default_ttl_seconds = 1800;
+              max_ttl_seconds = 3600;
+              issuers = [ "fort:wings" ];
+              max_concurrent = 2;
+              requests_per_minute = 60;
+              max_body_bytes = 52428800;
+              request_timeout_seconds = 900;
             };
-            openai-sol = {
+            openai = {
+              priority = 20;
               backend = "openai-responses";
               adapter = "anthropic-to-openai-responses";
               upstream_base = "https://chatgpt.com/backend-api/codex";
-              model = "gpt-5.6-sol";
-              credential = {
-                kind = "cofferd";
-                path = "fort/openai/cred";
-                oauth = true;
-              };
-              behavior = "translation-only";
+              credential = { kind = "cofferd"; path = "fort/openai/cred"; oauth = true; };
+              discovery = { kind = "openai-models"; path = "/models"; };
               max_context_tokens = 272000;
               max_output_tokens = 128000;
+              default_ttl_seconds = 1800;
+              max_ttl_seconds = 3600;
+              issuers = [ "fort:wings" ];
+              max_concurrent = 2;
+              requests_per_minute = 60;
+              max_body_bytes = 52428800;
+              request_timeout_seconds = 900;
             };
-            local-default = {
+            local = {
+              priority = 30;
               backend = "anthropic-messages";
               adapter = "passthrough";
               upstream_base = "http://frankenstein:8012";
-              model = "Qwen3.6-27B-Q8_0.gguf";
-              credential = {
-                kind = "none";
-              };
-              behavior = "translation-only";
+              credential.kind = "none";
+              discovery = { kind = "openai-models"; path = "/v1/models"; };
               max_context_tokens = 200000;
               max_output_tokens = 32768;
+              default_ttl_seconds = 1800;
+              max_ttl_seconds = 3600;
+              issuers = [ "fort:wings" ];
+              max_concurrent = 2;
+              requests_per_minute = 60;
+              max_body_bytes = 52428800;
+              request_timeout_seconds = 900;
             };
           };
         }
@@ -617,7 +616,7 @@ rec {
     in
     {
       config.environment.etc."tiamat/wings-gateway.json".source = tiamatWingsGatewayJson;
-      config.environment.etc."tiamat/gateway-routes.json".source = tiamatGatewayRoutesJson;
+      config.environment.etc."tiamat/gateway-providers.json".source = tiamatGatewayProvidersJson;
 
       # Disable Compute Wave Store and Resume — MES firmware bug on gfx1151
       # causes GPU hangs under ROCm workloads (ROCm #5590)

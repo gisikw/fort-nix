@@ -122,9 +122,8 @@ rec {
         '';
       };
 
-      # Manual vertical-slice acceptance. Route registration is an operator-side
-      # control-plane step and completes before Warden starts; neither Warden nor
-      # Claude Code receives route authority or upstream topology.
+      # Manual vertical-slice acceptance. Entitlement issuance resolves and freezes
+      # provider + exact model before Warden starts; Warden receives no signing authority.
       config.systemd.services.wings-acceptance-anthropic = {
         description = "Run Wings acceptance through Tiamat (Anthropic route)";
         path = [
@@ -144,14 +143,15 @@ rec {
           ReadWritePaths = [ "/var/lib/wings" ];
         };
         script = ''
-          route=anthropic-opus
+          provider=anthropic
+          model=claude-opus-5
           flight="acceptance-anthropic-$(date +%s)"
           workdir=/var/lib/wings/acceptance-anthropic
           rm -rf "$workdir"; mkdir -p "$workdir"
-          /run/overlays/bin/wings-register -grant-url http://lordhenry:8900/v1/tiamat/grants -route "$route" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key
+          entitlement=$(/run/overlays/bin/wings-issue -issuance-url http://lordhenry:8900/v1/tiamat/entitlements -provider "$provider" -model "$model" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key)
           { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden -workdir "$workdir" -base-url http://lordhenry:8900 -model routed -claude ${
             (import ../../../../pkgs/claude-code { inherit pkgs; })
-          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -capability-ttl 15m -signing-key-path fort/wings/signing-key -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -entitlement "$entitlement" -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
         '';
       };
 
@@ -174,14 +174,15 @@ rec {
           ReadWritePaths = [ "/var/lib/wings" ];
         };
         script = ''
-          route=openai-sol
+          provider=openai
+          model=gpt-5.6-sol
           flight="acceptance-openai-$(date +%s)"
           workdir=/var/lib/wings/acceptance-openai
           rm -rf "$workdir"; mkdir -p "$workdir"
-          /run/overlays/bin/wings-register -grant-url http://lordhenry:8900/v1/tiamat/grants -route "$route" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key
+          entitlement=$(/run/overlays/bin/wings-issue -issuance-url http://lordhenry:8900/v1/tiamat/entitlements -provider "$provider" -model "$model" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key)
           { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden -workdir "$workdir" -base-url http://lordhenry:8900 -model routed -claude ${
             (import ../../../../pkgs/claude-code { inherit pkgs; })
-          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Inspect the workdir, create routed.txt containing exactly openai followed by a newline, verify it through Bash, then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -capability-ttl 15m -signing-key-path fort/wings/signing-key -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Inspect the workdir, create routed.txt containing exactly openai followed by a newline, verify it through Bash, then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -entitlement "$entitlement" -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
         '';
       };
 
@@ -204,33 +205,18 @@ rec {
           ReadWritePaths = [ "/var/lib/wings" ];
         };
         script = ''
-          route=local-default
+          provider=local
+          model=Qwen3.6-27B-Q8_0.gguf
           flight="acceptance-local-$(date +%s)"
           workdir=/var/lib/wings/acceptance-local
           rm -rf "$workdir"; mkdir -p "$workdir"
-          /run/overlays/bin/wings-register -grant-url http://lordhenry:8900/v1/tiamat/grants -route "$route" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key
+          entitlement=$(/run/overlays/bin/wings-issue -issuance-url http://lordhenry:8900/v1/tiamat/entitlements -provider "$provider" -model "$model" -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -ttl 15m -signing-key-path fort/wings/signing-key)
           { echo wait; echo status; echo screen; echo quit; } | /run/overlays/bin/wings-warden -workdir "$workdir" -base-url http://lordhenry:8900 -model routed -claude ${
             (import ../../../../pkgs/claude-code { inherit pkgs; })
-          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -issuer fort:wings -key-id bootstrap-2026-07-23 -capability-ttl 15m -signing-key-path fort/wings/signing-key -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
+          }/bin/claude -mcp /run/overlays/bin/wings-mcp -prompt 'Create X.txt containing exactly Y followed by a newline. Verify it through Bash. Then call wings.complete with a concise Markdown summary and evidence. Do not create DONE.md.' -flight-id "$flight" -entitlement "$entitlement" -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal
         '';
       };
 
-      # Manual bootstrap probe: run only when deriving verification material.
-      # SO_PEERCRED maps this process to the narrowly scoped "wings" workload;
-      # stdout contains only the base64url Ed25519 public key.
-      config.systemd.services.wings-key-public = {
-        description = "Derive Wings public verification key through cofferd";
-        serviceConfig = {
-          Type = "oneshot";
-          User = "wings";
-          Group = "wings";
-          ExecStart = "/run/overlays/bin/wings-key-public -signing-key-path fort/wings/signing-key";
-          NoNewPrivileges = true;
-          PrivateTmp = true;
-          ProtectHome = true;
-          ProtectSystem = "strict";
-        };
-      };
       config.systemd.tmpfiles.rules = [
         "d /var/lib/wings 0750 wings wings -"
         "d /var/lib/cofferd 0750 coffer coffer -"
