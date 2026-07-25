@@ -124,8 +124,15 @@ rec {
               backend = "anthropic-messages";
               adapter = "passthrough";
               upstream_base = "https://api.anthropic.com";
-              credential = { kind = "cofferd"; path = "fort/anthropic/cred"; };
-              discovery = { kind = "anthropic-models"; path = "/v1/models"; };
+              credential = {
+                kind = "cofferd";
+                path = "fort/anthropic/cred";
+                oauth = true;
+              };
+              discovery = {
+                kind = "anthropic-models";
+                path = "/v1/models";
+              };
               max_context_tokens = 200000;
               max_output_tokens = 32000;
               default_ttl_seconds = 1800;
@@ -141,8 +148,16 @@ rec {
               backend = "openai-responses";
               adapter = "anthropic-to-openai-responses";
               upstream_base = "https://chatgpt.com/backend-api/codex";
-              credential = { kind = "cofferd"; path = "fort/openai/cred"; oauth = true; };
-              discovery = { kind = "openai-models"; path = "/models"; };
+              credential = {
+                kind = "cofferd";
+                path = "fort/openai/cred";
+                oauth = true;
+              };
+              discovery = {
+                kind = "codex-models";
+                path = "/models";
+                client_version = "0.145.0";
+              };
               max_context_tokens = 272000;
               max_output_tokens = 128000;
               default_ttl_seconds = 1800;
@@ -159,7 +174,10 @@ rec {
               adapter = "passthrough";
               upstream_base = "http://frankenstein:8012";
               credential.kind = "none";
-              discovery = { kind = "openai-models"; path = "/v1/models"; };
+              discovery = {
+                kind = "openai-models";
+                path = "/v1/models";
+              };
               max_context_tokens = 200000;
               max_output_tokens = 32768;
               default_ttl_seconds = 1800;
