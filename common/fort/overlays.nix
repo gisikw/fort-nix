@@ -57,6 +57,7 @@ let
     config = ov.config or {};
     secrets = ov.secrets or {};
     paths = ov.paths or {};
+    secretOwners = ov.secretOwners or {};
     expose = ov.expose or null;
     enabled = ov.enabled or true;
     # Declared inter-overlay dependencies (q-1e0a32ed): each entry must be
@@ -98,7 +99,7 @@ let
         sopsFile = secretPath;
         format = "binary";
         path = "/run/secrets/overlay-${name}-${secretName}";
-      };
+      } // (ov.secretOwners.${secretName} or {});
     }) ov.secrets)
   ) {} normalizedOverlays;
 

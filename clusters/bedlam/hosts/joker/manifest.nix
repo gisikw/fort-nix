@@ -24,12 +24,46 @@ rec {
     };
     wings = {
       package = "infra/wings";
+      dependsOn = [ "coffer" ];
+      config = {
+        role = "server";
+        listen = ":8910";
+        statePath = "/var/lib/wings/flights.json";
+        koboldUrl = "https://kobold.gisi.network";
+        terminalUrl = "http://lordhenry:8900/v1/tiamat/invocations/terminal";
+        issuanceUrl = "http://lordhenry:8900/v1/tiamat/entitlements";
+        inferenceBaseUrl = "http://lordhenry:8900";
+        wardenCommand = "/run/overlays/bin/wings-warden -server-url http://joker:8910 -claude /run/current-system/sw/bin/claude -mcp /run/overlays/bin/wings-mcp";
+        keyId = "bootstrap-2026-07-23";
+        signingKeyPath = "fort/wings/signing-key";
+      };
+      secrets.koboldTokenFile = ./kobold-controller-token.sops;
+      secretOwners.koboldTokenFile = { owner = "wings"; group = "wings"; mode = "0400"; };
+      expose = {
+        subdomain = "wings";
+        port = 8910;
+      };
+    };
+    kobold = {
+      package = "infra/kobold";
+      config = {
+        role = "chieftain";
+        chieftainConfigFile = "/etc/kobold/chieftain.json";
+      };
+      secrets.chieftainTokenEnvFile = ./kobold-worker-token-env.sops;
     };
   };
 
   module =
     { config, pkgs, ... }:
     {
+      config.environment.etc."kobold/chieftain.json".text = builtins.toJSON {
+        url = "https://kobold.gisi.network";
+        chieftain_id = "joker";
+        labels = [ "joker" "wings" "sticky" ];
+        heartbeat_interval_ms = 5000;
+        reconcile_interval_ms = 5000;
+      };
       config.fort.host = {
         inherit
           roles
