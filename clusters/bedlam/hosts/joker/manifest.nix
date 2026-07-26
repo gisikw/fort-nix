@@ -253,6 +253,7 @@ rec {
 
       config.systemd.tmpfiles.rules = [
         "d /var/lib/wings 0750 wings wings -"
+        "d /var/lib/wings/flights 0750 wings wings -"
         "d /var/lib/cofferd 0750 coffer coffer -"
         "d /run/cofferd 0750 coffer coffer -"
       ];
