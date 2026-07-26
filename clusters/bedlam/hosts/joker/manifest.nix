@@ -33,12 +33,14 @@ rec {
         terminalUrl = "http://lordhenry:8900/v1/tiamat/invocations/terminal";
         issuanceUrl = "http://lordhenry:8900/v1/tiamat/entitlements";
         inferenceBaseUrl = "http://lordhenry:8900";
-        wardenCommand = "/run/overlays/bin/wings-warden -server-url http://joker:8910 -claude /run/current-system/sw/bin/claude -mcp /run/overlays/bin/wings-mcp";
+        wardenCommand = "/run/overlays/bin/wings-warden -server-url http://joker:8910 -claude /run/current-system/sw/bin/claude -mcp /run/overlays/bin/wings-mcp -forge-username wings-warden -forge-password-file /run/secrets/overlay-wings-forgejoPasswordFile";
         keyId = "bootstrap-2026-07-23";
         signingKeyPath = "fort/wings/signing-key";
       };
       secrets.koboldTokenFile = ./kobold-controller-token.sops;
+      secrets.forgejoPasswordFile = ./wings-forgejo-password.sops;
       secretOwners.koboldTokenFile = { owner = "wings"; group = "wings"; mode = "0400"; };
+      secretOwners.forgejoPasswordFile = { owner = "wings"; group = "wings"; mode = "0400"; };
       expose = {
         subdomain = "wings";
         port = 8910;
