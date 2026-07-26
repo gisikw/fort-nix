@@ -349,6 +349,16 @@ in
     description = "Generate vdirsyncer config";
     wantedBy = [ "multi-user.target" ];
     after = [ "sops-nix.service" ];
+    # The generated config embeds the *contents* of these secrets, but the unit
+    # script only references their (fixed) /run/secrets paths - so rotating a
+    # password changes nothing systemd can see, and this oneshot would keep its
+    # RemainAfterExit=true state until the next reboot while vdirsyncer kept
+    # authenticating with the old password. Trigger on the encrypted files.
+    restartTriggers = [
+      config.sops.secrets.radicale-password.sopsFile
+      config.sops.secrets.oauth-client-id.sopsFile
+      config.sops.secrets.oauth-client-secret.sopsFile
+    ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
