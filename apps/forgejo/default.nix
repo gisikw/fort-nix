@@ -409,14 +409,19 @@ in
 
           STATUS_FILTER=""
           if [ -n "$STATUS" ]; then
+            # Forgejo/Gitea models/actions/status.go — do not reorder.
+            # 0 unknown 1 success 2 failure 3 cancelled 4 skipped
+            # 5 waiting 6 running 7 blocked 8 cancelling
             case "$STATUS" in
-              waiting)   STATUS_FILTER="AND r.status = 1" ;;
-              running)   STATUS_FILTER="AND r.status = 2" ;;
-              success)   STATUS_FILTER="AND r.status = 3" ;;
-              failure)   STATUS_FILTER="AND r.status = 4" ;;
-              cancelled) STATUS_FILTER="AND r.status = 5" ;;
-              skipped)   STATUS_FILTER="AND r.status = 6" ;;
-              blocked)   STATUS_FILTER="AND r.status = 7" ;;
+              unknown)    STATUS_FILTER="AND r.status = 0" ;;
+              success)    STATUS_FILTER="AND r.status = 1" ;;
+              failure)    STATUS_FILTER="AND r.status = 2" ;;
+              cancelled)  STATUS_FILTER="AND r.status = 3" ;;
+              skipped)    STATUS_FILTER="AND r.status = 4" ;;
+              waiting)    STATUS_FILTER="AND r.status = 5" ;;
+              running)    STATUS_FILTER="AND r.status = 6" ;;
+              blocked)    STATUS_FILTER="AND r.status = 7" ;;
+              cancelling) STATUS_FILTER="AND r.status = 8" ;;
             esac
           fi
 
@@ -429,14 +434,16 @@ in
           sql "
             SELECT r.id, repo.lower_name as repo, r.title,
               CASE r.status
-                WHEN 1 THEN 'waiting' WHEN 2 THEN 'running'
-                WHEN 3 THEN 'success' WHEN 4 THEN 'failure'
-                WHEN 5 THEN 'cancelled' WHEN 6 THEN 'skipped'
-                WHEN 7 THEN 'blocked' ELSE 'unknown'
+                WHEN 0 THEN 'unknown'   WHEN 1 THEN 'success'
+                WHEN 2 THEN 'failure'   WHEN 3 THEN 'cancelled'
+                WHEN 4 THEN 'skipped'   WHEN 5 THEN 'waiting'
+                WHEN 6 THEN 'running'   WHEN 7 THEN 'blocked'
+                WHEN 8 THEN 'cancelling' ELSE 'unknown'
               END as status,
               substr(r.commit_sha, 1, 8) as commit_sha,
               r.ref as branch, r.workflow_id as workflow,
-              r.event, r.created as created
+              r.event, r.created as created,
+              r.started as started, r.stopped as stopped
             FROM action_run r
             JOIN repository repo ON r.repo_id = repo.id
             JOIN [user] u ON repo.owner_id = u.id
