@@ -44,6 +44,18 @@ type OverlayState struct {
 	ManifestHash string `json:"manifestHash"`
 }
 
+// AttemptRecord is the last activation attempt for an overlay that did not
+// reach a healthy permanent state. It exists so the manager can remember that
+// it already tried a specific store path and failed: without it, every check
+// cycle rediscovers the same "new" version and retries it forever.
+type AttemptRecord struct {
+	StorePath string `json:"storePath"`
+	State     string `json:"state"`
+	Reason    string `json:"reason"`
+	At        int64  `json:"at"`
+	Attempts  int    `json:"attempts"`
+}
+
 // Evaluated overlay manifest (output of overlay.nix)
 type OverlayManifest struct {
 	Services map[string]ServiceDef `json:"services"`
@@ -218,6 +230,17 @@ func cmdCheck(cfg Config, overlayFilter string) {
 			log.Printf("[%s] store path missing, re-fetching: %s", name, current.StorePath)
 		}
 
+		// A store path that already failed activation is not retried on every
+		// poll: back off exponentially so a permanently broken version cannot
+		// thrash its services indefinitely. An explicit `activate` bypasses this.
+		if attempt := loadAttempt(cfg.StateDir, name); attempt != nil && attempt.StorePath == entry.StorePath {
+			if wait := backoffRemaining(attempt, cfg.PollInterval); wait > 0 {
+				log.Printf("[%s] skipping %s: %s after %d attempt(s) (%s); next retry in %s",
+					name, entry.StorePath, attempt.State, attempt.Attempts, attempt.Reason, wait.Round(time.Second))
+				continue
+			}
+		}
+
 		log.Printf("[%s] new version available: %s", name, entry.StorePath)
 		cmdActivate(cfg, name, entry.StorePath)
 	}
@@ -237,8 +260,7 @@ func cmdActivate(cfg Config, name, storePath string) {
 	// FETCHING: realize the store path
 	log.Printf("[%s] fetching %s", name, storePath)
 	if err := realiseStorePath(storePath); err != nil {
-		log.Printf("[%s] fetch failed: %v", name, err)
-		writeState(stateDir, "idle")
+		failActivation(stateDir, name, storePath, "fetch failed: %v", err)
 		return
 	}
 
@@ -246,15 +268,13 @@ func cmdActivate(cfg Config, name, storePath string) {
 	writeState(stateDir, "validating")
 	overlayNix := filepath.Join(storePath, "overlay.nix")
 	if _, err := os.Stat(overlayNix); err != nil {
-		log.Printf("[%s] no overlay.nix at %s", name, overlayNix)
-		writeState(stateDir, "idle")
+		failActivation(stateDir, name, storePath, "no overlay.nix at %s", overlayNix)
 		return
 	}
 
 	manifest, err := evalOverlay(storePath, ov.Config)
 	if err != nil {
-		log.Printf("[%s] eval failed: %v", name, err)
-		writeState(stateDir, "idle")
+		failActivation(stateDir, name, storePath, "eval failed: %v", err)
 		return
 	}
 
@@ -262,14 +282,12 @@ func cmdActivate(cfg Config, name, storePath string) {
 	ensureDataDirOwnership(name, ov.Config, manifest)
 	writeState(stateDir, "provisioning")
 	if err := generateUnits(name, manifest, ov.DependsOn); err != nil {
-		log.Printf("[%s] unit generation failed: %v", name, err)
-		writeState(stateDir, "idle")
+		failActivation(stateDir, name, storePath, "unit generation failed: %v", err)
 		return
 	}
 
 	if err := daemonReload(); err != nil {
-		log.Printf("[%s] daemon-reload failed: %v", name, err)
-		writeState(stateDir, "idle")
+		failActivation(stateDir, name, storePath, "daemon-reload failed: %v", err)
 		return
 	}
 
@@ -282,7 +300,7 @@ func cmdActivate(cfg Config, name, storePath string) {
 	if err := startTarget(name); err != nil {
 		log.Printf("[%s] start failed: %v", name, err)
 		writeState(stateDir, "rolling-back")
-		rollbackOverlay(cfg, name)
+		rollbackOverlay(cfg, name, storePath, fmt.Sprintf("start failed: %v", err))
 		return
 	}
 
@@ -292,7 +310,7 @@ func cmdActivate(cfg Config, name, storePath string) {
 		if !runHealthChecks(name, manifest.Health) {
 			log.Printf("[%s] health checks failed, rolling back", name)
 			writeState(stateDir, "rolling-back")
-			rollbackOverlay(cfg, name)
+			rollbackOverlay(cfg, name, storePath, "health checks failed")
 			return
 		}
 	}
@@ -306,36 +324,39 @@ func cmdActivate(cfg Config, name, storePath string) {
 	})
 	updateGCRoot(stateDir, "gc-root-current", storePath)
 	updateBinSymlinks(cfg.BinDir, manifest.Bins)
+	clearAttempt(stateDir)
 
 	log.Printf("[%s] activated %s", name, storePath)
 }
 
 // cmdRollback restores the previous version of an overlay
 func cmdRollback(cfg Config, name string) {
-	rollbackOverlay(cfg, name)
+	rollbackOverlay(cfg, name, "", "operator-initiated rollback")
 }
 
 // cmdStatus shows the state of all overlays
 func cmdStatus(cfg Config, jsonOutput bool) {
 	type StatusEntry struct {
-		Name     string        `json:"name"`
-		Package  string        `json:"package"`
-		State    string        `json:"state"`
-		Current  *OverlayState `json:"current"`
-		Previous *OverlayState `json:"previous"`
-		Enabled  bool          `json:"enabled"`
+		Name        string         `json:"name"`
+		Package     string         `json:"package"`
+		State       string         `json:"state"`
+		Current     *OverlayState  `json:"current"`
+		Previous    *OverlayState  `json:"previous"`
+		LastAttempt *AttemptRecord `json:"lastAttempt"`
+		Enabled     bool           `json:"enabled"`
 	}
 
 	var entries []StatusEntry
 	for name, ov := range cfg.Overlays {
 		stateDir := filepath.Join(cfg.StateDir, name)
 		entry := StatusEntry{
-			Name:     name,
-			Package:  ov.Package,
-			State:    readState(stateDir),
-			Current:  loadCurrentState(cfg.StateDir, name),
-			Previous: loadPreviousState(cfg.StateDir, name),
-			Enabled:  ov.Enabled,
+			Name:        name,
+			Package:     ov.Package,
+			State:       readState(stateDir),
+			Current:     loadCurrentState(cfg.StateDir, name),
+			Previous:    loadPreviousState(cfg.StateDir, name),
+			LastAttempt: loadAttempt(cfg.StateDir, name),
+			Enabled:     ov.Enabled,
 		}
 		entries = append(entries, entry)
 	}
@@ -350,6 +371,9 @@ func cmdStatus(cfg Config, jsonOutput bool) {
 				sp = e.Current.StorePath
 			}
 			fmt.Printf("%-20s %-12s %-10s %s\n", e.Name, e.State, enabledStr(e.Enabled), sp)
+			if a := e.LastAttempt; a != nil {
+				fmt.Printf("%-20s   last attempt x%d %s: %s (%s)\n", "", a.Attempts, a.State, a.Reason, a.StorePath)
+			}
 		}
 	}
 }
@@ -766,12 +790,22 @@ func ensureDataDirOwnership(name string, config map[string]string, manifest *Ove
 	}
 }
 
-func rollbackOverlay(cfg Config, name string) {
+// rollbackOverlay restores the previous version of an overlay. failedPath and
+// reason describe the activation that triggered the rollback; they are recorded
+// so a later check cycle knows that path was already tried and lost.
+//
+// A successful rollback ends in "rolled-back", not "permanent": the services are
+// running, but deliberately not running what the registry advertises, and those
+// two situations must not be indistinguishable from the outside.
+func rollbackOverlay(cfg Config, name, failedPath, reason string) {
 	stateDir := filepath.Join(cfg.StateDir, name)
 	previous := loadPreviousState(cfg.StateDir, name)
 	if previous == nil {
 		log.Printf("[%s] no previous version to rollback to", name)
-		writeState(stateDir, "idle")
+		if failedPath != "" {
+			recordAttempt(stateDir, failedPath, "failed", reason+"; no previous version to roll back to")
+		}
+		writeState(stateDir, "failed")
 		return
 	}
 
@@ -783,7 +817,10 @@ func rollbackOverlay(cfg Config, name string) {
 	manifest, err := evalOverlay(previous.StorePath, ov.Config)
 	if err != nil {
 		log.Printf("[%s] rollback eval failed: %v", name, err)
-		writeState(stateDir, "idle")
+		if failedPath != "" {
+			recordAttempt(stateDir, failedPath, "failed", fmt.Sprintf("%s; rollback eval failed: %v", reason, err))
+		}
+		writeState(stateDir, "failed")
 		return
 	}
 
@@ -798,7 +835,12 @@ func rollbackOverlay(cfg Config, name string) {
 	os.Remove(filepath.Join(stateDir, "previous.json"))
 	os.Remove(filepath.Join(stateDir, "gc-root-previous"))
 
-	writeState(stateDir, "permanent")
+	if failedPath != "" {
+		recordAttempt(stateDir, failedPath, "rolled-back", reason)
+	} else {
+		clearAttempt(stateDir)
+	}
+	writeState(stateDir, "rolled-back")
 	log.Printf("[%s] rolled back to %s", name, previous.StorePath)
 }
 
@@ -887,6 +929,85 @@ func rotatePrevious(stateDir string) {
 			}
 		}
 	}
+}
+
+// failActivation records a terminal activation failure: both the reason and the
+// store path that caused it go to disk. Recording the attempted path is what
+// lets the next check cycle recognise a known-bad version instead of treating
+// it as new work.
+func failActivation(stateDir, name, storePath, format string, args ...interface{}) {
+	reason := fmt.Sprintf(format, args...)
+	log.Printf("[%s] %s", name, reason)
+	recordAttempt(stateDir, storePath, "failed", reason)
+	writeState(stateDir, "failed")
+}
+
+// recordAttempt persists the outcome of an activation that did not end
+// permanent. Repeated failures against the same store path increment the
+// counter that drives retry backoff; a different path resets it.
+func recordAttempt(stateDir, storePath, state, reason string) {
+	attempts := 1
+	if prev := loadAttemptFile(filepath.Join(stateDir, "last-attempt.json")); prev != nil && prev.StorePath == storePath {
+		attempts = prev.Attempts + 1
+	}
+	rec := AttemptRecord{
+		StorePath: storePath,
+		State:     state,
+		Reason:    reason,
+		At:        time.Now().Unix(),
+		Attempts:  attempts,
+	}
+	data, _ := json.MarshalIndent(rec, "", "  ")
+	os.MkdirAll(stateDir, 0755)
+	os.WriteFile(filepath.Join(stateDir, "last-attempt.json"), data, 0644)
+}
+
+func clearAttempt(stateDir string) {
+	os.Remove(filepath.Join(stateDir, "last-attempt.json"))
+}
+
+func loadAttempt(baseDir, name string) *AttemptRecord {
+	return loadAttemptFile(filepath.Join(baseDir, name, "last-attempt.json"))
+}
+
+func loadAttemptFile(path string) *AttemptRecord {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var rec AttemptRecord
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return nil
+	}
+	return &rec
+}
+
+const maxRetryBackoff = 6 * time.Hour
+
+// backoffRemaining reports how long to keep skipping a store path that already
+// failed. The delay doubles per attempt from the poll interval up to a six-hour
+// ceiling, so a permanently broken version settles into a few retries a day
+// instead of one every poll — while a transient failure still recovers on its
+// own without operator involvement.
+func backoffRemaining(attempt *AttemptRecord, pollInterval string) time.Duration {
+	base, err := time.ParseDuration(pollInterval)
+	if err != nil || base <= 0 {
+		base = 5 * time.Minute
+	}
+
+	delay := base
+	for i := 1; i < attempt.Attempts && delay < maxRetryBackoff; i++ {
+		delay *= 2
+	}
+	if delay > maxRetryBackoff {
+		delay = maxRetryBackoff
+	}
+
+	elapsed := time.Since(time.Unix(attempt.At, 0))
+	if elapsed >= delay {
+		return 0
+	}
+	return delay - elapsed
 }
 
 func enabledStr(enabled bool) string {
