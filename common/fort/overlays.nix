@@ -151,6 +151,32 @@ in
       };
     }
 
+    # Overlay status capability — lets CI (and agents) observe what a host
+    # is actually running. `refresh` is deliberately fire-and-forget, so it
+    # returns before activation completes; this is the read side that makes
+    # the outcome of that activation observable.
+    {
+      fort.host.capabilities.overlay = {
+        handler = pkgs.writeShellScript "handle-overlay" ''
+          set -euo pipefail
+          input=$(${pkgs.coreutils}/bin/cat)
+          overlay=$(echo "$input" | ${pkgs.jq}/bin/jq -r '.overlay // empty')
+          status=$(${fort-overlay-manager}/bin/fort-overlay-manager status --json)
+          if [ -n "$overlay" ]; then
+            echo "$status" | ${pkgs.jq}/bin/jq --arg n "$overlay" \
+              'map(select(.name == $n)) | if length == 0
+                 then {error: "overlay not found", overlay: $n}
+                 else .[0] end'
+          else
+            echo "$status"
+          fi
+        '';
+        mode = "rpc";
+        description = "Report overlay activation state and live store paths";
+        allowed = [ "ci" "dev-sandbox" ];
+      };
+    }
+
     # State directory and bin directory
     {
       systemd.tmpfiles.rules = [
