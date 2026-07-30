@@ -33,7 +33,7 @@ rec {
         terminalUrl = "http://lordhenry:8900/v1/tiamat/invocations/terminal";
         issuanceUrl = "http://lordhenry:8900/v1/tiamat/entitlements";
         inferenceBaseUrl = "http://lordhenry:8900";
-        wardenCommand = "/run/overlays/bin/wings-warden -server-url http://joker:8910 -claude /run/current-system/sw/bin/claude -mcp /run/overlays/bin/wings-mcp -forge-username wings-warden -forge-password-file /run/secrets/overlay-wings-forgejoPasswordFile";
+        wardenCommand = "/run/overlays/bin/wings-warden -server-url http://joker:8910 -terminal-executor herdr -herdr /run/overlays/bin/herdr -herdr-home /var/lib/wings-herdr -harness-launcher /run/overlays/bin/wings-harness-launcher -claude /run/current-system/sw/bin/claude -mcp /run/overlays/bin/wings-mcp -forge-username wings-warden -forge-password-file /run/secrets/overlay-wings-forgejoPasswordFile";
         keyId = "bootstrap-2026-07-23";
         signingKeyPath = "fort/wings/signing-key";
       };
