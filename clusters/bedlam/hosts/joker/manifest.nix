@@ -93,53 +93,6 @@ rec {
         description = "Wings standalone warden";
       };
 
-      # Parallel local-placement canary. It deliberately shares the proven
-      # dedicated Wings Herdr session while keeping its flight ledger,
-      # placement ledger, workspace root, and HTTP endpoint separate from the
-      # Kobold-backed production path. KillMode=process is load-bearing: a
-      # server restart must leave its locally placed Warden alive for adoption.
-      config.systemd.services.wings-local-canary = {
-        description = "Wings local-placement canary";
-        wantedBy = [ "multi-user.target" ];
-        after = [ "network-online.target" "overlay-wings.target" "overlay-coffer.target" ];
-        wants = [ "network-online.target" ];
-        path = [
-          pkgs.bash
-          pkgs.coreutils
-          pkgs.git
-          pkgs.nix
-          (import ../../../../pkgs/claude-code { inherit pkgs; })
-        ];
-        environment.HOME = "/var/lib/wings";
-        serviceConfig = {
-          User = "wings";
-          Group = "wings";
-          StateDirectory = "wlc";
-          WorkingDirectory = "/var/lib/wlc";
-          Restart = "on-failure";
-          RestartSec = "2s";
-          KillMode = "process";
-          NoNewPrivileges = true;
-        };
-        script = ''
-          exec /run/overlays/bin/wings-server \
-            -listen :8911 \
-            -state /var/lib/wlc/flights.json \
-            -workspace-root /var/lib/wlc/flights \
-            -placement local \
-            -placement-state /var/lib/wlc/local-attempts.json \
-            -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal \
-            -issuance-url http://lordhenry:8900/v1/tiamat/entitlements \
-            -inference-base-url http://lordhenry:8900 \
-            -warden-command '/run/overlays/bin/wings-warden -server-url http://127.0.0.1:8911 -terminal-executor herdr -herdr /run/overlays/bin/herdr -herdr-home /var/lib/wings-herdr -harness-launcher /run/overlays/bin/wings-harness-launcher -claude /run/current-system/sw/bin/claude -mcp /run/overlays/bin/wings-mcp -forge-username wings-warden -forge-password-file /run/secrets/overlay-wings-forgejoPasswordFile' \
-            -issuer fort:wings \
-            -audience tiamat-claude-gateway \
-            -key-id bootstrap-2026-07-23 \
-            -signing-key-path fort/wings/signing-key \
-            -cofferd-socket /run/cofferd/coffer.sock
-        '';
-      };
-
       # ---- Coffer client daemon (cofferd) ----
       # This requests read-only access to the temporary Joker-local signing
       # key. The key signs short-lived flight capabilities; provider credentials
