@@ -12,6 +12,7 @@
 }:
 let
   domain = rootManifest.fortConfig.settings.domain;
+  lanIpv4Prefix = rootManifest.fortConfig.settings.lan.ipv4Prefix;
 
   inherit (import ./service-lib.nix) subdomainOf;
 
@@ -37,6 +38,12 @@ let
 
   # Get services that need LAN DNS (non-vpn visibility)
   lanDnsServices = builtins.filter (svc: svc.visibility != "vpn") config.fort.cluster.services;
+
+  # Services opting into a direct LAN port (nginx bypass). See lanDirect in
+  # common/fort-options.nix.
+  lanDirectServices = builtins.filter
+    (svc: (svc.lanDirect or false) && svc.port != null)
+    config.fort.cluster.services;
 in
 {
   config = lib.mkMerge [
@@ -111,6 +118,23 @@ in
           };
         }
       ) lanDnsServices);
+    })
+
+    # Direct LAN port exposure (nginx bypass) for services with lanDirect.
+    #
+    # Scoped to the LAN source prefix rather than a global allowedTCPPorts:
+    # a global allowance would also expose the port to the VPN mesh and to
+    # anything else that routes to this host, which for a localBypass service
+    # means exposing it past its own auth wall. The source match is the whole
+    # point of this block — do not "simplify" it into allowedTCPPorts.
+    #
+    # Plain `iptables`, never the `ip46tables` helper: this is an IPv4 prefix,
+    # and feeding it to ip6tables would fail the firewall unit at activation.
+    (lib.mkIf (lanDirectServices != []) {
+      networking.firewall.extraCommands = lib.concatMapStrings (svc: ''
+        iptables -w -A nixos-fw -p tcp -s ${lanIpv4Prefix} --dport ${toString svc.port} \
+          -m comment --comment "fort-lan-direct:${svc.name}" -j nixos-fw-accept
+      '') lanDirectServices;
     })
   ];
 }

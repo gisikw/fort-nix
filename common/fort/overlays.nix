@@ -111,6 +111,7 @@ let
         subdomain = ov.expose.subdomain or null;
         port = ov.expose.port;
         visibility = ov.expose.visibility or "vpn";
+        lanDirect = ov.expose.lanDirect or false;
         maxBodySize = ov.expose.maxBodySize or null;
         sso = ov.expose.sso or {};
       }]

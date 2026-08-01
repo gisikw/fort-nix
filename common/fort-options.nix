@@ -53,6 +53,24 @@
                   description = "The visibility level for this service.";
                 };
 
+                lanDirect = lib.mkOption {
+                  type = bool;
+                  default = false;
+                  description = ''
+                    If true, open this service's port directly to the LAN prefix,
+                    bypassing nginx entirely (no TLS, no vhost, no token wall).
+
+                    Intended for appliance clients that cannot tolerate the normal
+                    ingress path — e.g. a kiosk tablet whose WebView stalls on TLS
+                    handshake or captive-portal checks. The firewall rule is scoped
+                    to the LAN source prefix, so this does NOT expose the port to
+                    the VPN mesh or to any other network.
+
+                    Only meaningful alongside sso.localBypass: a LAN client reaching
+                    the port directly gets whatever the service itself enforces.
+                  '';
+                };
+
                 sso = lib.mkOption {
                   type = submodule {
                     options = {

@@ -111,6 +111,11 @@ rec {
         port = 4300;
         visibility = "public";
         sso = { mode = "token"; vpnBypass = true; localBypass = true; };
+        # The Skylight tablet's WebView cannot reliably complete the normal
+        # https ingress path when the router blocks its vendor/connectivity
+        # traffic, so the kiosk points at http://<lan-ip>:4300 directly.
+        # Firewall rule is LAN-prefix-scoped; not exposed to the mesh.
+        lanDirect = true;
       };
     };
     lair = {
