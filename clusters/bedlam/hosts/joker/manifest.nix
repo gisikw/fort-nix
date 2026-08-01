@@ -114,8 +114,8 @@ rec {
         serviceConfig = {
           User = "wings";
           Group = "wings";
-          StateDirectory = "wings-local-canary";
-          WorkingDirectory = "/var/lib/wings-local-canary";
+          StateDirectory = "wlc";
+          WorkingDirectory = "/var/lib/wlc";
           Restart = "on-failure";
           RestartSec = "2s";
           KillMode = "process";
@@ -124,10 +124,10 @@ rec {
         script = ''
           exec /run/overlays/bin/wings-server \
             -listen :8911 \
-            -state /var/lib/wings-local-canary/flights.json \
-            -workspace-root /var/lib/wings-local-canary/flights \
+            -state /var/lib/wlc/flights.json \
+            -workspace-root /var/lib/wlc/flights \
             -placement local \
-            -placement-state /var/lib/wings-local-canary/local-attempts.json \
+            -placement-state /var/lib/wlc/local-attempts.json \
             -terminal-url http://lordhenry:8900/v1/tiamat/invocations/terminal \
             -issuance-url http://lordhenry:8900/v1/tiamat/entitlements \
             -inference-base-url http://lordhenry:8900 \
