@@ -391,7 +391,10 @@ in
       [pair google_calendar]
       a = "google_calendar_remote"
       b = "google_calendar_local"
-      collections = ["from a", "from b"]
+      # Hard-coded (2026-08-02): own ASG cal + shared PTO cal. Shared cals require
+      # opt-in at calendar.google.com/calendar/syncselect before CalDAV exposes them.
+      # Deliberately excludes the Holidays cal (noise).
+      collections = [["kgisi", "kgisi@alpinesg.com", "kgisi@alpinesg.com"], ["asg-pto", "alpinesg.com_c638t8p1ss11ggl758bfg7dnh4@group.calendar.google.com", "asg-pto"]]
       metadata = ["color"]
       conflict_resolution = "a wins"
 
