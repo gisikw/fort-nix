@@ -111,10 +111,18 @@ rec {
       # and this client (ratched) read the same encrypted file.
       secrets = {
         mqttPassword = ../minos/mosquitto-family-hub-password.sops;
+        # The `family` Radicale principal, shared with radicale-provision on
+        # this same host. Reusing the principal rather than minting a hub-only
+        # one is deliberate: the rights file confines `family` to the family/
+        # namespace already, so a separate login would carry an identical
+        # grant. Revisit if the hub ever talks to Radicale off-loopback, or if
+        # rotation independence from the Dashlane/iOS copies starts to matter.
+        caldavPassword = ../../../../apps/radicale/family-password.sops;
       };
       # The overlay runs as `dev`; without this the secret lands root-only
       # and the process cannot authenticate to the broker.
       secretOwners.mqttPassword = { owner = "dev"; group = "users"; mode = "0400"; };
+      secretOwners.caldavPassword = { owner = "dev"; group = "users"; mode = "0400"; };
       expose = {
         subdomain = "hub";
         port = 4300;
