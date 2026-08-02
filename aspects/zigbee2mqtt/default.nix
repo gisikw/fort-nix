@@ -37,6 +37,15 @@ else
       while IFS=: read ieee script_name friendly_name; do
         ${pkgs.yq-go}/bin/yq -i ".$ieee.friendly_name = \"$friendly_name\"" /var/lib/zigbee2mqtt/devices.yaml
       done < <(grep -e '^0x' ${config.sops.secrets.iotManifest.path})
+
+      # Sync external converters from the store. z2m >= 2.0 auto-loads every
+      # .js in this directory; the `external_converters` setting no longer
+      # exists. Wiped and recopied each start so the repo is the source of
+      # truth and removed converters actually disappear.
+      rm -rf /var/lib/zigbee2mqtt/external_converters
+      install -d -m 0755 /var/lib/zigbee2mqtt/external_converters
+      install -m 0644 ${./external-converters}/*.js /var/lib/zigbee2mqtt/external_converters/
+
       export ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD=$(cat ''${CREDENTIALS_DIRECTORY}/mqtt-password)
       exec ${pkgs.zigbee2mqtt}/bin/zigbee2mqtt "$@"
     '';
