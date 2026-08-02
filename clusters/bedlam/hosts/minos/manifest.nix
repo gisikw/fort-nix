@@ -42,8 +42,28 @@ rec {
     }
     {
       name = "mosquitto";
+      # Opened to the fort mesh (VPN-prefix-scoped firewall rule, not the LAN)
+      # so family-hub on ratched can drive lights via zigbee2mqtt directly.
+      mesh = true;
       users = [
         { name = "zigbee2mqtt"; secret = "mosquitto-zigbee2mqtt-password"; }
+        # Least privilege: the wall-tablet hub may read the bridge device list
+        # and drive its one dimmer. It cannot touch locks, sensors, or the
+        # bridge's request topics, so a compromised tablet-facing service
+        # cannot rekey the Zigbee network.
+        {
+          name = "family-hub";
+          secret = "mosquitto-family-hub-password";
+          # Declared here rather than by a consuming module: unlike the other
+          # broker users, family-hub's client lives on another host.
+          passwordFile = ./mosquitto-family-hub-password.sops;
+          acl = [
+            "read zigbee2mqtt/bridge/devices"
+            "read zigbee2mqtt/0xacebe6fffee80f60"
+            "read zigbee2mqtt/0xacebe6fffee80f60/availability"
+            "write zigbee2mqtt/0xacebe6fffee80f60/set"
+          ];
+        }
         { name = "zwave"; secret = "mosquitto-zwave-js-ui-password"; }
         { name = "hass"; secret = "mosquitto-homeassistant-password"; }
         { name = "frigate"; secret = "mosquitto-frigate-password"; }

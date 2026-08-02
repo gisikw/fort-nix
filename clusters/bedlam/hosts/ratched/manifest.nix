@@ -106,6 +106,15 @@ rec {
     family-hub = {
       package = "infra/family-hub";
       config.port = "4300";
+      # Drives the living-room dimmer through zigbee2mqtt on minos directly,
+      # rather than via Home Assistant. Shared credential: the broker (minos)
+      # and this client (ratched) read the same encrypted file.
+      secrets = {
+        mqttPassword = ../minos/mosquitto-family-hub-password.sops;
+      };
+      # The overlay runs as `dev`; without this the secret lands root-only
+      # and the process cannot authenticate to the broker.
+      secretOwners.mqttPassword = { owner = "dev"; group = "users"; mode = "0400"; };
       expose = {
         subdomain = "hub";
         port = 4300;
