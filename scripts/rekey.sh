@@ -69,10 +69,35 @@ for host_dir in "$hosts_root"/*/; do
   host_count=$((host_count + 1))
 
   (
-    # Eval sops.secrets for this host (try nixos first, then darwin)
-    secrets_json=$(nix eval "./${hosts_root}/${host_name}#nixosConfigurations.${host_name}.config.sops.secrets" --json 2>/dev/null \
-      || nix eval "./${hosts_root}/${host_name}#darwinConfigurations.${host_name}.config.sops.secrets" --json 2>/dev/null \
-      || echo "{}")
+    # Eval sops.secrets for this host (try nixos first, then darwin).
+    #
+    # Fail loud. A host whose eval breaks (typo, missing .sops file referenced
+    # by a new module, flake error) used to fall through to `|| echo "{}"`,
+    # which is indistinguishable from "this host consumes no secrets". The
+    # result was silent, destructive and exit-0: the host is dropped from every
+    # secret it consumes, its rules vanish from .sops.yaml, and the affected
+    # files are re-encrypted without it. Losing e.g. ratched from
+    # aspects/mesh/auth-key.sops is only visible by reading the diff.
+    nixos_err=""; darwin_err=""
+    if secrets_json=$(nix eval "./${hosts_root}/${host_name}#nixosConfigurations.${host_name}.config.sops.secrets" --json 2>"$tmpdir/${host_name}.nixos.err"); then
+      :
+    elif secrets_json=$(nix eval "./${hosts_root}/${host_name}#darwinConfigurations.${host_name}.config.sops.secrets" --json 2>"$tmpdir/${host_name}.darwin.err"); then
+      :
+    else
+      nixos_err=$(cat "$tmpdir/${host_name}.nixos.err" 2>/dev/null || true)
+      darwin_err=$(cat "$tmpdir/${host_name}.darwin.err" 2>/dev/null || true)
+      {
+        echo "[rekey] FATAL: could not evaluate sops.secrets for host '${host_name}'."
+        echo "[rekey] Refusing to continue: treating this as \"no secrets\" would"
+        echo "[rekey] silently drop ${host_name} from every secret it consumes."
+        echo "--- nixosConfigurations error ---"
+        echo "$nixos_err"
+        echo "--- darwinConfigurations error ---"
+        echo "$darwin_err"
+      } >&2
+      touch "$tmpdir/EVAL_FAILED"
+      exit 1
+    fi
 
     # Extract unique sopsFile paths (strip nix store prefix)
     sops_files=$(echo "$secrets_json" | jq -r '
@@ -105,6 +130,16 @@ done
 
 echo "[rekey] Waiting for ${host_count} host evaluations..."
 wait
+
+# `wait` does not propagate subshell failures, so an aborted host eval is only
+# visible via this sentinel. Bail before any .sops.yaml is written: a partial
+# host set produces a *plausible-looking* config that silently drops recipients.
+if [[ -f "$tmpdir/EVAL_FAILED" ]]; then
+  echo "[rekey] Aborting: one or more host evaluations failed (see above)." >&2
+  echo "[rekey] .sops.yaml and all encrypted files left untouched." >&2
+  exit 1
+fi
+
 echo "[rekey] Host evaluations complete"
 
 if [[ ! -f "$tmpdir/mappings.tsv" ]]; then
