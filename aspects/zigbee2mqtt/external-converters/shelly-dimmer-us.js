@@ -9,10 +9,19 @@
 // Upstream tracking issue: https://github.com/Koenkk/zigbee2mqtt/issues/31731
 // (EU sibling: https://github.com/Koenkk/zigbee2mqtt/issues/30176)
 //
-// This definition is taken verbatim from the tested one in that issue.
-// Known working:     on/off, brightness, power-on behavior, linkquality
-// Known NOT working: effects, and all power/energy metering (the
-//                    electricityMeter exposes appear but never populate).
+// Known working:     on/off, brightness, power-on behavior, linkquality,
+//                    and power/voltage/current metering (the upstream
+//                    reporter said metering was dead; on our unit it works).
+// Known NOT working: effects.
+//
+// Deviation from the upstream definition: it includes
+//   m.deviceEndpoints({endpoints: {'1': 1, '239': 239}})
+// which makes z2m suffix every published value by endpoint, so the light
+// arrives as `state_1`/`brightness_1` while the root-level `state`/`brightness`
+// keys carry junk (state:"OFF" while state_1:"ON"). Endpoint 239 is Shelly's
+// proprietary WiFi-setup cluster (64513/64514), which nothing here consumes.
+// Dropping deviceEndpoints leaves only endpoint 1, published unsuffixed --
+// which is what family-hub's light widget and HA discovery actually read.
 //
 // Drop this file in {dataDir}/external_converters/; z2m >= 2.0 auto-loads
 // that directory (the old `external_converters` config setting is gone).
@@ -25,9 +34,5 @@ export default {
     model: 'Dimmer US',
     vendor: 'Shelly',
     description: 'Shelly Dimmer Gen4 US (fort-nix external converter)',
-    extend: [
-        m.deviceEndpoints({ endpoints: { '1': 1, '239': 239 } }),
-        m.light(),
-        m.electricityMeter(),
-    ],
+    extend: [m.light(), m.electricityMeter()],
 };
