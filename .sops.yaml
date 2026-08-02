@@ -73,6 +73,24 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+  - path_regex: apps/radicale/collections\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
+  - path_regex: apps/radicale/family-password\.sops$
+    key_groups:
+      - age:
+          # Principals (secrets role)
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
+          # Device keys (consuming hosts)
+          - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
   - path_regex: apps/radicale/htpasswd\.sops$
     key_groups:
       - age:
@@ -273,7 +291,7 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1dcw3fhvhaz2tj6xqq3fkv43h8j640suhafm86as5mr3fpjm4d55s8u0em3 # joker
-  - path_regex: clusters/bedlam/hosts/joker/wings-forgejo-password\.sops$
+  - path_regex: clusters/bedlam/hosts/joker/kobold-worker-token-env\.sops$
     key_groups:
       - age:
           # Principals (secrets role)
@@ -282,7 +300,7 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1dcw3fhvhaz2tj6xqq3fkv43h8j640suhafm86as5mr3fpjm4d55s8u0em3 # joker
-  - path_regex: clusters/bedlam/hosts/joker/kobold-worker-token-env\.sops$
+  - path_regex: clusters/bedlam/hosts/joker/wings-forgejo-password\.sops$
     key_groups:
       - age:
           # Principals (secrets role)
