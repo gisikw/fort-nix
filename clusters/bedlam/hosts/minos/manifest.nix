@@ -32,6 +32,9 @@ rec {
       passwordFile = ./mosquitto-zigbee2mqtt-password.sops;
       mqttSecretName = "mosquitto-zigbee2mqtt-password";
       iot.manifest = ./iot.manifest.sops;
+      # Living-room dimmer: family-hub on ratched subscribes to this topic and
+      # has no other way to learn the current state, so it must be retained.
+      retainDevices = [ "0xacebe6fffee80f60" ];
     }
     {
       name = "zwave-js-ui";

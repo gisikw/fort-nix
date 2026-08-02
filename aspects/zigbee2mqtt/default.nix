@@ -1,5 +1,13 @@
-{ passwordFile, mqttSecretName, iot, deviceProfileManifest, ... }:
-{ config, pkgs, ... }:
+{
+  passwordFile,
+  mqttSecretName,
+  iot,
+  deviceProfileManifest,
+  # IEEE addresses whose state topic should be retained by the broker.
+  retainDevices ? [ ],
+  ...
+}:
+{ config, lib, pkgs, ... }:
 if (deviceProfileManifest.platform or "nixos") != "nixos" then
   throw "fort-nix: aspect 'zigbee2mqtt' is Linux-only (services.zigbee2mqtt, systemd, dialout serial group); remove it from this darwin host's manifest"
 else
@@ -37,6 +45,17 @@ else
       while IFS=: read ieee script_name friendly_name; do
         ${pkgs.yq-go}/bin/yq -i ".$ieee.friendly_name = \"$friendly_name\"" /var/lib/zigbee2mqtt/devices.yaml
       done < <(grep -e '^0x' ${config.sops.secrets.iotManifest.path})
+
+      # Retain state topics for devices whose current value a subscriber needs
+      # on connect. z2m does NOT retain device state topics by default, so a
+      # client that connects between device publishes sees nothing and has no
+      # way to learn the current state — for the wall tablet that means a dead
+      # light widget after every restart until someone touches the switch.
+      # These are per-device options in devices.yaml, same file as the
+      # friendly_name pass above. yq creates the entry if absent.
+${lib.concatMapStrings (ieee: ''
+      ${pkgs.yq-go}/bin/yq -i '.["${ieee}"].retain = true' /var/lib/zigbee2mqtt/devices.yaml
+'') retainDevices}
 
       # Sync external converters from the store. z2m >= 2.0 auto-loads every
       # .js in this directory; the `external_converters` setting no longer
