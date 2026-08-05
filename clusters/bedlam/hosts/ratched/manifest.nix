@@ -45,6 +45,9 @@ rec {
         sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
       };
     };
+    flight = {
+      package = "infra/flight";
+    };
     headjack = {
       package = "infra/headjack";
     };
