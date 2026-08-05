@@ -12,6 +12,7 @@ rec {
     "gitops"
     "ci-runner"
     "agent-debug"
+    "herdr-fleet"
   ];
 
   overlays = {
