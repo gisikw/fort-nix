@@ -14,6 +14,14 @@
 //                    reporter said metering was dead; on our unit it works).
 // Known NOT working: effects.
 //
+// CALIBRATION: this dimmer ignores every level command until Shelly's
+// calibration pass has completed. Before it does, the device still reports
+// healthy and lies convincingly -- on/off works, metering works, z2m accepts
+// `brightness` and `brightness_step`, updates its own state, and the bulb
+// stays at full. Nothing in the Zigbee layer or in this converter surfaces
+// the difference. Diagnosed the hard way 2026-08-08; do not go looking for a
+// converter bug before confirming the device is calibrated.
+//
 // Deviation from the upstream definition: it includes
 //   m.deviceEndpoints({endpoints: {'1': 1, '239': 239}})
 // which makes z2m suffix every published value by endpoint, so the light
