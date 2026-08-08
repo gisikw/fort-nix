@@ -65,6 +65,12 @@ rec {
             "read zigbee2mqtt/0xacebe6fffee80f60"
             "read zigbee2mqtt/0xacebe6fffee80f60/availability"
             "write zigbee2mqtt/0xacebe6fffee80f60/set"
+            # Ask the dimmer to report. The device volunteers state only a
+            # handful of times a day, so a hub that could only listen spent
+            # most of its life holding a snapshot too old to trust and showed
+            # the card as dead. Strictly narrower than /set: this reads a
+            # device it may already read, and commands nothing.
+            "write zigbee2mqtt/0xacebe6fffee80f60/get"
           ];
         }
         { name = "zwave"; secret = "mosquitto-zwave-js-ui-password"; }
