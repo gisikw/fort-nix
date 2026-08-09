@@ -9,6 +9,7 @@ rec {
     "audiobookshelf"
     "calibre-web"
     "backup-hub"
+    "media-ingest"
   ];
 
   aspects = [

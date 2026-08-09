@@ -12,6 +12,7 @@ rec {
     "sonarr"
     "readarr"
     "qbittorrent"
+    "media-egress"
   ];
 
   aspects = [

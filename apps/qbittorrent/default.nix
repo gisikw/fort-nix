@@ -57,7 +57,10 @@ let
   # actual USB SSD.
   ensureDirs = pkgs.writeShellScript "qbittorrent-ensure-dirs" ''
     set -euo pipefail
-    install -d -o qbittorrent -g qbittorrent -m 0755 ${completePath} ${incompletePath}
+    # Mode 2775: setgid so torrent subdirectories inherit group qbittorrent,
+    # and group-write so the ingest puller can unlink files after copying them
+    # (unlink needs write on the containing directory, not the file).
+    install -d -o qbittorrent -g qbittorrent -m 2775 ${completePath} ${incompletePath}
   '';
 in
 {
