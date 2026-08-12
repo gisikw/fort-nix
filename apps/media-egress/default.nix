@@ -84,14 +84,27 @@ in
   # group-owned by qbittorrent, which the ingest user is a member of.
   systemd.services.qbittorrent.serviceConfig.UMask = lib.mkForce "0002";
 
-  # Empty directory skeletons are left behind after --remove-source-files
-  # (rsync removes files, never directories). q cleans up after itself rather
-  # than widening what ursula is allowed to do over SSH.
+  # Two housekeeping jobs on the handoff directory, both run by q rather than
+  # widening what ursula is allowed to do over SSH.
   #
-  # The -mmin +60 guard keeps this from racing a torrent that qbittorrent has
-  # just created but not yet written into.
+  # 1. Normalize group-write on torrent directories. UMask=0002 above only
+  #    governs directories qbittorrent creates from here on. Anything that
+  #    predates this app -- or is hand-placed, moved in, or restored from
+  #    backup -- lands 0755 and the puller cannot unlink its contents, because
+  #    unlink needs write on the *containing* directory, not the file. The
+  #    symptom is a pull that copies perfectly, fails every delete, exits 23,
+  #    and re-transfers the same data forever. Enforced continuously rather
+  #    than repaired once, since the non-umask paths in are always open.
+  #
+  # 2. Remove the empty directory skeletons left behind once the files are
+  #    gone (rsync removes files, never directories).
+  #
+  # The -mmin +60 guard keeps the reap from racing a torrent that qbittorrent
+  # has just created but not yet written into. The normalize pass deliberately
+  # has no such guard: making a directory group-writable is harmless to an
+  # in-flight download, and delaying it just delays the first successful pull.
   systemd.services.ingest-reap = {
-    description = "Remove emptied torrent directories from the ingest handoff";
+    description = "Normalize and reap the ingest handoff directory";
     serviceConfig = {
       Type = "oneshot";
       User = "qbittorrent";
@@ -99,6 +112,9 @@ in
     };
     unitConfig.ConditionPathIsMountPoint = "/ingest";
     script = ''
+      ${pkgs.findutils}/bin/find ${completePath} -mindepth 1 -type d \
+        ! -perm -g+w -exec ${pkgs.coreutils}/bin/chmod g+ws {} + 2>/dev/null || true
+
       ${pkgs.findutils}/bin/find ${completePath} -mindepth 1 -type d -empty \
         -mmin +60 -delete 2>/dev/null || true
     '';
