@@ -733,5 +733,11 @@ in
       visibility = "public";
       sso = { mode = "identity"; groups = [ "admin" ]; };
     }
+    {
+      name = "familiar";
+      port = 1692;
+      visibility = "public";
+      sso = { mode = "identity"; groups = [ "admin" ]; };
+    }
   ];
 }
