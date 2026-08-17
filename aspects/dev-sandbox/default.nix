@@ -737,7 +737,7 @@ in
       name = "familiar";
       port = 1692;
       visibility = "public";
-      sso = { mode = "identity"; groups = [ "admin", "infra" ]; };
+      sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
     }
   ];
 }
