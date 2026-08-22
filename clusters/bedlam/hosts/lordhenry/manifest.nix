@@ -632,11 +632,6 @@ rec {
           ];
         }
       );
-      tiamatAnthropicSecretDropin = pkgs.writeText "tiamat-anthropic-secret-file.conf" ''
-        [Service]
-        Environment=TIAMAT_ANTHROPIC_API_KEY_FILE=${config.sops.secrets.tiamat-anthropic-api-key.path}
-        UnsetEnvironment=ANTHROPIC_API_KEY
-      '';
     in
     {
       config.environment.etc."tiamat/wings-gateway.json".source = tiamatWingsGatewayJson;
@@ -856,11 +851,22 @@ rec {
       # Do not expose ANTHROPIC_API_KEY globally: Claude Code subprocesses must
       # continue using their OAuth state rather than accidentally switching to
       # API-key auth inherited from the parent process.
-      config.system.activationScripts.tiamatAnthropicSecretDropin.text = ''
-        install -D -m 0644 ${tiamatAnthropicSecretDropin} /etc/systemd/system/overlay-tiamat.service.d/10-anthropic-secret-file.conf
-        # Pre-flattening unit name (q-b5f9ad4b) — drop the stale drop-in dir
-        rm -rf /etc/systemd/system/overlay-tiamat-tiamat.service.d
-      '';
+      #
+      # Declarative drop-in (not an activation script): /etc is immutable on
+      # 25.11's etc-overlay, so imperative installs into /etc fail the whole
+      # switch. environment.etc cannot nest under systemd/system (that path is
+      # the unit-tree symlink), so use systemd.units with asDropin, which
+      # renders overlay-tiamat.service.d/overrides.conf inside the unit tree.
+      # The unit itself is created by fort-overlay-manager at runtime; drop-in
+      # directories merge across systemd search paths regardless.
+      config.systemd.units."overlay-tiamat.service" = {
+        overrideStrategy = "asDropin";
+        text = ''
+          [Service]
+          Environment=TIAMAT_ANTHROPIC_API_KEY_FILE=${config.sops.secrets.tiamat-anthropic-api-key.path}
+          UnsetEnvironment=ANTHROPIC_API_KEY
+        '';
+      };
 
       config.systemd.services.tiamat-profiles-provision = {
         description = "Provision Tiamat profile configuration";
