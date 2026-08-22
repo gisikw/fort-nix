@@ -82,8 +82,14 @@ rec {
     tiamat-router = {
       package = "infra/tiamat-router";
       config.port = "8901";
-      # Host-local until an authenticated machine-client exposure model is
-      # chosen; identity SSO would not fit the router's API clients.
+      expose = {
+        subdomain = "tiamat-router";
+        port = 8901;
+        visibility = "public";
+        maxBodySize = "100m";
+      };
+      # The router enforces its own per-client bearer tokens; an SSO or fort
+      # token gate would prevent API clients from forwarding that credential.
     };
     # Coffer client daemon: leases secrets from drhorrible's coffer-server and
     # serves them to same-host workloads over a peer-credential unix socket
