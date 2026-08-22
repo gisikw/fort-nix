@@ -3,12 +3,12 @@
 , serviceName ? "llama"
 , model ? {
     repo = "unsloth/Qwen3.8-27B-GGUF";
-    file = "Qwen3.8-27B-Q8_0.gguf";
-    sha256 = "a680f44a06920e5d689774823782006aa3acc8db95750323373b24139b67e348";
+    file = "Qwen3.8-27B-UD-Q4_K_XL.gguf";
+    sha256 = "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e";
   }
 , mmproj ? null
 , extraModels ? [ ]
-, contextSize ? 200000
+, contextSize ? 262144
 , gpuLayers ? 999
 , enableMtp ? true
 , ...
