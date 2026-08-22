@@ -309,6 +309,7 @@ rec {
         "hoard" = {};
         "phylactery" = {};
         "tiamat" = {};
+        "tiamat-router" = {};
         "grotto" = {};
       };
     };

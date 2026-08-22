@@ -79,6 +79,12 @@ rec {
         };
       };
     };
+    tiamat-router = {
+      package = "infra/tiamat-router";
+      config.port = "8901";
+      # Host-local until an authenticated machine-client exposure model is
+      # chosen; identity SSO would not fit the router's API clients.
+    };
     # Coffer client daemon: leases secrets from drhorrible's coffer-server and
     # serves them to same-host workloads over a peer-credential unix socket
     # (SO_PEERCRED uid -> workload -> grant, AMENDMENT 1). Users, config TOML,
@@ -680,6 +686,14 @@ rec {
         group = "grotto";
         description = "Grotto service user";
         home = "/home/dev/.local/share/grotto";
+        createHome = true;
+      };
+      config.users.groups.tiamat-router = { };
+      config.users.users.tiamat-router = {
+        isSystemUser = true;
+        group = "tiamat-router";
+        description = "Tiamat Router service user";
+        home = "/var/lib/tiamat-router";
         createHome = true;
       };
       config.users.groups.tiamat = { };
