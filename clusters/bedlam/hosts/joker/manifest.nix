@@ -12,6 +12,7 @@ rec {
     "gitops"
     "ci-runner"
     "agent-debug"
+    "familiar-test"
     "herdr-fleet"
   ];
 
