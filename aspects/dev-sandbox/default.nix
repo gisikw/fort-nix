@@ -253,6 +253,7 @@ in
       # Fort agent configuration for dev-sandbox identity
       export FORT_SSH_KEY="${agentKeyPath}"
       export FORT_ORIGIN="dev-sandbox"
+      export TIAMAT_ROUTER_TOKEN_FILE="/run/secrets/tiamat-router-token"
 
       # Source API keys and credentials
       if [[ -r /var/lib/fort/dev-sandbox/env ]]; then
@@ -307,6 +308,16 @@ in
     owner = user;
     group = "users";
     mode = "0600";
+  };
+
+  # Shared bootstrap credential for authenticated tiamat-router calls.
+  sops.secrets.tiamat-router-token = {
+    sopsFile = ./tiamat-router-token.sops;
+    format = "binary";
+    path = "/run/secrets/tiamat-router-token";
+    owner = user;
+    group = "users";
+    mode = "0400";
   };
 
   # Agent key for fort signing (readable by dev user)

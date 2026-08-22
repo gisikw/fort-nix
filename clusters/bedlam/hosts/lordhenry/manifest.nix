@@ -81,7 +81,10 @@ rec {
     };
     tiamat-router = {
       package = "infra/tiamat-router";
-      config.port = "8901";
+      config = {
+        port = "8901";
+        configPath = "/var/lib/tiamat-router/bootstrap.json";
+      };
       expose = {
         subdomain = "tiamat-router";
         port = 8901;
@@ -819,6 +822,14 @@ rec {
         "d /run/cofferd 0750 coffer coffer -"
       ];
 
+      config.sops.secrets.tiamat-router-token = {
+        sopsFile = ../../../../aspects/dev-sandbox/tiamat-router-token.sops;
+        format = "binary";
+        owner = "tiamat-router";
+        group = "tiamat-router";
+        mode = "0400";
+      };
+
       config.sops.secrets.tiamat-exo-opus-prompt = {
         sopsFile = ./exo-opus-prompt.sops;
         format = "binary";
@@ -871,6 +882,42 @@ rec {
           [Service]
           Environment=TIAMAT_ANTHROPIC_API_KEY_FILE=${config.sops.secrets.tiamat-anthropic-api-key.path}
           UnsetEnvironment=ANTHROPIC_API_KEY
+        '';
+      };
+
+      # Runtime assembly keeps the bearer token out of the Nix store. The
+      # overlay unit requires this oneshot through the drop-in below, including
+      # when fort-overlay-manager creates or restarts the unit after boot.
+      config.systemd.services.tiamat-router-bootstrap-provision = {
+        description = "Provision tiamat-router bootstrap configuration";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "overlay-tiamat-router.service" ];
+        after = [ "sops-nix.service" ];
+        restartTriggers = [ config.sops.secrets.tiamat-router-token.sopsFile ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          set -euo pipefail
+          token="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets.tiamat-router-token.path})"
+          test -n "$token"
+          umask 077
+          ${pkgs.jq}/bin/jq -n --arg token "$token" \
+            '{clients: [{id: "dev-sandbox", token: $token}], providers: []}' \
+            > /var/lib/tiamat-router/bootstrap.json.tmp
+          ${pkgs.coreutils}/bin/install -o tiamat-router -g tiamat-router -m 0400 \
+            /var/lib/tiamat-router/bootstrap.json.tmp /var/lib/tiamat-router/bootstrap.json
+          ${pkgs.coreutils}/bin/rm -f /var/lib/tiamat-router/bootstrap.json.tmp
+        '';
+      };
+
+      config.systemd.units."overlay-tiamat-router.service" = {
+        overrideStrategy = "asDropin";
+        text = ''
+          [Unit]
+          Requires=tiamat-router-bootstrap-provision.service
+          After=tiamat-router-bootstrap-provision.service
         '';
       };
 
