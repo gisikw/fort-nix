@@ -8,9 +8,9 @@ rec {
     {
       name = "llama-server";
       mmproj = {
-        repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
+        repo = "unsloth/Qwen3.8-27B-GGUF";
         file = "mmproj-F16.gguf";
-        sha256 = "eacf610d1ee4bd5ed0197a0777dd8f4fceb8eefa27009067c7d496cb68fbde45";
+        sha256 = "cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e";
       };
     }
     # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.

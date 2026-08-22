@@ -1,7 +1,7 @@
 { pkgs, cuda ? true, cudaArch ? "86" }:
 
 let
-  version = "9181";
+  version = "10584";
   cudaPackages = pkgs.cudaPackages_12_8;
   stdenv = if cuda then cudaPackages.backendStdenv else pkgs.stdenv;
 in
@@ -13,7 +13,7 @@ stdenv.mkDerivation {
     owner = "ggml-org";
     repo = "llama.cpp";
     tag = "b${version}";
-    hash = "sha256-FQGfvpgKXXyShv6pZC4e9C6u7aTC8vFhyqTnNEwWnDI=";
+    hash = "sha256-iRvsfgomUR+J29lnMJNKmzjypMz4Mi71jvNQ1UDwRNw=";
   };
 
   nativeBuildInputs = [

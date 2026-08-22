@@ -2,9 +2,9 @@
 , subdomain ? null
 , serviceName ? "llama"
 , model ? {
-    repo = "unsloth/Qwen3.6-27B-MTP-GGUF";
-    file = "Qwen3.6-27B-Q8_0.gguf";
-    sha256 = "9408dcb356cc061a05c139e5647cbde0698ff980c6a69f7fc214e9989f86cfa8";
+    repo = "unsloth/Qwen3.8-27B-GGUF";
+    file = "Qwen3.8-27B-Q8_0.gguf";
+    sha256 = "a680f44a06920e5d689774823782006aa3acc8db95750323373b24139b67e348";
   }
 , mmproj ? null
 , extraModels ? [ ]
