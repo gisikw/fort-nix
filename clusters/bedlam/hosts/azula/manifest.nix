@@ -27,6 +27,17 @@ rec {
     {
       config.fort.host = { inherit roles apps aspects; };
 
+      # Manual Familiar rewrite test deployment. Keep the account declarative so
+      # GitOps activation does not remove the long-running Presence/supervisor
+      # owner created during pre-cutover testing.
+      config.users.users.familiar = {
+        isNormalUser = true;
+        home = "/home/familiar";
+        createHome = true;
+        shell = pkgs.bashInteractive;
+        openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
+      };
+
       # Office captive-portal survival kit. Azula may need to register on
       # unfamiliar networks before it can fetch anything else, so keep both a
       # graphical browser path and text-mode/debug tools available locally.
