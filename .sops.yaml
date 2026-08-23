@@ -202,6 +202,7 @@ creation_rules:
           - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
+          - age1x0z78gpnpgkxpzm22wvcvlaylhkj58ds6vvsjqtrrvlrn7cducyqdhv6j6 # azula
           - age13g9zncylyhf46r90fd8qkhw6lhnkp43qnmkaxy4rtsw8xsd9xudsd8uhzx # lordhenry
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
   - path_regex: aspects/egress-vpn/egress-vpn-conf\.sops$

@@ -38,6 +38,17 @@ rec {
         openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
       };
 
+      # Shared credential used by the Familiar rewrite stack to authenticate to
+      # tiamat-router without placing the token in the Nix store.
+      config.sops.secrets.tiamat-router-token = {
+        sopsFile = ../../../../aspects/dev-sandbox/tiamat-router-token.sops;
+        format = "binary";
+        path = "/run/secrets/tiamat-router-token";
+        owner = "familiar";
+        group = "users";
+        mode = "0400";
+      };
+
       # Office captive-portal survival kit. Azula may need to register on
       # unfamiliar networks before it can fetch anything else, so keep both a
       # graphical browser path and text-mode/debug tools available locally.
