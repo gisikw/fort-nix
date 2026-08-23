@@ -7,6 +7,7 @@
     sha256 = "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e";
   }
 , mmproj ? null
+, modelAlias ? null
 , extraModels ? [ ]
 , contextSize ? 262144
 , gpuLayers ? 999
@@ -20,6 +21,7 @@ let
   llamaPackage = if accelerator == "cuda" then llama-cpp-cuda else llama-cpp-cpu;
   modelStore = "/var/lib/llama-server/models";
   port = 8012;
+  effectiveModelAlias = if modelAlias != null then modelAlias else lib.removeSuffix ".gguf" model.file;
 
   models = [ model ] ++ extraModels;
   artifacts = models ++ lib.optional (mmproj != null) mmproj;
@@ -146,6 +148,7 @@ in
         "--host 0.0.0.0"
         "--port ${toString port}"
         "--model ${modelStore}/${model.file}"
+        "--alias ${effectiveModelAlias}"
         "--jinja"
         "--parallel 1"
         "--ctx-size ${toString contextSize}"
