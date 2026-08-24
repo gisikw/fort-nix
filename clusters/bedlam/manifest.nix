@@ -311,6 +311,7 @@ rec {
         "tiamat" = {};
         "tiamat-router" = {};
         "grotto" = {};
+        "kestrel" = {};
       };
     };
   };
