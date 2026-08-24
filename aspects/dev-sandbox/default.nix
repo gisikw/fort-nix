@@ -750,5 +750,11 @@ in
       visibility = "public";
       sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
     }
+    {
+      name = "rote";
+      port = 7226;
+      visibility = "public";
+      sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
+    }
   ];
 }
