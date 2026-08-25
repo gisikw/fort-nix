@@ -2,18 +2,21 @@
 
 pkgs.buildNpmPackage rec {
   pname = "pi-coding-agent";
-  version = "0.55.1";
+  version = "0.84.2";
 
   src = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/@mariozechner/pi-coding-agent/-/pi-coding-agent-${version}.tgz";
-    hash = "sha256-Qjuv8GzMdENnNwX5xo/Yfh4aRhn7N7pIlXrkeoHGJMk=";
+    url = "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-${version}.tgz";
+    hash = "sha256-9dv6prGh2inmg4pEFkC8OsU/Eh18L3wCvcUde5rOMdc=";
   };
 
-  npmDepsHash = "sha256-OpN1d6OA5x0m+38YVSMTSdiFvUAtlFtRGJ/6eSaKcYw=";
+  npmDepsHash = "sha256-bqq2urTpODdRQ1vKY1Gkf4KkQcMP1mStU6xjblI8V2k=";
 
   postPatch = ''
+    rm npm-shrinkwrap.json
     cp ${./package-lock.json} package-lock.json
   '';
+
+  npmFlags = [ "--legacy-peer-deps" ];
 
   dontNpmBuild = true;
 
