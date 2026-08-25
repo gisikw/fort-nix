@@ -83,6 +83,10 @@ rec {
         isSystemUser = true;
         group = "golem";
         home = "/var/lib/golem";
+        # tmux executes worker commands via the user's shell; nologin (the
+        # isSystemUser default) kills every worker pane at birth. Workers need
+        # a real shell.
+        shell = pkgs.bashInteractive;
       };
 
       config.systemd.services.golemd = {
@@ -117,6 +121,9 @@ rec {
           ExecStart = "${golem}/bin/golemd --config ${golemdConfig} --state /var/lib/golem --listen 127.0.0.1:9920";
           Restart = "on-failure";
         };
+        # Belt and braces with the user shell above: golemd pins the private
+        # tmux server's default-shell from this variable.
+        environment.GOLEM_INTERACTIVE_SHELL = "${pkgs.bashInteractive}/bin/bash";
       };
 
       config.environment.variables.GOLEM_ENDPOINT = "http://127.0.0.1:9920";
