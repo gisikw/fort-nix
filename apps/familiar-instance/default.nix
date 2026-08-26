@@ -101,7 +101,7 @@ in
     serviceConfig = {
       User = user;
       Group = group;
-      WorkingDirectory = repoDir;
+      WorkingDirectory = instanceDir;
       ExecStart = "${repoDir}/familiar.sh --config ${instanceDir}/familiar.toml server";
       Restart = "on-failure";
       RestartSec = 10;
