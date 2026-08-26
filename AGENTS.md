@@ -192,6 +192,56 @@ fort <host> refresh '{"overlay": "myapp"}'  # Trigger immediate check
 
 Working examples: knockout, headjack, litmus (all on ratched).
 
+### Tracked Services (runtime-deployed from project flakes)
+
+For services built from project repos where you want deployment decoupled from
+nix evaluation **without** the overlay chain (forgejo CI → Attic → overlay.nix),
+use **fort.tracked** (`common/fort/tracked.nix`). The project repo MUST expose a
+flake; the host clones, builds `repo#<flakeAttr>` itself, and activates through
+a nix profile (`/nix/var/nix/profiles/fort-tracked/<name>`). Build failures
+leave the old profile and running service untouched; profile generations give
+rollback for free.
+
+```nix
+# In a host manifest's module (or any NixOS module):
+config.fort.tracked.golemd = {
+  repo = "gisikw/golem";       # github shorthand; or gitUrl for other remotes
+  flakeAttr = "full";          # packages.<system>.<attr>
+  autoUpdate = true;           # poll branch tip (default false — see below)
+  pollInterval = "15m";
+  exec = "golemd --config ${cfg} ...";  # bare binary name; resolved via ExecSearchPath
+  addToPath = true;            # profile bin/ on interactive PATH
+  unit = {                     # merged into the generated systemd.services.<name>
+    description = "...";
+    after = [ ... ];
+    path = [ ... ];
+    preStart = "...";
+    serviceConfig = { User = "..."; StateDirectory = "..."; };
+  };
+  expose = { port = 9920; visibility = "vpn"; };  # optional fort.cluster.services entry
+};
+```
+
+Generated units: `<name>.service` (runner — fully static, ConditionPathExists
+on the profile) and `fort-tracked-<name>-fetch.service` (oneshot: resolve sha,
+fetch, build, flip profile, restart runner).
+
+Control surface in `/var/lib/fort-tracked/<name>/`:
+- `desired.sha` — with `autoUpdate = true` the poller writes it (record); with
+  `autoUpdate = false` **you** write a commit sha here and a path unit triggers
+  the fetch.
+- `current.sha` — last successfully built+activated sha (status only).
+
+Trust rule: `autoUpdate = true` means push-access-to-branch = code execution on
+the host. Only enable for repos solely controlled by us; everything else stays
+manual. Working example: golemd on azula.
+
+**Tracked vs overlays vs apps:** apps = definition in fort-nix, deploy via
+nixos-rebuild. Overlays = definition travels with the binary via Attic+registry,
+rich health/rollback orchestration. Tracked = definition in fort-nix, binary
+built on-host straight from the project repo's flake — no CI, no cache, no
+overlay.nix required.
+
 ### SSO Modes
 
 Services can use SSO via `fort.cluster.services`:

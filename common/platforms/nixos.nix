@@ -105,6 +105,12 @@ in
           cluster
           ;
       })
+      (import ../fort/tracked.nix {
+        inherit
+          rootManifest
+          cluster
+          ;
+      })
     ]
     ++ appModules
     ++ aspectModules;

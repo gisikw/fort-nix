@@ -29,7 +29,9 @@ rec {
   module =
     { config, pkgs, ... }:
     let
-      golem = import ../../../../pkgs/golem { inherit pkgs; };
+      # Workers resolve `pi` from PATH; the golem flake's wrapper only pins
+      # tmux/git/bash, so the harness CLI rides in via the unit's path.
+      pi-coding-agent = import ../../../../pkgs/pi-coding-agent { inherit pkgs; };
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
         name = "azula"
         clone_enabled = false
@@ -89,12 +91,22 @@ rec {
         shell = pkgs.bashInteractive;
       };
 
-      config.systemd.services.golemd = {
+      # golemd is runtime-deployed: fort.tracked builds gisikw/golem's flake
+      # on-host and flips a profile; nix evaluation cadence stays decoupled
+      # from app deployment cadence. See common/fort/tracked.nix.
+      config.fort.tracked.golemd = {
+        repo = "gisikw/golem";
+        flakeAttr = "full";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = "golemd --config ${golemdConfig} --state /var/lib/golem --listen 127.0.0.1:9920";
+        addToPath = true;
+        unit = {
         description = "Golem delegated-agent daemon";
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
         wantedBy = [ "multi-user.target" ];
-        path = [ pkgs.git ];
+        path = [ pkgs.git pkgs.tmux pkgs.bashInteractive pi-coding-agent ];
         preStart = ''
           set -euo pipefail
           scratch=/var/lib/golem/projects/scratch
@@ -118,12 +130,12 @@ rec {
           Group = "golem";
           StateDirectory = "golem";
           StateDirectoryMode = "0750";
-          ExecStart = "${golem}/bin/golemd --config ${golemdConfig} --state /var/lib/golem --listen 127.0.0.1:9920";
           Restart = "on-failure";
         };
         # Belt and braces with the user shell above: golemd pins the private
         # tmux server's default-shell from this variable.
         environment.GOLEM_INTERACTIVE_SHELL = "${pkgs.bashInteractive}/bin/bash";
+        };
       };
 
       config.environment.variables.GOLEM_ENDPOINT = "http://127.0.0.1:9920";
@@ -136,7 +148,6 @@ rec {
       config.services.xserver.desktopManager.xfce.enable = true;
 
       config.environment.systemPackages = with pkgs; [
-        golem
         firefox
         w3m
         lynx
