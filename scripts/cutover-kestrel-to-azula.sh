@@ -8,7 +8,7 @@
 set -euo pipefail
 
 source_repo="${KESTREL_SOURCE:-/home/dev/Projects/kestrel}"
-target="${KESTREL_TARGET:-admin@azula.fort.gisi.network}"
+target="${KESTREL_TARGET:-root@azula.fort.gisi.network}"
 target_dir="/var/lib/kestrel"
 execute=0
 source_stopped=0
@@ -24,7 +24,7 @@ Dry-runs by default. Execution requires both explicit custody assertions:
 
 Options:
   --source PATH          Kestrel checkout (default: /home/dev/Projects/kestrel)
-  --target USER@HOST     SSH target (default: admin@azula.fort.gisi.network)
+  --target USER@HOST     SSH target (default: root@azula.fort.gisi.network)
   --no-gh-credential     do not copy ~/.config/gh/hosts.yml
   -h, --help             show this help
 EOF
