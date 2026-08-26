@@ -53,7 +53,14 @@ in
     wantedBy = [ "multi-user.target" ];
     # Until the first successful tracked fetch there is nothing to run; the
     # fetch unit's post-update restart cold-starts us once the tree exists.
-    unitConfig.ConditionPathExists = "${repoDir}/familiar.sh";
+    # An explicitly provisioned private instance (instanceRepo = null) stays
+    # cleanly inactive until its custody transfer lands familiar.toml. The
+    # operator starts it after transfer; configured clone-on-start instances
+    # must not receive this second condition or preStart could never clone.
+    unitConfig.ConditionPathExists = [
+      "${repoDir}/familiar.sh"
+    ]
+    ++ lib.optional (instanceRepo == null) "${instanceDir}/familiar.toml";
     path = [
       pkgs.bash
       pkgs.coreutils

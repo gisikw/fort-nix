@@ -7,7 +7,7 @@ rec {
   apps = [
     {
       name = "familiar-instance";
-      instanceDir = "/home/familiar/Projects/familiar-test-instance";
+      instanceDir = "/var/lib/kestrel";
       user = "familiar";
       group = "users";
       home = "/home/familiar";
@@ -41,6 +41,30 @@ rec {
       # Workers resolve `pi` from PATH; the golem flake's wrapper only pins
       # tmux/git/bash, so the harness CLI rides in via the unit's path.
       pi-coding-agent = import ../../../../pkgs/pi-coding-agent { inherit pkgs; };
+      domain = config.fort.cluster.settings.domain;
+      familiarHome = "/home/familiar";
+      kestrelDir = "/var/lib/kestrel";
+      familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
+      familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
+        set -euo pipefail
+        ${pkgs.coreutils}/bin/mkdir -p /var/lib/fort-git
+        tmp=$(${pkgs.coreutils}/bin/mktemp /var/lib/fort-git/.familiar-token.XXXXXX)
+        trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+        ${pkgs.jq}/bin/jq -er '.token' > "$tmp"
+        ${pkgs.coreutils}/bin/chown familiar:users "$tmp"
+        ${pkgs.coreutils}/bin/chmod 0600 "$tmp"
+        ${pkgs.coreutils}/bin/mv -f "$tmp" ${familiarGitTokenPath}
+        trap - EXIT
+      '';
+      familiarGitCredentialHelper = pkgs.writeShellScript "familiar-git-credential-helper" ''
+        case "''${1:-}" in
+          get)
+            [ -r ${familiarGitTokenPath} ] && [ -s ${familiarGitTokenPath} ] || exit 0
+            echo "username=forge-admin"
+            echo "password=$(${pkgs.coreutils}/bin/cat ${familiarGitTokenPath})"
+            ;;
+        esac
+      '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
         name = "azula"
         clone_enabled = false
@@ -72,10 +96,57 @@ rec {
       # owner created during pre-cutover testing.
       config.users.users.familiar = {
         isNormalUser = true;
-        home = "/home/familiar";
+        home = familiarHome;
         createHome = true;
         shell = pkgs.bashInteractive;
         openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
+      };
+
+      # Kestrel is the private, durable Familiar instance—not a developer
+      # checkout. Fort owns its location and permissions; the one-time cutover
+      # populates the directory before starting familiar-instance.
+      config.systemd.tmpfiles.rules = [
+        "d ${familiarHome}/.ssh 0700 familiar users -"
+        "d ${familiarHome}/.config 0700 familiar users -"
+        "d ${familiarHome}/.config/gh 0700 familiar users -"
+        "d ${kestrelDir} 0700 familiar users -"
+      ];
+
+      # Reuse the established developer SSH identity for outbound work from
+      # Kestrel without importing the rest of dev-sandbox.
+      config.sops.secrets.familiar-ssh-key = {
+        sopsFile = ../../../../aspects/dev-sandbox/ssh-key.sops;
+        format = "binary";
+        path = "${familiarHome}/.ssh/id_ed25519";
+        owner = "familiar";
+        group = "users";
+        mode = "0600";
+      };
+      config.system.activationScripts.familiar-ssh-pubkey = ''
+        echo "${config.fort.cluster.settings.principals.dev-sandbox.sshKey}" > ${familiarHome}/.ssh/id_ed25519.pub
+        chown familiar:users ${familiarHome}/.ssh/id_ed25519.pub
+        chmod 0644 ${familiarHome}/.ssh/id_ed25519.pub
+      '';
+
+      # Request a dedicated RW Forgejo token for Kestrel's archive pushes.
+      # The helper is host-global but only familiar can read this token.
+      config.fort.host.needs.git-token.familiar = {
+        from = "drhorrible";
+        request = {
+          access = "rw";
+        };
+        handler = familiarGitTokenHandler;
+      };
+      config.environment.etc."familiar-git-credential-helper".source = familiarGitCredentialHelper;
+      config.programs.git = {
+        enable = true;
+        config = {
+          user.name = "Kevin Gisi";
+          user.email = "kevin@kevingisi.com";
+          init.defaultBranch = "main";
+          credential."https://git.${domain}".helper = "/etc/familiar-git-credential-helper";
+          safe.directory = kestrelDir;
+        };
       };
 
       # Shared credential used by the Familiar rewrite stack to authenticate to
@@ -198,6 +269,15 @@ rec {
         dnsutils
         openssl
         xterm
+
+        # Minimal operator/development baseline for Kestrel. Project-specific
+        # compilers and runtimes remain the responsibility of nix develop.
+        git
+        gh
+        openssh
+        rsync
+        ripgrep
+        fd
       ];
     };
 }
