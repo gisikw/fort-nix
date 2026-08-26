@@ -146,7 +146,11 @@ let
       [ -e "$flag" ] || exit 0
       rm -f "$flag"
       ${lib.concatMapStrings (unit: ''
-        ${pkgs.systemd}/bin/systemctl restart ${unit} \
+        # --no-block: this runs from the fetch unit's ExecStartPost, and
+        # dependents are ordered After= the fetch unit. A blocking restart
+        # would deadlock: the job can't start until the fetch unit finishes
+        # activating, which can't happen until this script exits.
+        ${pkgs.systemd}/bin/systemctl restart --no-block ${unit} \
           || ${pkgs.util-linux}/bin/logger -t fort-tracked-${name} "restart of ${unit} failed"
       '') (restartTargetsFor name svc)}
     '';
