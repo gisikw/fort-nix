@@ -89,17 +89,6 @@ rec {
         mode = "0400";
       };
 
-      config.users.groups.golem = { };
-      config.users.users.golem = {
-        isSystemUser = true;
-        group = "golem";
-        home = "/var/lib/golem";
-        # tmux executes worker commands via the user's shell; nologin (the
-        # isSystemUser default) kills every worker pane at birth. Workers need
-        # a real shell.
-        shell = pkgs.bashInteractive;
-      };
-
       # Familiar code tree: tracked from the rewrite branch, tree-only
       # (exec = null — the runtime is familiar.sh + source tree, not a
       # profile binary). Building #familiar-server is the validation gate:
@@ -126,42 +115,68 @@ rec {
         flakeAttr = "full";
         autoUpdate = true;
         pollInterval = "15m";
-        exec = "golemd --config ${golemdConfig} --state /var/lib/golem --listen 127.0.0.1:9920";
+        # --linger 1h: retained-session policy is explicit and configurable
+        # by editing this tracked runner config (default would also be 1h, but
+        # making it explicit prevents surprises if golemd's default changes).
+        exec = "golemd --config ${golemdConfig} --state /var/lib/golem --listen 127.0.0.1:9920 --linger 1h";
         addToPath = true;
         unit = {
-        description = "Golem delegated-agent daemon";
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
-        wantedBy = [ "multi-user.target" ];
-        path = [ pkgs.git pkgs.tmux pkgs.bashInteractive pi-coding-agent ];
-        preStart = ''
-          set -euo pipefail
-          scratch=/var/lib/golem/projects/scratch
-          marker="$scratch/.golem-bootstrap-v1"
-          mkdir -p "$scratch"
-          if [ ! -e "$marker" ]; then
-            if ! git -C "$scratch" rev-parse --git-dir >/dev/null 2>&1; then
-              git -C "$scratch" init
+          description = "Golem delegated-agent daemon";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          wantedBy = [ "multi-user.target" ];
+          path = [
+            pkgs.git
+            pkgs.tmux
+            pkgs.bashInteractive
+            pi-coding-agent
+          ];
+          # golemd runs as familiar:users so that the Familiar renderer/viewer
+          # (also familiar:users) can reach /var/lib/golem/tmux.sock (0600,
+          # owner familiar) and golemd.sock without any supplemental group or
+          # ACL machinery. systemd's StateDirectory= handling automatically
+          # chowns /var/lib/golem to familiar on the first activation after
+          # this change; no explicit migration step is required. The former
+          # golem system user/group declarations are removed because nothing
+          # else depended on them.
+          preStart = ''
+            set -euo pipefail
+            scratch=/var/lib/golem/projects/scratch
+            marker="$scratch/.golem-bootstrap-v1"
+            mkdir -p "$scratch"
+            if [ ! -e "$marker" ]; then
+              if ! git -C "$scratch" rev-parse --git-dir >/dev/null 2>&1; then
+                git -C "$scratch" init
+              fi
+              if ! git -C "$scratch" rev-parse --verify HEAD >/dev/null 2>&1; then
+                git -C "$scratch" \
+                  -c user.name='Golem Bootstrap' \
+                  -c user.email='golem@azula' \
+                  commit --allow-empty -m 'Initialize Golem scratch project'
+              fi
+              touch "$marker"
             fi
-            if ! git -C "$scratch" rev-parse --verify HEAD >/dev/null 2>&1; then
-              git -C "$scratch" \
-                -c user.name='Golem Bootstrap' \
-                -c user.email='golem@azula' \
-                commit --allow-empty -m 'Initialize Golem scratch project'
-            fi
-            touch "$marker"
-          fi
-        '';
-        serviceConfig = {
-          User = "golem";
-          Group = "golem";
-          StateDirectory = "golem";
-          StateDirectoryMode = "0750";
-          Restart = "on-failure";
-        };
-        # Belt and braces with the user shell above: golemd pins the private
-        # tmux server's default-shell from this variable.
-        environment.GOLEM_INTERACTIVE_SHELL = "${pkgs.bashInteractive}/bin/bash";
+          '';
+          serviceConfig = {
+            User = "familiar";
+            Group = "users";
+            StateDirectory = "golem";
+            # 0700: only familiar (the service user) needs direct filesystem
+            # access; the socket inside is 0600 and also owner=familiar, so
+            # the Familiar renderer (same UID) reaches it without relaxing
+            # the directory.
+            StateDirectoryMode = "0700";
+            Restart = "on-failure";
+          };
+          environment = {
+            # Explicitly pin HOME so golemd's UserHomeDir()-derived defaults
+            # (allowed-cwd-roots, artifact paths) resolve to the familiar home
+            # directory rather than relying on systemd PAM/passwd lookup order.
+            HOME = "/home/familiar";
+            # Belt and braces: golemd pins the private tmux server's
+            # default-shell from this variable.
+            GOLEM_INTERACTIVE_SHELL = "${pkgs.bashInteractive}/bin/bash";
+          };
         };
       };
 
