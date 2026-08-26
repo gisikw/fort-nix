@@ -67,7 +67,7 @@ rec {
       '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
         name = "azula"
-        clone_enabled = false
+        clone_enabled = true
         api_bearer_tokens = []
 
         [providers.llama]
