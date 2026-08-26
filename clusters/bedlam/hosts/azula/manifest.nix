@@ -5,6 +5,15 @@ rec {
   roles = [ ];
 
   apps = [
+    {
+      name = "familiar-instance";
+      instanceDir = "/home/familiar/Projects/familiar-test-instance";
+      user = "familiar";
+      group = "users";
+      home = "/home/familiar";
+      trackedName = "familiar";
+      serviceName = "familiar-instance";
+    }
     # {
     #   name = "llama-server";
     #   accelerator = "cpu";
@@ -89,6 +98,24 @@ rec {
         # isSystemUser default) kills every worker pane at birth. Workers need
         # a real shell.
         shell = pkgs.bashInteractive;
+      };
+
+      # Familiar code tree: tracked from the rewrite branch, tree-only
+      # (exec = null — the runtime is familiar.sh + source tree, not a
+      # profile binary). Building #familiar-server is the validation gate:
+      # the tree only advances when the server flake builds and tests green.
+      # The familiar-instance app runs the private instance against this
+      # tree and is bounced via restartUnits after each update.
+      config.fort.tracked.familiar = {
+        repo = "gisikw/familiar";
+        branch = "rewrite";
+        flakeAttr = "familiar-server";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = null;
+        user = "familiar";
+        group = "users";
+        restartUnits = [ "familiar-instance.service" ];
       };
 
       # golemd is runtime-deployed: fort.tracked builds gisikw/golem's flake

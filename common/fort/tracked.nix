@@ -16,12 +16,19 @@
 #
 # Split of responsibilities:
 #   fetch unit  (fort-tracked-<name>-fetch): resolve desired sha, git fetch,
-#     nix build repo#attr --profile /nix/var/nix/profiles/fort-tracked/<name>,
-#     then restart the runner. Only succeeds on successful build; a broken
-#     main leaves the old profile (and running service) untouched.
+#     nix build repo#attr --profile
+#     /nix/var/nix/profiles/fort-tracked-<name>/profile, then restart
+#     dependents (root ExecStartPost, gated on a flag the fetch script sets
+#     only when it actually flipped the profile). Only succeeds on successful
+#     build; a broken branch leaves the old tree, profile, and running
+#     service untouched.
 #   runner unit (<name>): fully statically defined; expects mise en place.
 #     ConditionPathExists on the profile keeps first-boot-before-first-fetch
-#     from flapping; the fetch unit starts it once the profile exists.
+#     from flapping; the post-update restart starts it once the profile
+#     exists. Generated only when exec != null — tree-only consumers (e.g. a
+#     source-tree runtime like familiar) set exec = null and run their own
+#     unit against /var/lib/fort-tracked/<name>/repo, wired up via
+#     restartUnits.
 #
 # Control surface in /var/lib/fort-tracked/<name>/:
 #   desired.sha — what should be running. autoUpdate=true: written by the
@@ -45,17 +52,27 @@
 }:
 let
   stateBase = "/var/lib/fort-tracked";
-  profileBase = "/nix/var/nix/profiles/fort-tracked";
+  # Per-service profile directory: keeps user-owned profiles possible (the
+  # shared /nix/var/nix/profiles is root-owned) while staying inside the
+  # GC-root-scanned profiles tree, so generations survive garbage collection.
+  profileDirFor = name: "/nix/var/nix/profiles/fort-tracked-${name}";
+  profileFor = name: "${profileDirFor name}/profile";
 
   cfg = config.fort.tracked;
 
   urlFor = svc: if svc.gitUrl != null then svc.gitUrl else "https://github.com/${svc.repo}.git";
 
+  # Units to restart after a successful profile flip: the runner itself (when
+  # one exists and restartOnUpdate), plus any declared dependents.
+  restartTargetsFor =
+    name: svc:
+    (lib.optional (svc.exec != null && svc.restartOnUpdate) "${name}.service") ++ svc.restartUnits;
+
   fetchScriptFor =
     name: svc:
     let
       state = "${stateBase}/${name}";
-      profile = "${profileBase}/${name}";
+      profile = profileFor name;
       url = urlFor svc;
     in
     pkgs.writeShellScript "fort-tracked-${name}-fetch" ''
@@ -66,12 +83,9 @@ let
           pkgs.nix
           pkgs.coreutils
           pkgs.util-linux
-          pkgs.systemd
         ]
       }:$PATH"
       log() { logger -t fort-tracked-${name} "$@"; }
-
-      mkdir -p "${state}" "${profileBase}"
 
       ${
         if svc.autoUpdate then
@@ -106,8 +120,10 @@ let
       git -C "${state}/repo" remote set-url origin "${url}"
       git -C "${state}/repo" fetch -q origin "$desired"
       git -C "${state}/repo" checkout -qf "$desired"
-      # Flake eval treats untracked files as a dirty tree; scrub leftovers.
-      git -C "${state}/repo" clean -fdxq
+      # Scrub untracked leftovers but PRESERVE gitignored paths (no -x):
+      # tree-only consumers keep runtime state like models/ inside the
+      # checkout, and those dirs must survive updates.
+      git -C "${state}/repo" clean -fdq
 
       log "building ${state}/repo#${svc.flakeAttr}"
       nix build "${state}/repo#${svc.flakeAttr}" --no-link --profile "${profile}" \
@@ -116,10 +132,23 @@ let
 
       nix-env -p "${profile}" --delete-generations +5 >/dev/null 2>&1 || true
       printf '%s\n' "$desired" > "${state}/current.sha"
+      # Signal the (root) ExecStartPost to restart dependents. The fetch may
+      # run unprivileged, so it cannot call systemctl itself.
+      touch "${state}/.restart-pending"
       log "activated $desired"
-      ${lib.optionalString svc.restartOnUpdate ''
-        systemctl restart ${name}.service || log "restart of ${name}.service failed"
-      ''}
+    '';
+
+  restartScriptFor =
+    name: svc:
+    pkgs.writeShellScript "fort-tracked-${name}-restart" ''
+      set -eu
+      flag="${stateBase}/${name}/.restart-pending"
+      [ -e "$flag" ] || exit 0
+      rm -f "$flag"
+      ${lib.concatMapStrings (unit: ''
+        ${pkgs.systemd}/bin/systemctl restart ${unit} \
+          || ${pkgs.util-linux}/bin/logger -t fort-tracked-${name} "restart of ${unit} failed"
+      '') (restartTargetsFor name svc)}
     '';
 
   # NOTE on structure: the top-level `config` attrset below must have a
@@ -127,7 +156,6 @@ let
   # config.fort.tracked causes infinite recursion (the module system cannot
   # resolve the merge structure without evaluating config). Per-service
   # merging therefore happens inside each option's value.
-  profileFor = name: "${profileBase}/${name}";
   fetchUnitFor = name: "fort-tracked-${name}-fetch";
   perService = f: lib.mapAttrsToList f cfg;
 in
@@ -177,11 +205,40 @@ in
           };
 
           exec = lib.mkOption {
-            type = lib.types.str;
+            type = lib.types.nullOr lib.types.str;
+            default = null;
             description = ''
               Runner command line. The leading word is resolved against the
               tracked profile's bin/ via ExecSearchPath, so use a bare binary
-              name (e.g. "golemd --config /etc/...").
+              name (e.g. "golemd --config /etc/..."). Set null for tree-only
+              tracking: no runner unit is generated, and consumers (see
+              restartUnits) run against /var/lib/fort-tracked/<name>/repo.
+            '';
+          };
+
+          user = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = ''
+              Run the fetch/build as this user; the state dir, checkout, and
+              profile dir are owned by them. Null runs the fetch as root.
+            '';
+          };
+
+          group = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Group for the fetch unit and owned directories.";
+          };
+
+          restartUnits = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ ];
+            description = ''
+              Additional systemd units to restart after a successful update
+              (e.g. an instance service running from the tracked tree).
+              Restart also starts a unit whose start condition newly passes,
+              which is how tree-only consumers cold-start after first fetch.
             '';
           };
 
@@ -233,12 +290,26 @@ in
 
     systemd.tmpfiles.rules = lib.optionals (cfg != { }) (
       [ "d ${stateBase} 0755 root root -" ]
-      ++ perService (name: _: "d ${stateBase}/${name} 0755 root root -")
+      ++ lib.concatLists (
+        perService (
+          name: svc:
+          let
+            owner = "${if svc.user != null then svc.user else "root"} ${
+              if svc.group != null then svc.group else "root"
+            }";
+          in
+          [
+            "d ${stateBase}/${name} 0755 ${owner} -"
+            "d ${profileDirFor name} 0755 ${owner} -"
+          ]
+        )
+      )
     );
 
     systemd.services = lib.mkMerge (
       perService (
-        name: svc: {
+        name: svc:
+        {
           ${fetchUnitFor name} = {
             description = "Fort tracked service ${name} - fetch, build, activate";
             after = [ "network-online.target" ];
@@ -246,13 +317,23 @@ in
             # Manual mode has no timer; run at boot to verify the pinned sha
             # (exits fast when current == desired and the profile exists).
             wantedBy = lib.optionals (!svc.autoUpdate) [ "multi-user.target" ];
+            # Contain git/nix caches; also gives an unprivileged fetch a HOME.
+            environment.HOME = "${stateBase}/${name}";
             serviceConfig = {
               Type = "oneshot";
               TimeoutStartSec = "1h";
               ExecStart = fetchScriptFor name svc;
+            }
+            // lib.optionalAttrs (svc.user != null) { User = svc.user; }
+            // lib.optionalAttrs (svc.group != null) { Group = svc.group; }
+            // lib.optionalAttrs (restartTargetsFor name svc != [ ]) {
+              # "+" = full privileges even when the fetch itself runs
+              # unprivileged; only fires when the fetch flipped the profile.
+              ExecStartPost = "+${restartScriptFor name svc}";
             };
           };
-
+        }
+        // lib.optionalAttrs (svc.exec != null) {
           ${name} = lib.mkMerge [
             {
               wantedBy = [ "multi-user.target" ];

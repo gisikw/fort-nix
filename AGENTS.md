@@ -198,9 +198,9 @@ For services built from project repos where you want deployment decoupled from
 nix evaluation **without** the overlay chain (forgejo CI → Attic → overlay.nix),
 use **fort.tracked** (`common/fort/tracked.nix`). The project repo MUST expose a
 flake; the host clones, builds `repo#<flakeAttr>` itself, and activates through
-a nix profile (`/nix/var/nix/profiles/fort-tracked/<name>`). Build failures
-leave the old profile and running service untouched; profile generations give
-rollback for free.
+a nix profile (`/nix/var/nix/profiles/fort-tracked-<name>/profile`). Build
+failures leave the old profile and running service untouched; profile
+generations give rollback for free.
 
 ```nix
 # In a host manifest's module (or any NixOS module):
@@ -223,8 +223,24 @@ config.fort.tracked.golemd = {
 ```
 
 Generated units: `<name>.service` (runner — fully static, ConditionPathExists
-on the profile) and `fort-tracked-<name>-fetch.service` (oneshot: resolve sha,
-fetch, build, flip profile, restart runner).
+on the profile; only generated when `exec != null`) and
+`fort-tracked-<name>-fetch.service` (oneshot: resolve sha, fetch, build, flip
+profile, restart dependents).
+
+Tree-only mode: set `exec = null` for projects whose runtime is the source
+tree itself (e.g. familiar's `familiar.sh` + supervisor). The checkout at
+`/var/lib/fort-tracked/<name>/repo` only advances on green builds — the
+`flakeAttr` build acts as a validation gate. Consumers declare themselves in
+`restartUnits` to get bounced after updates. Set `user`/`group` to own the
+checkout and run the fetch unprivileged (restarts still work: the restart
+step is a root `ExecStartPost`). `git clean` in the fetch preserves
+gitignored paths, so runtime state (models/, state/) inside the checkout
+survives updates.
+
+Instance-vs-code split: a private instance (config/identity/memory repo, e.g.
+kestrel) is NEVER part of the code flake. Run it via `apps/familiar-instance`
+pointed at the tracked tree. Never point two live hosts at one instance repo
+(archive fork).
 
 Control surface in `/var/lib/fort-tracked/<name>/`:
 - `desired.sha` — with `autoUpdate = true` the poller writes it (record); with
