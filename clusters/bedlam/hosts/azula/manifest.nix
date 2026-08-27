@@ -171,15 +171,15 @@ rec {
         mode = "0400";
       };
 
-      # Familiar code tree: tracked from the rewrite branch, tree-only
-      # (exec = null — the runtime is familiar.sh + source tree, not a
-      # profile binary). Building #familiar-server is the validation gate:
-      # the tree only advances when the server flake builds and tests green.
-      # The familiar-instance app runs the private instance against this
-      # tree and is bounced via restartUnits after each update.
+      # Familiar code tree: tracked from main, tree-only (exec = null — the
+      # runtime is familiar.sh + source tree, not a profile binary). Building
+      # #familiar-server is the validation gate: the tree only advances when
+      # the server flake builds and tests green. The familiar-instance app runs
+      # the private instance against this tree and is bounced via restartUnits
+      # after each update; independently owned Presence is not.
       config.fort.tracked.familiar = {
         repo = "gisikw/familiar";
-        branch = "rewrite";
+        branch = "main";
         flakeAttr = "familiar-server";
         autoUpdate = true;
         pollInterval = "15m";
