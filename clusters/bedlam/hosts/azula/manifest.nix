@@ -14,25 +14,11 @@ rec {
       trackedName = "familiar";
       serviceName = "familiar-instance";
     }
-    # {
-    #   name = "llama-server";
-    #   accelerator = "cpu";
-    #   subdomain = "llama2";
-    #   serviceName = "llama2";
-    #   contextSize = 131072;
-    #   enableMtp = true;
-    #   model = {
-    #     repo = "unsloth/Qwen3.6-35B-A3B-MTP-GGUF";
-    #     file = "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf";
-    #     sha256 = "55983c5a75a1ab969824077b3bb3de4146e82a9234072b48ad4e8f92ad3fe9f1";
-    #   };
-    # }
   ];
 
   aspects = [
     "observable"
     "agent-debug"
-    "familiar-test"
     "couchdb"
   ];
 
@@ -106,6 +92,13 @@ rec {
         createHome = true;
         shell = pkgs.bashInteractive;
         openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
+      };
+
+      fort.cluster.services.familiar = {
+        name = "familiar";
+        port = 1692;
+        visibility = "public";
+        sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
       };
 
       # Kestrel is the private, durable Familiar instance—not a developer

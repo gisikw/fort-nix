@@ -29,8 +29,6 @@ let
   # Custom packages
   claude-code = import ../../pkgs/claude-code { inherit pkgs; };
   opencode = import ../../pkgs/opencode { inherit pkgs; };
-  beads = import ../../pkgs/beads { inherit pkgs; };
-  ticket = import ../../pkgs/ticket { inherit pkgs; };
   fort = import ../../pkgs/fort { inherit pkgs domain; };
   cursor-agent = import ../../pkgs/cursor-agent { inherit pkgs; };
   codex = import ../../pkgs/codex { inherit pkgs; };
@@ -147,8 +145,6 @@ let
     gemini-cli
     opencode
     pi-coding-agent
-    beads
-    ticket
 
     # Fort control plane
     fort
@@ -727,12 +723,6 @@ in
   # Development services
   fort.cluster.services = [
     {
-      name = "bz";
-      port = 6167;
-      visibility = "vpn";
-      sso.mode = "none";
-    }
-    {
       name = "tokenmaxx";
       port = 8888;
       visibility = "public";
@@ -743,12 +733,6 @@ in
       port = 5173;
       visibility = "public";
       sso = { mode = "identity"; groups = [ "admin" ]; };
-    }
-    {
-      name = "familiar";
-      port = 1692;
-      visibility = "public";
-      sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
     }
     {
       name = "rote";
