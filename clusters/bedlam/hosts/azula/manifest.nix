@@ -111,6 +111,11 @@ rec {
         "d ${familiarHome}/.config 0700 familiar users -"
         "d ${familiarHome}/.config/gh 0700 familiar users -"
         "d ${kestrelDir} 0700 familiar users -"
+        # Presence already carries this directory at the front of PATH. A
+        # stable link makes the dynamic tracked profile available immediately
+        # without restarting the resident conversation.
+        "d ${kestrelDir}/state/pi/bin 0700 familiar users -"
+        "L+ ${kestrelDir}/state/pi/bin/stuff - - - - /nix/var/nix/profiles/fort-tracked-stuff/profile/bin/stuff"
       ];
 
       # Reuse the established developer SSH identity for outbound work from
