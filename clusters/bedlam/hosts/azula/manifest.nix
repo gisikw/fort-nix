@@ -264,8 +264,10 @@ rec {
       config.sops.secrets.stuff-api-token = {
         sopsFile = ./stuff-api-token.sops;
         format = "binary";
-        owner = "stuff";
-        group = "stuff";
+        # Familiar is the local CLI principal. The service receives this same
+        # file through systemd's private credential directory below.
+        owner = "familiar";
+        group = "users";
         mode = "0400";
         restartUnits = [ "stuff.service" ];
       };
@@ -312,14 +314,17 @@ rec {
             STUFF_COUCH_DB = "stuff";
             STUFF_COUCH_USER = "stuff";
             STUFF_COUCH_PASSWORD_FILE = "/run/stuff/couchdb-password";
-            STUFF_TOKEN_FILE = config.sops.secrets.stuff-api-token.path;
+            STUFF_TOKEN_FILE = "/run/credentials/stuff.service/api-token";
           };
           serviceConfig = {
             User = "stuff";
             Group = "stuff";
             RuntimeDirectory = "stuff";
             RuntimeDirectoryMode = "0700";
-            LoadCredential = [ "couchdb-admin:${config.sops.secrets.couchdb-admin.path}" ];
+            LoadCredential = [
+              "couchdb-admin:${config.sops.secrets.couchdb-admin.path}"
+              "api-token:${config.sops.secrets.stuff-api-token.path}"
+            ];
             Restart = "on-failure";
             RestartSec = "5s";
             NoNewPrivileges = true;
@@ -336,7 +341,11 @@ rec {
         };
       };
 
-      config.environment.variables.GOLEM_ENDPOINT = "http://127.0.0.1:9920";
+      config.environment.variables = {
+        GOLEM_ENDPOINT = "http://127.0.0.1:9920";
+        STUFF_URL = "http://127.0.0.1:7847";
+        STUFF_TOKEN_FILE = config.sops.secrets.stuff-api-token.path;
+      };
 
       # Office captive-portal survival kit. Azula may need to register on
       # unfamiliar networks before it can fetch anything else, so keep both a
