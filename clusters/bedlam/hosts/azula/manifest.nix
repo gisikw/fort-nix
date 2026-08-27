@@ -94,12 +94,20 @@ rec {
         openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
       };
 
-      config.fort.cluster.services.familiar = {
-        name = "familiar";
-        port = 1692;
-        visibility = "public";
-        sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
-      };
+      config.fort.cluster.services = [
+        {
+          name = "familiar";
+          port = 1692;
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [
+              "admin"
+              "infra"
+            ];
+          };
+        }
+      ];
 
       # Kestrel is the private, durable Familiar instance—not a developer
       # checkout. Fort owns its location and permissions; the one-time cutover
