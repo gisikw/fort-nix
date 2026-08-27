@@ -303,6 +303,15 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1ra7t0nd0arf6lrger73z3ftnhutqzwggu6j8q97a7uzmaux009rqla2ju7 # drhorrible
+  - path_regex: clusters/bedlam/hosts/azula/stuff-api-token\.sops$
+    key_groups:
+      - age:
+          # Principals and the Familiar deployment identity
+          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
+          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
+          - age1k3wv5m9tdyfm0dj78mqmrk0mfatcdeqt08lyfsld9nlxvawhk4kquynvuz # familiar
+          # Consuming host
+          - age1x0z78gpnpgkxpzm22wvcvlaylhkj58ds6vvsjqtrrvlrn7cducyqdhv6j6 # azula
   - path_regex: clusters/bedlam/hosts/joker/kobold-controller-token\.sops$
     key_groups:
       - age:

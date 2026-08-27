@@ -252,6 +252,90 @@ rec {
         };
       };
 
+      # Stuff is a small CouchDB-backed Item/Note gateway. Its binary follows
+      # the public repository independently of host evaluation, while the
+      # runner itself remains declarative and least-privileged.
+      config.users.groups.stuff = { };
+      config.users.users.stuff = {
+        isSystemUser = true;
+        group = "stuff";
+      };
+
+      config.sops.secrets.stuff-api-token = {
+        sopsFile = ./stuff-api-token.sops;
+        format = "binary";
+        owner = "stuff";
+        group = "stuff";
+        mode = "0400";
+        restartUnits = [ "stuff.service" ];
+      };
+
+      config.fort.tracked.stuff = {
+        repo = "gisikw/stuff";
+        flakeAttr = "default";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = "stuff serve";
+        # Adds the dynamic profile to login-shell PATH, including for the
+        # familiar account, without pinning the binary into the host closure.
+        addToPath = true;
+        expose = {
+          subdomain = "stuff";
+          port = 7847;
+          visibility = "public";
+          health.endpoint = "/health";
+        };
+        unit = {
+          description = "Stuff Item and Note service";
+          after = [
+            "network-online.target"
+            "couchdb.service"
+            "sops-nix.service"
+          ];
+          wants = [ "network-online.target" ];
+          requires = [ "couchdb.service" ];
+          preStart = ''
+            set -euo pipefail
+            password="$(${pkgs.gawk}/bin/awk -F '[[:space:]]*=[[:space:]]*' \
+              '$1 == "stuff" { print $2; exit }' \
+              "$CREDENTIALS_DIRECTORY/couchdb-admin")"
+            if [ -z "$password" ]; then
+              echo "Stuff: CouchDB credential did not contain the expected user" >&2
+              exit 1
+            fi
+            umask 077
+            ${pkgs.coreutils}/bin/printf '%s' "$password" > /run/stuff/couchdb-password
+          '';
+          environment = {
+            STUFF_LISTEN = "127.0.0.1:7847";
+            STUFF_COUCH_URL = "http://127.0.0.1:5984";
+            STUFF_COUCH_DB = "stuff";
+            STUFF_COUCH_USER = "stuff";
+            STUFF_COUCH_PASSWORD_FILE = "/run/stuff/couchdb-password";
+            STUFF_TOKEN_FILE = config.sops.secrets.stuff-api-token.path;
+          };
+          serviceConfig = {
+            User = "stuff";
+            Group = "stuff";
+            RuntimeDirectory = "stuff";
+            RuntimeDirectoryMode = "0700";
+            LoadCredential = [ "couchdb-admin:${config.sops.secrets.couchdb-admin.path}" ];
+            Restart = "on-failure";
+            RestartSec = "5s";
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            ProtectHome = true;
+            ProtectSystem = "strict";
+            CapabilityBoundingSet = "";
+            RestrictAddressFamilies = [
+              "AF_INET"
+              "AF_INET6"
+              "AF_UNIX"
+            ];
+          };
+        };
+      };
+
       config.environment.variables.GOLEM_ENDPOINT = "http://127.0.0.1:9920";
 
       # Office captive-portal survival kit. Azula may need to register on
