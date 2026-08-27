@@ -295,6 +295,10 @@ rec {
           subdomain = "stuff";
           port = 7847;
           visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [ "admin" ];
+          };
           health.endpoint = "/health";
         };
         unit = {
