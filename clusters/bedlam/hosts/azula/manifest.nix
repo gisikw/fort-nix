@@ -66,6 +66,11 @@ rec {
             ;;
         esac
       '';
+      stuffForFamiliar = pkgs.writeShellScript "stuff-for-familiar" ''
+        export STUFF_URL="''${STUFF_URL:-http://127.0.0.1:7847}"
+        export STUFF_TOKEN_FILE="''${STUFF_TOKEN_FILE:-/run/secrets/stuff-api-token}"
+        exec /nix/var/nix/profiles/fort-tracked-stuff/profile/bin/stuff "$@"
+      '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
         name = "azula"
         clone_enabled = true
@@ -115,7 +120,7 @@ rec {
         # stable link makes the dynamic tracked profile available immediately
         # without restarting the resident conversation.
         "d ${kestrelDir}/state/pi/bin 0700 familiar users -"
-        "L+ ${kestrelDir}/state/pi/bin/stuff - - - - /nix/var/nix/profiles/fort-tracked-stuff/profile/bin/stuff"
+        "L+ ${kestrelDir}/state/pi/bin/stuff - - - - ${stuffForFamiliar}"
       ];
 
       # Reuse the established developer SSH identity for outbound work from
