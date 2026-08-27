@@ -95,6 +95,29 @@ let
       }
     fi
   '';
+  # Presence readiness alone is insufficient during the one-time migration:
+  # the new monitor may initially be observing a tmux born in the legacy outer
+  # cgroup. Refuse to launch the outer supervisor until the resident pane is
+  # physically owned by the dedicated Presence unit. This also prevents a
+  # future startup race from recreating tmux under the wrong service.
+  waitForPresenceOwnership = ''
+    presence_unit=${lib.escapeShellArg "${presenceServiceName}.service"}
+    socket=${lib.escapeShellArg presenceSocket}
+    target=${lib.escapeShellArg "${presenceSession}:0.0"}
+    tries=0
+    while [ "$tries" -lt 150 ]; do
+      control_group="$(systemctl show "$presence_unit" --property=ControlGroup --value 2>/dev/null || true)"
+      pane_pid="$(tmux -S "$socket" display-message -p -t "$target" '#{pane_pid}' 2>/dev/null || true)"
+      if [ -n "$control_group" ] && [ -n "$pane_pid" ] \
+        && grep -Fxq "$pane_pid" "/sys/fs/cgroup$control_group/cgroup.procs" 2>/dev/null; then
+        exit 0
+      fi
+      tries=$((tries + 1))
+      sleep 0.2
+    done
+    echo "familiar instance: Presence pane is not owned by $presence_unit" >&2
+    exit 1
+  '';
   presenceEnvironment = {
     HOME = home;
     FAMILIAR_CONFIG_PATH = "${instanceDir}/familiar.toml";
@@ -190,7 +213,7 @@ in
     # must not receive this second condition or preStart could never clone.
     unitConfig.ConditionPathExists = instanceConditions;
     path = runtimePath;
-    preStart = provisionInstance;
+    preStart = provisionInstance + waitForPresenceOwnership;
     environment = {
       HOME = home;
       FAMILIAR_CONFIG_PATH = "${instanceDir}/familiar.toml";
