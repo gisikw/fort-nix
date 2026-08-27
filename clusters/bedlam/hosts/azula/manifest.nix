@@ -33,6 +33,7 @@ rec {
     "observable"
     "agent-debug"
     "familiar-test"
+    "couchdb"
   ];
 
   module =
