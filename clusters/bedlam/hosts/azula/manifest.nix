@@ -94,7 +94,7 @@ rec {
         openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
       };
 
-      fort.cluster.services.familiar = {
+      config.fort.cluster.services.familiar = {
         name = "familiar";
         port = 1692;
         visibility = "public";
