@@ -199,6 +199,7 @@ if platform == "darwin" then {
   launchd.daemons.fort-host-status = {
     serviceConfig = {
       Label = "network.gisi.fort.host-status";
+      UserName = "root";
       ProgramArguments = [ "${darwinStatusScript}" ];
       StartInterval = 30;
       RunAtLoad = true;

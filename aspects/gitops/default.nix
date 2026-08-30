@@ -427,6 +427,7 @@ lib.mkMerge [
         launchd.daemons.fort-gitops = {
           serviceConfig = {
             Label = "network.gisi.fort.gitops";
+            UserName = "root";
             ProgramArguments = [ "${darwinRebuildScript}" ];
             StartInterval = 30;
             StandardOutPath = "/var/log/fort-gitops.log";

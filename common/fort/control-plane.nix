@@ -419,6 +419,9 @@ in
       launchd.daemons.fort-provider = {
         serviceConfig = {
           Label = "network.gisi.fort.provider";
+          # macOS 26 no longer reliably infers root for third-party system
+          # jobs; without this launchd leaves the provider at EX_CONFIG.
+          UserName = "root";
           ProgramArguments = [
             "${fortProvider}/bin/fort-provider"
             "--listen" (if config.fort.cluster.services != [] then "127.0.0.1:8444" else "0.0.0.0:443")
@@ -503,6 +506,7 @@ in
       launchd.daemons.fort-consumer = {
         serviceConfig = {
           Label = "network.gisi.fort.consumer";
+          UserName = "root";
           ProgramArguments = [ "${fortFulfillScript}" ];
           StartInterval = 300;  # 5 minutes
           RunAtLoad = true;
@@ -621,6 +625,7 @@ in
       launchd.daemons.fort-provider-gc = {
         serviceConfig = {
           Label = "network.gisi.fort.provider-gc";
+          UserName = "root";
           ProgramArguments = [ "${fortProvider}/bin/fort-provider" "--gc" ];
           StartInterval = 3600;  # Every hour
           StandardOutPath = "/var/log/fort-provider-gc.log";

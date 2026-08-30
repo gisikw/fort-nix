@@ -382,6 +382,9 @@ in
     launchd.daemons.fort-nginx = {
       serviceConfig = {
         Label = nginxLabel;
+        # macOS 26 no longer reliably infers root for third-party system jobs;
+        # an omitted UserName leaves the job in launchd with EX_CONFIG.
+        UserName = "root";
         ProgramArguments = [
           "${pkgs.nginx}/bin/nginx"
           "-p" nginxStateDir
@@ -393,8 +396,11 @@ in
         KeepAlive = true;
         # Certs/dirs appear via activation; retry fast until they do.
         ThrottleInterval = 5;
-        # launchd's default 256-fd soft limit is below worker_connections
+        # launchd's default 256-fd limit is below worker_connections. Raising
+        # only the soft limit above that hard limit makes launchd reject the
+        # job with EX_CONFIG, so the limits must move together.
         SoftResourceLimits.NumberOfFiles = 4096;
+        HardResourceLimits.NumberOfFiles = 4096;
         StandardOutPath = "/var/log/fort-nginx.log";
         StandardErrorPath = "/var/log/fort-nginx.log";
       };
@@ -442,9 +448,11 @@ in
       serviceConfig = {
         Label = identityLabel;
         ProgramArguments = [ "${identityProxyWrapper}" ];
-        # Socket must be connectable by nginx workers (nobody); the daemon
-        # runs root:nobody so the 0660 socket's group bit covers them.
-        GroupName = "nobody";
+        # Socket access comes from the wrapper chowning its directory to
+        # root:nobody; do not ask launchd to assume the special nobody group.
+        # macOS 26 rejects that launchd GroupName with EX_CONFIG, and needs
+        # the system job's root identity stated explicitly.
+        UserName = "root";
         RunAtLoad = true;
         KeepAlive = true;
         # identity doc arrives via sops at activation; OIDC discovery needs

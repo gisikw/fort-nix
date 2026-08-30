@@ -96,6 +96,7 @@ lib.mkMerge ([
     launchd.daemons.fort-mesh-enroll = {
       serviceConfig = {
         Label = "network.gisi.fort.mesh-enroll";
+        UserName = "root";
         ProgramArguments = [ "${enrollScript}" ];
         RunAtLoad = true;
         StandardOutPath = "/var/log/fort-mesh-enroll.log";
