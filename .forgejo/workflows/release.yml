@@ -117,6 +117,22 @@ jobs:
         env:
           NIX_CONFIG: "warn-dirty = false"
 
+  deploy-obrien:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: macos
+    steps:
+      - uses: actions/checkout@v4
+
+      # obrien is the only Darwin host and cannot run the Linux gitops agent.
+      # Converge it from its local runner so service fixes do not wait for a
+      # manual SSH deployment (which left apple-dist down after host drift).
+      - name: Deploy obrien
+        run: |
+          sudo darwin-rebuild switch --flake ./clusters/bedlam/hosts/obrien#obrien
+          sudo mkdir -p /var/lib/fort-gitops
+          git rev-parse --short HEAD | sudo tee /var/lib/fort-gitops/deployed-commit >/dev/null
+
   mirror:
     needs: check
     if: github.event_name == 'push'
