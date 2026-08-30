@@ -88,8 +88,8 @@ func processEntriesWithClient(client TokenGenerator, input HandlerInput, tokenDi
 			continue
 		}
 
-		if access == "rw" && origin != "ratched" {
-			resp := TokenResponse{Error: "rw access requires dev-sandbox host (ratched)"}
+		if access == "rw" && !rwHosts[origin] {
+			resp := TokenResponse{Error: "rw access not permitted for this host"}
 			respBytes, _ := json.Marshal(resp)
 			output[key] = OutputEntry{
 				Request:  entry.Request,
@@ -285,7 +285,7 @@ func TestProcessEntries_RBACDenied(t *testing.T) {
 	tmpDir := t.TempDir()
 	mock := newMockForgejoClient()
 
-	// Non-ratched host requesting rw access
+	// Unapproved host requesting rw access
 	input := HandlerInput{
 		"joker:git-token": InputEntry{
 			Request: json.RawMessage(`{"access":"rw"}`),
@@ -303,8 +303,8 @@ func TestProcessEntries_RBACDenied(t *testing.T) {
 	if resp.Error == "" {
 		t.Error("expected RBAC error")
 	}
-	if !strings.Contains(resp.Error, "dev-sandbox") {
-		t.Errorf("error should mention dev-sandbox: %s", resp.Error)
+	if !strings.Contains(resp.Error, "not permitted") {
+		t.Errorf("error should explain denial: %s", resp.Error)
 	}
 
 	// Should not have called generate
@@ -314,34 +314,32 @@ func TestProcessEntries_RBACDenied(t *testing.T) {
 }
 
 func TestProcessEntries_RBACAllowed(t *testing.T) {
-	tmpDir := t.TempDir()
-	mock := newMockForgejoClient()
+	for _, host := range []string{"ratched", "obrien", "azula"} {
+		t.Run(host, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			mock := newMockForgejoClient()
+			key := host + ":git-token"
+			input := HandlerInput{
+				key: InputEntry{Request: json.RawMessage(`{"access":"rw"}`)},
+			}
 
-	// ratched host requesting rw access
-	input := HandlerInput{
-		"ratched:git-token": InputEntry{
-			Request: json.RawMessage(`{"access":"rw"}`),
-		},
-	}
+			output, err := processEntriesWithClient(mock, input, tmpDir)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-	output, err := processEntriesWithClient(mock, input, tmpDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var resp TokenResponse
-	json.Unmarshal(output["ratched:git-token"].Response, &resp)
-
-	if resp.Error != "" {
-		t.Errorf("unexpected error: %s", resp.Error)
-	}
-	if resp.Token == "" {
-		t.Error("expected token for authorized request")
-	}
-
-	// Verify scopes include write
-	if len(mock.generateCalls) != 1 {
-		t.Fatalf("expected 1 generate call")
+			var resp TokenResponse
+			json.Unmarshal(output[key].Response, &resp)
+			if resp.Error != "" {
+				t.Errorf("unexpected error: %s", resp.Error)
+			}
+			if resp.Token == "" {
+				t.Error("expected token for authorized request")
+			}
+			if len(mock.generateCalls) != 1 {
+				t.Fatalf("expected 1 generate call")
+			}
+		})
 	}
 }
 

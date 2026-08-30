@@ -24,6 +24,8 @@ const (
 	username = "forge-admin"
 )
 
+var rwHosts = map[string]bool{"ratched": true, "obrien": true, "azula": true}
+
 func main() {
 	// Read configuration from environment
 	forgejoPackage := getEnv("FORGEJO_PACKAGE", defaultForgejoPackage)
@@ -109,8 +111,7 @@ func processEntries(client *ForgejoClient, input HandlerInput) (HandlerOutput, e
 			continue
 		}
 
-		// RBAC: Only approved hosts can request rw access
-		rwHosts := map[string]bool{"ratched": true, "obrien": true}
+		// RBAC: Only approved hosts can request rw access.
 		if access == "rw" && !rwHosts[origin] {
 			resp := TokenResponse{Error: "rw access not permitted for this host"}
 			respBytes, _ := json.Marshal(resp)
