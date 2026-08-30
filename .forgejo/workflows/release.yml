@@ -130,6 +130,12 @@ jobs:
       - name: Deploy obrien
         run: |
           sudo /run/current-system/sw/bin/darwin-rebuild switch --flake ./clusters/bedlam/hosts/obrien#obrien
+          # nix-darwin leaves an unchanged launchd job alone; explicitly
+          # converge the distribution proxy in case launchd lost its job.
+          sudo /bin/launchctl kickstart -k system/network.gisi.fort.nginx
+          sleep 2
+          curl --fail --silent --show-error --resolve apple.gisi.network:443:127.0.0.1 \
+            https://apple.gisi.network/ -o /dev/null
           sudo mkdir -p /var/lib/fort-gitops
           git rev-parse --short HEAD | sudo tee /var/lib/fort-gitops/deployed-commit >/dev/null
 
