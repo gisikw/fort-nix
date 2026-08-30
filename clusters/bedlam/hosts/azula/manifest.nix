@@ -84,8 +84,41 @@ rec {
         base_url = "https://llama.gisi.network/v1"
         api_key_env = ""
 
+        # Router-backed providers are registered dynamically inside each
+        # isolated pi worker. Golem owns no upstream OAuth state.
+        [providers.tiamat-anthropic-claude-code-personal]
+        kind = "tiamat"
+
+        [providers.tiamat-responses-codex-personal]
+        kind = "tiamat"
+
+        [providers.tiamat-openai-llama-frankenstein]
+        kind = "tiamat"
+
         [harnesses.pi]
-        models = ["llama/Qwen3.8-27B-UD-Q4_K_XL"]
+        models = [
+          "tiamat-anthropic-claude-code-personal/claude-fable-5",
+          "tiamat-anthropic-claude-code-personal/claude-haiku-4-5-20251001",
+          "tiamat-anthropic-claude-code-personal/claude-opus-4-5-20251101",
+          "tiamat-anthropic-claude-code-personal/claude-opus-4-6",
+          "tiamat-anthropic-claude-code-personal/claude-opus-4-7",
+          "tiamat-anthropic-claude-code-personal/claude-opus-4-8",
+          "tiamat-anthropic-claude-code-personal/claude-opus-5",
+          "tiamat-anthropic-claude-code-personal/claude-sonnet-4-5-20250929",
+          "tiamat-anthropic-claude-code-personal/claude-sonnet-4-6",
+          "tiamat-anthropic-claude-code-personal/claude-sonnet-5",
+          "tiamat-responses-codex-personal/codex-auto-review",
+          "tiamat-responses-codex-personal/gpt-5.4",
+          "tiamat-responses-codex-personal/gpt-5.4-mini",
+          "tiamat-responses-codex-personal/gpt-5.5",
+          "tiamat-responses-codex-personal/gpt-5.6-luna",
+          "tiamat-responses-codex-personal/gpt-5.6-sol",
+          "tiamat-responses-codex-personal/gpt-5.6-terra",
+          "tiamat-responses-codex-personal/gpt-reserve",
+          "tiamat-openai-llama-frankenstein/Qwen3.8-27B-UD-Q4_K_XL",
+          # Keep the direct path as a fallback while Router wiring settles.
+          "llama/Qwen3.8-27B-UD-Q4_K_XL",
+        ]
 
         [harnesses.fake]
         models = []
@@ -333,6 +366,8 @@ rec {
             # Belt and braces: golemd pins the private tmux server's
             # default-shell from this variable.
             GOLEM_INTERACTIVE_SHELL = "${pkgs.bashInteractive}/bin/bash";
+            GOLEM_TIAMAT_URL = "https://router.gisi.network";
+            GOLEM_TIAMAT_TOKEN_FILE = "/run/secrets/tiamat-router-token";
           };
         };
       };
