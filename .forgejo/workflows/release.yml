@@ -129,7 +129,7 @@ jobs:
       # manual SSH deployment (which left apple-dist down after host drift).
       - name: Deploy obrien
         run: |
-          sudo darwin-rebuild switch --flake ./clusters/bedlam/hosts/obrien#obrien
+          sudo /run/current-system/sw/bin/darwin-rebuild switch --flake ./clusters/bedlam/hosts/obrien#obrien
           sudo mkdir -p /var/lib/fort-gitops
           git rev-parse --short HEAD | sudo tee /var/lib/fort-gitops/deployed-commit >/dev/null
 
