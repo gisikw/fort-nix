@@ -30,7 +30,13 @@ rec {
       # hearth-room iOS loop — see docs/obrien-muse-serve.md § Gestures.
       axe = import ../../../../pkgs/axe { inherit pkgs; };
       claude-code = import ../../../../pkgs/claude-code { inherit pkgs; };
-      pi-coding-agent = import ../../../../pkgs/pi-coding-agent { inherit pkgs; };
+      pi-coding-agent = (import ../../../../pkgs/pi-coding-agent { inherit pkgs; }).overrideAttrs (old: {
+        # The npm package is architecture-independent and is proven on obrien;
+        # the shared derivation's Linux-only metadata is overly restrictive.
+        meta = old.meta // {
+          platforms = lib.platforms.unix;
+        };
+      });
 
       # Keep the runtime source revision explicit: obrien's host generation,
       # rather than an imperative user profile, owns when golemd advances.
