@@ -165,7 +165,7 @@ rec {
           ProgramArguments = [
             "${golem}/bin/golemd"
             "--config"
-            golemdConfig
+            "${golemdConfig}"
             "--state"
             golemStateDir
             "--listen"
