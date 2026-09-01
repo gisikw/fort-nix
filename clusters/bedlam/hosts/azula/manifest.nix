@@ -142,8 +142,24 @@ rec {
         home = familiarHome;
         createHome = true;
         shell = pkgs.bashInteractive;
+        # systemd-journal: plain journalctl works without escalation.
+        extraGroups = [ "systemd-journal" ];
         openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
       };
+
+      # Familiar operates this host (service state dirs, unit debugging) and
+      # has no password, so sudo must not prompt for one.
+      config.security.sudo.extraRules = [
+        {
+          users = [ "familiar" ];
+          commands = [
+            {
+              command = "ALL";
+              options = [ "NOPASSWD" ];
+            }
+          ];
+        }
+      ];
 
       config.users.groups.tiamat-router = { };
       config.users.users.tiamat-router = {
