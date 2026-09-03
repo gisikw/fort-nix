@@ -209,6 +209,13 @@ func createNewClient(api *PocketIDAPI, req OIDCRequest, groupIDs []string, callb
 	if err != nil {
 		return OIDCResponse{Error: fmt.Sprintf("Failed to create client: %v", err)}
 	}
+	// If the provider ignored a requested custom id (older pocket-id versions
+	// drop unknown fields), fail loudly instead of delete-recreate looping
+	// forever: the pinned id is a contract with the shipping client.
+	if clientID != "" && client.ID != clientID {
+		_ = api.DeleteClient(client.ID)
+		return OIDCResponse{Error: fmt.Sprintf("provider did not honor custom client id (wanted %q, got %q); pocket-id version may predate custom ids", clientID, client.ID)}
+	}
 
 	// Set allowed groups
 	if len(groupIDs) > 0 {
