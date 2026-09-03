@@ -9,3 +9,4 @@ erl_crash.dump
 .ko/builds/
 .ko/agent.*
 pkgs/fort-provider/fort-provider
+pkgs/identity-proxy/identity-proxy
