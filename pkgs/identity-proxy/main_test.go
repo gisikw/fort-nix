@@ -100,6 +100,7 @@ func TestValidateBearerToken(t *testing.T) {
 	idp := testIssuer(t, key)
 	defer idp.Close()
 	s := testServer(t, idp.URL)
+	s.httpClient = idp.Client()
 
 	// Tokens must carry the live test issuer; the verifier checks iss
 	// against the discovery doc's issuer, which is srv.URL.

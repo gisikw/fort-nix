@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -114,6 +115,7 @@ func main() {
 		oauth2Config:   oauth2Config,
 		verifier:       verifier,
 		bearerVerifier: bearerVerifier,
+		httpClient:     &http.Client{Timeout: 10 * time.Second},
 	}
 
 	mux := http.NewServeMux()
@@ -255,6 +257,7 @@ type Server struct {
 	oauth2Config   *oauth2.Config
 	verifier       *oidc.IDTokenVerifier
 	bearerVerifier *oidc.IDTokenVerifier
+	httpClient     *http.Client
 }
 
 // handleValidate is the nginx auth_request target.
@@ -323,52 +326,83 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// validateBearerToken verifies an OIDC access token (JWT) from a native
-// client: signature and issuer via the provider's JWKS, audience against the
-// configured native-client list, then email mapping through the identity doc
-// (the doc stays authoritative for name and groups — same trust model as the
-// tailscale whois path). Returns ok=false on any failure.
+// validateBearerToken verifies an access token from a native client.
+// JWTs are verified locally via JWKS; opaque tokens (pocket-id's default
+// access-token format) are validated by calling the issuer's userinfo
+// endpoint — standard OIDC token introspection-by-proxy. Either way the
+// identity doc remains authoritative for name and groups via the resolved
+// email — same trust model as the tailscale whois path.
 func (s *Server) validateBearerToken(ctx context.Context, raw string) (*resolvedUser, bool) {
 	if s.bearerVerifier == nil {
 		return nil, false
 	}
+	var email string
 	idt, err := s.bearerVerifier.Verify(ctx, raw)
-	if err != nil {
-		log.Printf("bearer verify: %v", err)
-		return nil, false
-	}
-	var claims struct {
-		Aud    []string `json:"aud"`
-		Email  string   `json:"email"`
-		Name   string   `json:"preferred_username"`
-		Groups []string `json:"groups"`
-	}
-	if err := idt.Claims(&claims); err != nil {
-		log.Printf("bearer claims: %v", err)
-		return nil, false
-	}
-	audOK := false
-	for _, want := range s.cfg.BearerAudiences {
-		for _, got := range claims.Aud {
-			if got == want {
-				audOK = true
-			}
+	if err == nil {
+		var claims struct {
+			Aud   []string `json:"aud"`
+			Email string   `json:"email"`
 		}
+		if err := idt.Claims(&claims); err != nil {
+			log.Printf("bearer claims: %v", err)
+			return nil, false
+		}
+		if !audAccepted(s.cfg.BearerAudiences, claims.Aud) {
+			log.Printf("bearer aud not accepted: %v", claims.Aud)
+			return nil, false
+		}
+		email = claims.Email
+	} else {
+		// Not a parseable JWT — treat as an opaque token and ask the issuer.
+		var ui struct {
+			Email string `json:"email"`
+		}
+		if err := s.userInfo(ctx, raw, &ui); err != nil {
+			log.Printf("bearer userinfo: %v", err)
+			return nil, false
+		}
+		email = ui.Email
 	}
-	if !audOK {
-		log.Printf("bearer aud not accepted: %v", claims.Aud)
-		return nil, false
-	}
-	if claims.Email == "" {
+	if email == "" {
 		log.Printf("bearer token has no email claim")
 		return nil, false
 	}
-	user, ok := s.doc.byEmail[strings.ToLower(claims.Email)]
+	user, ok := s.doc.byEmail[strings.ToLower(email)]
 	if !ok {
-		log.Printf("bearer email %q not in identity doc", claims.Email)
+		log.Printf("bearer email %q not in identity doc", email)
 		return nil, false
 	}
 	return user, true
+}
+
+// userInfo calls the issuer's userinfo endpoint with the token.
+func (s *Server) userInfo(ctx context.Context, token string, out interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.OIDCIssuer+"/api/oidc/userinfo", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		return fmt.Errorf("userinfo status %d", resp.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
+}
+
+func audAccepted(want []string, got []string) bool {
+	for _, w := range want {
+		for _, g := range got {
+			if g == w {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // handleProtectedResource serves RFC 9728 Protected Resource Metadata so
@@ -382,10 +416,10 @@ func (s *Server) handleProtectedResource(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"resource":                   "https://" + host,
-		"authorization_servers":       []string{s.cfg.OIDCIssuer},
-		"scopes_supported":            []string{"openid", "profile", "email", "offline_access"},
-		"bearer_methods_supported":    []string{"header"},
+		"resource":                 "https://" + host,
+		"authorization_servers":    []string{s.cfg.OIDCIssuer},
+		"scopes_supported":         []string{"openid", "profile", "email", "offline_access"},
+		"bearer_methods_supported": []string{"header"},
 	})
 }
 
