@@ -257,6 +257,10 @@ in
         from = "drhorrible";
         request = {
           client_name = "Familiar Desktop";
+          # Pin the OIDC client id: the Electron app ships it as a constant
+          # (RFC 8252 public client). The provider recreates the client under
+          # this id if an earlier registration minted a random one.
+          client_id = "familiar-desktop";
           groups = [ ];
           callback_urls = [ "http://127.0.0.1/callback" ];
         };

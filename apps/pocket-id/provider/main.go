@@ -162,6 +162,14 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 
 	// Check if client exists by name
 	if client := FindClientByName(existing, req.ClientName); client != nil {
+		// Pinned id in the request but the existing client has a different
+		// (e.g. provider-minted random) id: recreate under the pinned id.
+		if req.RequestedClientID != "" && client.ID != req.RequestedClientID {
+			if err := api.DeleteClient(client.ID); err != nil {
+				return OIDCResponse{Error: fmt.Sprintf("Failed to delete client for id pin: %v", err)}
+			}
+			return createNewClient(api, req, groupIDs, callbackURLs, keptIDs)
+		}
 		// Client exists but we don't have the secret cached - regenerate it
 		if err := api.SetAllowedGroups(client.ID, groupIDs); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to sync groups for %s: %v\n", req.ClientName, err)
@@ -179,7 +187,7 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 			if err := api.DeleteClient(client.ID); err != nil {
 				return OIDCResponse{Error: fmt.Sprintf("Failed to delete client for recreation: %v", err)}
 			}
-			return createNewClient(api, req.ClientName, groupIDs, callbackURLs, keptIDs)
+			return createNewClient(api, req, groupIDs, callbackURLs, keptIDs)
 		}
 
 		keptIDs[client.ID] = true
@@ -190,12 +198,14 @@ func processClient(api *PocketIDAPI, existing []PocketIDClient, req OIDCRequest,
 	}
 
 	// Create new client
-	return createNewClient(api, req.ClientName, groupIDs, callbackURLs, keptIDs)
+	return createNewClient(api, req, groupIDs, callbackURLs, keptIDs)
 }
 
 // createNewClient creates a new OIDC client
-func createNewClient(api *PocketIDAPI, name string, groupIDs []string, callbackURLs []string, keptIDs map[string]bool) OIDCResponse {
-	client, err := api.CreateClient(name, callbackURLs)
+func createNewClient(api *PocketIDAPI, req OIDCRequest, groupIDs []string, callbackURLs []string, keptIDs map[string]bool) OIDCResponse {
+	clientID := req.RequestedClientID
+	name := req.ClientName
+	client, err := api.CreateClient(name, callbackURLs, clientID)
 	if err != nil {
 		return OIDCResponse{Error: fmt.Sprintf("Failed to create client: %v", err)}
 	}

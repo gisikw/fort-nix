@@ -25,7 +25,11 @@ type OIDCRequest struct {
 	ClientName   string   `json:"client_name"`
 	Groups       []string `json:"groups,omitempty"`
 	CallbackURLs []string `json:"callback_urls,omitempty"`
-	FortNeedID   string   `json:"_fort_need_id,omitempty"`
+	// RequestedClientID pins the OIDC client id (pocket-id's "custom client
+	// ID") instead of letting the provider mint a random one. Used when the
+	// consuming client ships the id as a constant (RFC 8252 public clients).
+	RequestedClientID string   `json:"client_id,omitempty"`
+	FortNeedID        string   `json:"_fort_need_id,omitempty"`
 }
 
 // OIDCResponse is the response payload to consumers
@@ -68,12 +72,13 @@ type SecretResponse struct {
 
 // CreateClientRequest is the request body for creating an OIDC client
 type CreateClientRequest struct {
-	Name                    string   `json:"name"`
-	CallbackURLs            []string `json:"callbackURLs"`
-	LogoutCallbackURLs      []string `json:"logoutCallbackURLs"`
-	IsPublic                bool     `json:"isPublic"`
-	PKCEEnabled             bool     `json:"pkceEnabled"`
-	RequiresReauthentication bool    `json:"requiresReauthentication"`
+	ID                       string   `json:"id,omitempty"` // optional custom client id (pinned for public native clients)
+	Name                     string   `json:"name"`
+	CallbackURLs             []string `json:"callbackURLs"`
+	LogoutCallbackURLs       []string `json:"logoutCallbackURLs"`
+	IsPublic                 bool     `json:"isPublic"`
+	PKCEEnabled              bool     `json:"pkceEnabled"`
+	RequiresReauthentication bool     `json:"requiresReauthentication"`
 }
 
 // AllowedGroupsRequest is the request body for setting allowed user groups

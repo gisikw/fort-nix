@@ -95,17 +95,21 @@ func (c *PocketIDAPI) GetAllClients() ([]PocketIDClient, error) {
 	return allClients, nil
 }
 
-// CreateClient creates a new OIDC client and returns its info
-func (c *PocketIDAPI) CreateClient(name string, callbackURLs []string) (*PocketIDClient, error) {
+// CreateClient creates a new OIDC client and returns its info. A non-empty
+// clientID pins the id (pocket-id custom client id) and marks the client
+// public with PKCE — the RFC 8252 native-app profile, where the id ships in
+// the client and no secret exists.
+func (c *PocketIDAPI) CreateClient(name string, callbackURLs []string, clientID string) (*PocketIDClient, error) {
 	if callbackURLs == nil {
 		callbackURLs = []string{}
 	}
 	req := CreateClientRequest{
-		Name:                    name,
-		CallbackURLs:            callbackURLs,
-		LogoutCallbackURLs:      []string{},
-		IsPublic:                false,
-		PKCEEnabled:             false,
+		ID:                       clientID,
+		Name:                     name,
+		CallbackURLs:             callbackURLs,
+		LogoutCallbackURLs:       []string{},
+		IsPublic:                 clientID != "", // pinned ids are public native clients
+		PKCEEnabled:              true,
 		RequiresReauthentication: false,
 	}
 
