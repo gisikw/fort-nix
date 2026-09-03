@@ -243,10 +243,13 @@ in
                     proxy_set_header X-Real-IP $remote_addr;
                   '';
                 };
-                # RFC 9728 protected resource metadata (native-client discovery)
+                # RFC 9728 protected resource metadata (native-client discovery).
+                # Pass the original URI through: proxy_pass to a unix socket
+                # with an inline URI needs a colon delimiter and silently eats
+                # the path otherwise (gixy-clean but 502 "Not a directory").
                 locations."= /.well-known/oauth-protected-resource" = lib.mkIf isIdentityMode {
                   extraConfig = ''
-                    proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock/_identity/protected-resource;
+                    proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
                     proxy_set_header Host $host;
                     proxy_set_header X-Original-Host $host;
                   '';

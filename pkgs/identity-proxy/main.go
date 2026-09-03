@@ -121,6 +121,10 @@ func main() {
 	mux.HandleFunc("/_identity/login", srv.handleLogin)
 	mux.HandleFunc("/_identity/callback", srv.handleCallback)
 	mux.HandleFunc("/_identity/protected-resource", srv.handleProtectedResource)
+	// nginx passes /.well-known/oauth-protected-resource through without a
+	// URI rewrite (unix-socket proxy_pass URI handling is colon-delimited and
+	// easy to get wrong), so serve the well-known path directly too.
+	mux.HandleFunc("/.well-known/oauth-protected-resource", srv.handleProtectedResource)
 
 	// Remove stale socket
 	os.Remove(cfg.ListenSocket)
