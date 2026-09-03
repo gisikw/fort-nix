@@ -161,7 +161,10 @@ in
                             proxy_set_header X-Forwarded-Groups $identity_groups;
                             # RFC 9728/6750 advertisement: native clients that get a
                             # 401 learn where to run the authorization dance.
-                            add_header WWW-Authenticate 'Bearer resource_metadata="https://$host/.well-known/oauth-protected-resource"' always;
+                            # more_set_headers, not add_header: add_header at
+                            # location level drops the server-level CSP header
+                            # (gixy add_header_redefinition).
+                            more_set_headers 'WWW-Authenticate: Bearer resource_metadata="https://$host/.well-known/oauth-protected-resource"';
                             error_page 401 = @identity_login;
                           '')
                           # Conditional routing: bypass auth for trusted networks, otherwise go through oauth2-proxy
