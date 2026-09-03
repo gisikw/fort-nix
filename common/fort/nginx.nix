@@ -65,6 +65,16 @@ in
             ${lanIpv4Prefix} 1;
             127.0.0.0/8 1;
           }
+
+          # Native clients (Electron) authenticate with a Bearer token. webRequest
+          # header injection is unreliable on WebSocket upgrades, so the client
+          # also mirrors the token into a _fort_bearer cookie; this map turns it
+          # back into an Authorization header for the identity auth_request
+          # subrequest. Without the cookie, the real header passes through.
+          map $cookie__fort_bearer $fort_bearer_auth {
+            default "Bearer $cookie__fort_bearer";
+            "" $http_authorization;
+          }
         ''
         + lib.optionalString (tokenServices != [ ]) ''
 
@@ -226,6 +236,7 @@ in
                     proxy_set_header X-Original-Host $host;
                     proxy_set_header X-Real-IP $remote_addr;
                     proxy_set_header X-Identity-Required-Groups "${lib.concatStringsSep "," svc.sso.groups}";
+                    proxy_set_header Authorization $fort_bearer_auth;
                   '';
                 };
                 # Identity proxy login redirect
