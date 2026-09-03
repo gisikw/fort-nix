@@ -332,16 +332,18 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 // endpoint — standard OIDC token introspection-by-proxy. Either way the
 // identity doc remains authoritative for name and groups via the resolved
 // email — same trust model as the tailscale whois path.
+// validateBearerToken verifies an access token from a native client.
+// Audience is checked locally for JWTs; identity is resolved uniformly via
+// the issuer's userinfo endpoint — pocket-id access tokens carry aud but no
+// email, and opaque tokens carry neither. The identity doc remains
+// authoritative for name and groups — same trust model as the whois path.
 func (s *Server) validateBearerToken(ctx context.Context, raw string) (*resolvedUser, bool) {
 	if s.bearerVerifier == nil {
 		return nil, false
 	}
-	var email string
-	idt, err := s.bearerVerifier.Verify(ctx, raw)
-	if err == nil {
+	if idt, err := s.bearerVerifier.Verify(ctx, raw); err == nil {
 		var claims struct {
-			Aud   []string `json:"aud"`
-			Email string   `json:"email"`
+			Aud []string `json:"aud"`
 		}
 		if err := idt.Claims(&claims); err != nil {
 			log.Printf("bearer claims: %v", err)
@@ -351,25 +353,22 @@ func (s *Server) validateBearerToken(ctx context.Context, raw string) (*resolved
 			log.Printf("bearer aud not accepted: %v", claims.Aud)
 			return nil, false
 		}
-		email = claims.Email
-	} else {
-		// Not a parseable JWT — treat as an opaque token and ask the issuer.
-		var ui struct {
-			Email string `json:"email"`
-		}
-		if err := s.userInfo(ctx, raw, &ui); err != nil {
-			log.Printf("bearer userinfo: %v", err)
-			return nil, false
-		}
-		email = ui.Email
 	}
-	if email == "" {
-		log.Printf("bearer token has no email claim")
+	// Opaque tokens skip local verification; userinfo is the authority.
+	var ui struct {
+		Email string `json:"email"`
+	}
+	if err := s.userInfo(ctx, raw, &ui); err != nil {
+		log.Printf("bearer userinfo: %v", err)
 		return nil, false
 	}
-	user, ok := s.doc.byEmail[strings.ToLower(email)]
+	if ui.Email == "" {
+		log.Printf("userinfo returned no email")
+		return nil, false
+	}
+	user, ok := s.doc.byEmail[strings.ToLower(ui.Email)]
 	if !ok {
-		log.Printf("bearer email %q not in identity doc", email)
+		log.Printf("bearer email %q not in identity doc", ui.Email)
 		return nil, false
 	}
 	return user, true

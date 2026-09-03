@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/go-jose/go-jose/v4"
 )
 
-// spin up a minimal OIDC issuer: discovery doc + JWKS backed by one RSA key.
 // spin up a minimal OIDC issuer: discovery doc + JWKS backed by one RSA key.
 func testIssuer(t *testing.T, key *rsa.PrivateKey) *httptest.Server {
 	t.Helper()
@@ -36,9 +36,22 @@ func testIssuer(t *testing.T, key *rsa.PrivateKey) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(append([]byte(`{"keys":[`), append(buf, []byte("]}")...)...))
 	})
+	// userinfo maps pre-registered tokens to emails — tests register tokens
+	// in userinfoTokens to simulate the issuer knowing the token.
+	mux.HandleFunc("/api/oidc/userinfo", func(w http.ResponseWriter, r *http.Request) {
+		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		email, ok := userinfoTokens.Load(tok)
+		if !ok {
+			w.WriteHeader(401)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"email": email.(string), "sub": "x"})
+	})
 	t.Cleanup(srv.Close)
 	return srv
 }
+
+var userinfoTokens sync.Map
 
 func signIDToken(t *testing.T, key *rsa.PrivateKey, issuer string, claims map[string]interface{}) string {
 	t.Helper()
@@ -114,10 +127,11 @@ func TestValidateBearerToken(t *testing.T) {
 	}
 
 	valid := signIDToken(t, key, issuer, map[string]interface{}{
-		"aud":                  []string{"familiar-desktop"},
-		"email":                "kevin@example.com",
-		"preferred_username":   "kevin",
+		"aud": []string{"familiar-desktop"},
 	})
+	// Access tokens carry no email (pocket-id's real behavior); identity comes
+	// from userinfo, which the mock resolves per-token.
+	userinfoTokens.Store(valid, "kevin@example.com")
 
 	// Happy path: token proves email, doc supplies groups.
 	w := httptest.NewRecorder()
@@ -131,7 +145,7 @@ func TestValidateBearerToken(t *testing.T) {
 
 	// Wrong audience → rejected even though signature is valid.
 	wrongAud := signIDToken(t, key, issuer, map[string]interface{}{
-		"aud": []string{"someone-else"}, "email": "kevin@example.com",
+		"aud": []string{"someone-else"},
 	})
 	w = httptest.NewRecorder()
 	s.handleValidate(w, makeReq(wrongAud, "admin"))
@@ -139,10 +153,13 @@ func TestValidateBearerToken(t *testing.T) {
 		t.Fatalf("wrong aud: code=%d", w.Code)
 	}
 
-	// Valid token, email not in the identity doc → unauthorized.
+	// Valid JWT whose owner is not in the identity doc → unauthorized.
+	// (Distinct claim needed: RSA-PKCS1v15 is deterministic, so identical
+	// claims would produce a token byte-identical to `valid`.)
 	stranger := signIDToken(t, key, issuer, map[string]interface{}{
-		"aud": []string{"familiar-desktop"}, "email": "stranger@example.com",
+		"aud": []string{"familiar-desktop"}, "sub": "stranger-sub",
 	})
+	userinfoTokens.Store(stranger, "stranger@example.com")
 	w = httptest.NewRecorder()
 	s.handleValidate(w, makeReq(stranger, "admin"))
 	if w.Code != http.StatusUnauthorized {
@@ -162,6 +179,22 @@ func TestValidateBearerToken(t *testing.T) {
 	s.handleValidate(w, makeReq(valid, "sudo"))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("missing group: code=%d", w.Code)
+	}
+
+	// Opaque access token (pocket-id's default format): userinfo resolves it.
+	opaque := "opaque-token-abc"
+	userinfoTokens.Store(opaque, "kevin@example.com")
+	w = httptest.NewRecorder()
+	s.handleValidate(w, makeReq(opaque, "admin"))
+	if w.Code != http.StatusOK || w.Header().Get("X-Identity-User") != "kevin" {
+		t.Fatalf("opaque token via userinfo: code=%d body=%s", w.Code, w.Body.String())
+	}
+
+	// Rejected opaque token (issuer doesn't know it) → unauthorized.
+	w = httptest.NewRecorder()
+	s.handleValidate(w, makeReq("opaque-token-rejected", "admin"))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("rejected opaque: code=%d", w.Code)
 	}
 
 	// Garbage token → unauthorized, not a panic.
@@ -185,7 +218,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 		t.Fatalf("code=%d ct=%q", w.Code, w.Header().Get("Content-Type"))
 	}
 	var meta struct {
-		Resource            string   `json:"resource"`
+		Resource             string   `json:"resource"`
 		AuthorizationServers []string `json:"authorization_servers"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &meta); err != nil {
