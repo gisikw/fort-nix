@@ -33,6 +33,10 @@ type Config struct {
 	OIDCIssuer       string
 	OIDCClientID     string
 	OIDCClientSecret string
+	// Audiences accepted on Bearer JWTs from native clients (RFC 8252 apps
+	// that authenticate directly against the OIDC issuer). Comma-separated
+	// BEARER_AUDIENCES env; defaults to the interactive client's own ID.
+	BearerAudiences []string
 }
 
 // User represents an entry in the identity TOML document.
@@ -99,19 +103,24 @@ func main() {
 		Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
 	}
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
+	// Bearer tokens come from native clients with their own audiences; skip
+	// the verifier's audience check and enforce the accepted list ourselves.
+	bearerVerifier := provider.Verifier(&oidc.Config{SkipClientIDCheck: true})
 
 	srv := &Server{
-		cfg:          cfg,
-		doc:          doc,
-		cache:        cache,
-		oauth2Config: oauth2Config,
-		verifier:     verifier,
+		cfg:            cfg,
+		doc:            doc,
+		cache:          cache,
+		oauth2Config:   oauth2Config,
+		verifier:       verifier,
+		bearerVerifier: bearerVerifier,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/_identity/validate", srv.handleValidate)
 	mux.HandleFunc("/_identity/login", srv.handleLogin)
 	mux.HandleFunc("/_identity/callback", srv.handleCallback)
+	mux.HandleFunc("/_identity/protected-resource", srv.handleProtectedResource)
 
 	// Remove stale socket
 	os.Remove(cfg.ListenSocket)
@@ -167,6 +176,16 @@ func loadConfig() *Config {
 		dur = 24 * time.Hour
 	}
 
+	audiences := []string{strings.TrimSpace(string(clientID))}
+	if extra := strings.TrimSpace(os.Getenv("BEARER_AUDIENCES")); extra != "" {
+		audiences = nil
+		for _, a := range strings.Split(extra, ",") {
+			if a = strings.TrimSpace(a); a != "" {
+				audiences = append(audiences, a)
+			}
+		}
+	}
+
 	return &Config{
 		ListenSocket:     socket,
 		IdentityDoc:      identityDoc,
@@ -176,6 +195,7 @@ func loadConfig() *Config {
 		OIDCIssuer:       issuer,
 		OIDCClientID:     strings.TrimSpace(string(clientID)),
 		OIDCClientSecret: strings.TrimSpace(string(clientSecret)),
+		BearerAudiences:  audiences,
 	}
 }
 
@@ -225,17 +245,36 @@ func envOr(key, fallback string) string {
 
 // Server holds all handler dependencies.
 type Server struct {
-	cfg          *Config
-	doc          *IdentityDoc
-	cache        *WhoisCache
-	oauth2Config *oauth2.Config
-	verifier     *oidc.IDTokenVerifier
+	cfg            *Config
+	doc            *IdentityDoc
+	cache          *WhoisCache
+	oauth2Config   *oauth2.Config
+	verifier       *oidc.IDTokenVerifier
+	bearerVerifier *oidc.IDTokenVerifier
 }
 
 // handleValidate is the nginx auth_request target.
 func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 	requiredGroups := parseGroups(r.Header.Get("X-Identity-Required-Groups"))
 	realIP := r.Header.Get("X-Real-IP")
+
+	// Path 0: Bearer JWT from a native client (RFC 8252 apps that ran the
+	// authorization-code dance directly against the OIDC issuer). The token
+	// proves the email; the identity doc remains authoritative for groups.
+	if authz := r.Header.Get("Authorization"); strings.HasPrefix(authz, "Bearer ") {
+		user, ok := s.validateBearerToken(r.Context(), strings.TrimPrefix(authz, "Bearer "))
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !checkGroups(user.Groups, requiredGroups) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		setIdentityHeaders(w, user)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	// Path 1: VPN — tailscale whois
 	if isTailscaleIP(realIP) {
@@ -278,6 +317,72 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 		Groups: payload.Groups,
 	})
 	w.WriteHeader(http.StatusOK)
+}
+
+// validateBearerToken verifies an OIDC access token (JWT) from a native
+// client: signature and issuer via the provider's JWKS, audience against the
+// configured native-client list, then email mapping through the identity doc
+// (the doc stays authoritative for name and groups — same trust model as the
+// tailscale whois path). Returns ok=false on any failure.
+func (s *Server) validateBearerToken(ctx context.Context, raw string) (*resolvedUser, bool) {
+	if s.bearerVerifier == nil {
+		return nil, false
+	}
+	idt, err := s.bearerVerifier.Verify(ctx, raw)
+	if err != nil {
+		log.Printf("bearer verify: %v", err)
+		return nil, false
+	}
+	var claims struct {
+		Aud    []string `json:"aud"`
+		Email  string   `json:"email"`
+		Name   string   `json:"preferred_username"`
+		Groups []string `json:"groups"`
+	}
+	if err := idt.Claims(&claims); err != nil {
+		log.Printf("bearer claims: %v", err)
+		return nil, false
+	}
+	audOK := false
+	for _, want := range s.cfg.BearerAudiences {
+		for _, got := range claims.Aud {
+			if got == want {
+				audOK = true
+			}
+		}
+	}
+	if !audOK {
+		log.Printf("bearer aud not accepted: %v", claims.Aud)
+		return nil, false
+	}
+	if claims.Email == "" {
+		log.Printf("bearer token has no email claim")
+		return nil, false
+	}
+	user, ok := s.doc.byEmail[strings.ToLower(claims.Email)]
+	if !ok {
+		log.Printf("bearer email %q not in identity doc", claims.Email)
+		return nil, false
+	}
+	return user, true
+}
+
+// handleProtectedResource serves RFC 9728 Protected Resource Metadata so
+// native clients can discover the authorization server guarding this host.
+// The resource is the requesting host (X-Original-Host from nginx); the
+// authorization server is the configured issuer.
+func (s *Server) handleProtectedResource(w http.ResponseWriter, r *http.Request) {
+	host := r.Header.Get("X-Original-Host")
+	if host == "" {
+		host = r.Host
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"resource":                   "https://" + host,
+		"authorization_servers":       []string{s.cfg.OIDCIssuer},
+		"scopes_supported":            []string{"openid", "profile", "email", "offline_access"},
+		"bearer_methods_supported":    []string{"header"},
+	})
 }
 
 // handleLogin redirects to the OIDC authorization endpoint.
