@@ -262,7 +262,9 @@ in
           # this id if an earlier registration minted a random one.
           client_id = "familiar-desktop";
           groups = [ ];
-          callback_urls = [ "http://127.0.0.1/callback" ];
+          callback_urls = [
+            "http://127.0.0.1:17421/callback"
+          ];
         };
         # No service consumes these credentials — the client is public and
         # the id is a constant. The handler records them under fort-auth so
