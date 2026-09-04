@@ -226,6 +226,19 @@ rec {
       # /var/lib/unfamiliar; identity read from Kestrel's stack read-only.
       # Restart to pick up code changes: `sudo systemctl restart unfamiliar`.
       # (state dir tmpfiles rule lives in the shared list below)
+      # Kestrel (running as familiar) deploys Unfamiliar by merging to the
+      # checkout and restarting the unit. Let that user manage exactly this
+      # unit without interactive auth; nothing else.
+      config.security.polkit.extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          if (action.id == "org.freedesktop.systemd1.manage-units" &&
+              action.lookup("unit") == "unfamiliar.service" &&
+              subject.user == "familiar") {
+            return polkit.Result.YES;
+          }
+        });
+      '';
+
       config.systemd.services.unfamiliar = {
         description = "Unfamiliar — persistent presence on the pi SDK";
         wantedBy = [ "multi-user.target" ];
