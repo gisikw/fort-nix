@@ -571,14 +571,22 @@ in
 
       just sync
 
-      # Commit and push if there are changes
+      # Commit, then integrate what other hosts pushed before pushing. Without
+      # the pull this host forked from origin whenever anyone else wrote to
+      # hoard, and stacked half-hourly commits behind a rejected push for
+      # days (125 deep on 2026-09-04). It also means the briefing agent can
+      # be written to: a file pushed from elsewhere is on this disk by the
+      # next sync.
       cd "${homeDir}/Projects/hoard"
       git add -A
       if ! git diff --cached --quiet; then
         git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        git push
       else
         echo "No changes to commit"
+      fi
+      git pull --rebase --autostash origin main || echo "pull --rebase failed; leaving local history for a human" >&2
+      if [ -n "$(git log origin/main..HEAD --oneline)" ]; then
+        git push
       fi
     '';
   };
