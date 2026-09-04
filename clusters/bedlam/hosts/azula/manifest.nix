@@ -508,10 +508,12 @@ rec {
       config.services.xserver.desktopManager.xfce.enable = true;
       # Do not autostart the display manager: this is a headless box that has
       # hard-hung on amdgpu (DCN REG_WAIT timeouts at every boot on 6.12), and
-      # the graphical session is only needed for captive portals. When it is,
-      # `sudo systemctl start display-manager` brings up lightdm/XFCE on the
-      # attached screen; it will not come back on its own after a reboot.
-      config.systemd.services.display-manager.wantedBy = pkgs.lib.mkForce [ ];
+      # the graphical session is only needed for captive portals. NixOS pulls
+      # display-manager in via graphical.target's own Wants=, so forcing the
+      # service's wantedBy does nothing; boot to multi-user instead. When a
+      # portal needs it: `sudo systemctl start display-manager` (or
+      # `systemctl isolate graphical.target`); it will not return after reboot.
+      config.systemd.defaultUnit = "multi-user.target";
 
       config.environment.systemPackages = with pkgs; [
         firefox
