@@ -48,6 +48,17 @@ rec {
       pi-coding-agent = import ../../../../pkgs/pi-coding-agent { inherit pkgs; };
       domain = config.fort.cluster.settings.domain;
       familiarHome = "/home/familiar";
+      # Unfamiliar's shepherd peers into golem capsules through Bun.Terminal,
+      # which landed after nixos-25.11's bun (1.3.3). Pin the same 1.3.13
+      # release the unfamiliar flake resolves so the unit and the test suite
+      # agree on what Bun is. Drop this once nixpkgs carries >= 1.3.13.
+      unfamiliarBun = pkgs.bun.overrideAttrs (old: rec {
+        version = "1.3.13";
+        src = pkgs.fetchurl {
+          url = "https://github.com/oven-sh/bun/releases/download/bun-v${version}/bun-linux-x64.zip";
+          hash = "sha256-ecB3H6i5LDOq5B4VoODTB+qZ0OLwAxfHHGxTI3p44lo=";
+        };
+      });
       kestrelDir = "/var/lib/kestrel";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
@@ -220,7 +231,9 @@ rec {
         wantedBy = [ "multi-user.target" ];
         after = [ "network-online.target" "sops-nix.service" "golemd.service" ];
         wants = [ "network-online.target" ];
-        path = with pkgs; [ bun nodejs_22 git bashInteractive coreutils ];
+        # tmux is the client half of shepherd's peer-in terminal: it attaches
+        # to golemd's worker sessions at /var/lib/golem/tmux.sock.
+        path = with pkgs; [ unfamiliarBun nodejs_22 git bashInteractive coreutils tmux ];
         environment = {
           HOME = familiarHome;
           UNFAMILIAR_CONFIG = "${familiarHome}/Projects/unfamiliar/deploy/azula.toml";
@@ -231,7 +244,7 @@ rec {
           User = "familiar";
           Group = "users";
           WorkingDirectory = "${familiarHome}/Projects/unfamiliar";
-          ExecStart = "${pkgs.bun}/bin/bun run apps/server/src/main.ts";
+          ExecStart = "${unfamiliarBun}/bin/bun run apps/server/src/main.ts";
           Restart = "on-failure";
           RestartSec = "5s";
         };
