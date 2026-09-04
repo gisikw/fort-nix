@@ -513,7 +513,7 @@ rec {
       # service's wantedBy does nothing; boot to multi-user instead. When a
       # portal needs it: `sudo systemctl start display-manager` (or
       # `systemctl isolate graphical.target`); it will not return after reboot.
-      config.systemd.defaultUnit = "multi-user.target";
+      config.systemd.defaultUnit = pkgs.lib.mkForce "multi-user.target";
 
       config.environment.systemPackages = with pkgs; [
         firefox
