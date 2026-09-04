@@ -515,6 +515,48 @@ rec {
       # `systemctl isolate graphical.target`); it will not return after reboot.
       config.systemd.defaultUnit = pkgs.lib.mkForce "multi-user.target";
 
+      # Carrier watchdog for the Aquantia (atlantic) NIC. 2026-09-04: five
+      # "freezes" turned out to be eno1 reporting link 1000 -> 0 and never
+      # renegotiating; the host itself ran fine for minutes until power-cycled.
+      # Nothing in the stack bounces a NIC that merely looks unplugged, so this
+      # does: after LIMIT seconds without carrier, down/up the link; if still
+      # dead, remove and rescan the PCI device to reinitialise the firmware.
+      config.systemd.services.eno1-carrier-watchdog = {
+        description = "Bounce eno1 when carrier stays lost";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
+        path = with pkgs; [ coreutils iproute2 ];
+        serviceConfig = {
+          Restart = "always";
+          RestartSec = "10s";
+        };
+        script = ''
+          set -u
+          IF=eno1
+          LIMIT=20
+          lost=0
+          while :; do
+            if [ "$(cat /sys/class/net/$IF/carrier 2>/dev/null || echo 0)" = "1" ]; then
+              lost=0
+            else
+              lost=$((lost + 5))
+              if [ "$lost" -ge "$LIMIT" ]; then
+                echo "$IF: no carrier for ''${lost}s, bouncing link"
+                ip link set "$IF" down; sleep 2; ip link set "$IF" up; sleep 10
+                if [ "$(cat /sys/class/net/$IF/carrier 2>/dev/null || echo 0)" != "1" ]; then
+                  pci=$(basename "$(readlink -f /sys/class/net/$IF/device)")
+                  echo "$IF: still no carrier, removing and rescanning PCI device $pci"
+                  echo 1 > "/sys/bus/pci/devices/$pci/remove"; sleep 2
+                  echo 1 > /sys/bus/pci/rescan; sleep 15
+                fi
+                lost=0
+              fi
+            fi
+            sleep 5
+          done
+        '';
+      };
+
       config.environment.systemPackages = with pkgs; [
         firefox
         w3m
