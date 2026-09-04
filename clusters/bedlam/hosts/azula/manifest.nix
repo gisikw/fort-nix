@@ -197,12 +197,51 @@ rec {
             ];
           };
         }
+        # Unfamiliar: the pi-SDK rewrite of Familiar, served from Kevin's
+        # development checkout so the morning inspection sees what runs.
+        {
+          name = "unfamiliar";
+          port = 1700;
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [ "admin" ];
+          };
+        }
       ];
+
+      # Unfamiliar runtime (see ~/Projects/unfamiliar/docs/ARCHITECTURE.md).
+      # Runs the checkout in place as familiar with Bun; state under
+      # /var/lib/unfamiliar; identity read from Kestrel's stack read-only.
+      # Restart to pick up code changes: `sudo systemctl restart unfamiliar`.
+      # (state dir tmpfiles rule lives in the shared list below)
+      config.systemd.services.unfamiliar = {
+        description = "Unfamiliar — persistent presence on the pi SDK";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-online.target" "sops-nix.service" "golemd.service" ];
+        wants = [ "network-online.target" ];
+        path = with pkgs; [ bun nodejs_22 git bashInteractive coreutils ];
+        environment = {
+          HOME = familiarHome;
+          UNFAMILIAR_CONFIG = "${familiarHome}/Projects/unfamiliar/deploy/azula.toml";
+          UNFAMILIAR_ROOT = "${familiarHome}/Projects/unfamiliar";
+          GOLEM_ENDPOINT = "http://127.0.0.1:9920";
+        };
+        serviceConfig = {
+          User = "familiar";
+          Group = "users";
+          WorkingDirectory = "${familiarHome}/Projects/unfamiliar";
+          ExecStart = "${pkgs.bun}/bin/bun run apps/server/src/main.ts";
+          Restart = "on-failure";
+          RestartSec = "5s";
+        };
+      };
 
       # Kestrel is the private, durable Familiar instance—not a developer
       # checkout. Fort owns its location and permissions; the one-time cutover
       # populates the directory before starting familiar-instance.
       config.systemd.tmpfiles.rules = [
+        "d /var/lib/unfamiliar 0700 familiar users -"
         "d ${familiarHome}/.ssh 0700 familiar users -"
         "d ${familiarHome}/.config 0700 familiar users -"
         "d ${familiarHome}/.config/gh 0700 familiar users -"
