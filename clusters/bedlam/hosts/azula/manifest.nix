@@ -98,6 +98,7 @@ rec {
         [harnesses.pi]
         models = [
           "tiamat-anthropic-claude-code-personal/claude-fable-5",
+          "tiamat-anthropic-claude-code-personal/claude-fable-5-1",
           "tiamat-anthropic-claude-code-personal/claude-haiku-4-5-20251001",
           "tiamat-anthropic-claude-code-personal/claude-opus-4-5-20251101",
           "tiamat-anthropic-claude-code-personal/claude-opus-4-6",
