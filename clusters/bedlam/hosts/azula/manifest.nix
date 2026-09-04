@@ -506,6 +506,12 @@ rec {
       config.services.xserver.enable = true;
       config.services.xserver.displayManager.lightdm.enable = true;
       config.services.xserver.desktopManager.xfce.enable = true;
+      # Do not autostart the display manager: this is a headless box that has
+      # hard-hung on amdgpu (DCN REG_WAIT timeouts at every boot on 6.12), and
+      # the graphical session is only needed for captive portals. When it is,
+      # `sudo systemctl start display-manager` brings up lightdm/XFCE on the
+      # attached screen; it will not come back on its own after a reboot.
+      config.systemd.services.display-manager.wantedBy = pkgs.lib.mkForce [ ];
 
       config.environment.systemPackages = with pkgs; [
         firefox
