@@ -94,7 +94,7 @@ in
       name = "monitor";
       subdomain = subdomain;
       port = 3000;
-      sso = { mode = "identity"; groups = [ "admin" ]; };
+      sso = { mode = "identity"; groups = [ "admin" "infra" ]; };
     }
   ];
 }
