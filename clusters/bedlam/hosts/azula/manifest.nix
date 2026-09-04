@@ -134,6 +134,19 @@ rec {
     {
       config.fort.host = { inherit roles apps aspects; };
 
+      # Hard-hang mitigation (2026-09-04). Three whole-host lock-ups in one
+      # evening, each showing ~27 GB free, load < 1, temps < 60 °C on the
+      # last Prometheus scrape before going dark — no resource ramp, just
+      # gone. Kernel 6.12 is early for this Strix Point APU (HX 470 / 890M);
+      # amdgpu already logs a DCN REG_WAIT timeout at every boot. Track the
+      # newest kernel on this host only; other hosts keep the default.
+      config.boot.kernelPackages = pkgs.linuxPackages_latest;
+
+      # Erase-your-darlings drops the journal with the boot, so a hang leaves
+      # no body. Persist it so `journalctl -b -1 -k` can testify next time.
+      config.services.journald.storage = "persistent";
+      config.environment.persistence."/persist/system".directories = [ "/var/log/journal" ];
+
       # Manual Familiar rewrite test deployment. Keep the account declarative so
       # GitOps activation does not remove the long-running Presence/supervisor
       # owner created during pre-cutover testing.
