@@ -631,8 +631,11 @@ rec {
           Restart = "always";
           RestartSec = "10s";
         };
+        # NB: NixOS runs `script` under `sh -e`. `ip link set up` exits 2 when the
+        # atlantic firmware is hung ("Boot code hanged"), which used to abort the
+        # script before the rescan ever ran -- three incidents, zero rescans.
         script = ''
-          set -u
+          set -u +e
           IF=eno1
           LIMIT=20
           lost=0
@@ -643,12 +646,18 @@ rec {
               lost=$((lost + 5))
               if [ "$lost" -ge "$LIMIT" ]; then
                 echo "$IF: no carrier for ''${lost}s, bouncing link"
-                ip link set "$IF" down; sleep 2; ip link set "$IF" up; sleep 10
+                pci=$(basename "$(readlink -f /sys/class/net/$IF/device)")
+                ip link set "$IF" down; sleep 2
+                if ip link set "$IF" up; then
+                  sleep 10
+                else
+                  echo "$IF: link up failed (firmware hung?), skipping carrier wait"
+                fi
                 if [ "$(cat /sys/class/net/$IF/carrier 2>/dev/null || echo 0)" != "1" ]; then
-                  pci=$(basename "$(readlink -f /sys/class/net/$IF/device)")
                   echo "$IF: still no carrier, removing and rescanning PCI device $pci"
                   echo 1 > "/sys/bus/pci/devices/$pci/remove"; sleep 2
                   echo 1 > /sys/bus/pci/rescan; sleep 15
+                  ip link set "$IF" up || true
                 fi
                 lost=0
               fi
