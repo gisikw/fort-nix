@@ -73,14 +73,18 @@ in
       # Gated on "there is an ESP": systemd-boot, or GRUB with efiSupport (the
       # Beelinks). raishan is BIOS GRUB on Linode with no real /boot filesystem.
       ({ config, lib, ... }: {
-        fileSystems."/boot".options = lib.mkIf (
+        # mkIf must wrap the attrset: gating only `.options` still creates a
+        # /boot entry with no device, which fails eval on raishan (CI caught it).
+        fileSystems = lib.mkIf (
           config.boot.loader.systemd-boot.enable
           || (config.boot.loader.grub.enable && config.boot.loader.grub.efiSupport)
-        ) [
-          "noauto"
-          "x-systemd.automount"
-          "x-systemd.idle-timeout=1min"
-        ];
+        ) {
+          "/boot".options = [
+            "noauto"
+            "x-systemd.automount"
+            "x-systemd.idle-timeout=1min"
+          ];
+        };
       })
       impermanence.nixosModules.impermanence
       rootManifest.module
