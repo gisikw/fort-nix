@@ -65,23 +65,6 @@ in
 
         users.users.root.openssh.authorizedKeys.keys = rootAuthorizedKeys;
       }
-      # Gapped ESP. /boot is only ever written during switch-to-configuration;
-      # the rest of the time an idle mounted FAT partition is just exposure to
-      # a power cut (a bootloader was lost this way once). Mount on demand and
-      # unmount a minute after the last touch. Recovery from a corrupted ESP on
-      # a Beelink is an Ubuntu live USB -> sshd -> chroot, not the NixOS ISO.
-      # Gated on "there is an ESP": systemd-boot, or GRUB with efiSupport (the
-      # Beelinks). raishan is BIOS GRUB on Linode with no real /boot filesystem.
-      ({ config, lib, ... }: {
-        fileSystems."/boot".options = lib.mkIf (
-          config.boot.loader.systemd-boot.enable
-          || (config.boot.loader.grub.enable && config.boot.loader.grub.efiSupport)
-        ) [
-          "noauto"
-          "x-systemd.automount"
-          "x-systemd.idle-timeout=1min"
-        ];
-      })
       impermanence.nixosModules.impermanence
       rootManifest.module
       hostManifest.module
