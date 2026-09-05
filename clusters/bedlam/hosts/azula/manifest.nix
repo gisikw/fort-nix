@@ -626,7 +626,7 @@ rec {
         description = "Bounce eno1 when carrier stays lost";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
-        path = with pkgs; [ coreutils iproute2 ];
+        path = with pkgs; [ coreutils iproute2 systemd ];
         serviceConfig = {
           Restart = "always";
           RestartSec = "10s";
@@ -658,6 +658,23 @@ rec {
                   echo 1 > "/sys/bus/pci/devices/$pci/remove"; sleep 2
                   echo 1 > /sys/bus/pci/rescan; sleep 15
                   ip link set "$IF" up || true
+                  sleep 10
+                fi
+                if [ "$(cat /sys/class/net/$IF/carrier 2>/dev/null || echo 0)" != "1" ]; then
+                  # Bounce and rescan both failed. The host itself is healthy
+                  # (it's running this script), so a clean reboot re-probes
+                  # the NIC through a warm reset -- which is what has actually
+                  # revived it every time so far. Guard: never within 15 min
+                  # of boot, so a NIC that's dead at boot waits for a human
+                  # instead of reboot-looping.
+                  up_s=$(cut -d. -f1 /proc/uptime)
+                  if [ "$up_s" -ge 900 ]; then
+                    echo "$IF: rescan failed, uptime ''${up_s}s -- clean reboot"
+                    systemctl reboot
+                    sleep 60
+                  else
+                    echo "$IF: rescan failed but uptime ''${up_s}s < 900s, not rebooting"
+                  fi
                 fi
                 lost=0
               fi
