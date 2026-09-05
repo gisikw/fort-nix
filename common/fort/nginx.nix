@@ -139,6 +139,15 @@ in
                           (lib.optionalString (svc.maxBodySize != null) ''
                             client_max_body_size ${svc.maxBodySize};
                           '')
+                          # Identity mode: a static root gets the same auth_request
+                          # wall as a proxied one. There is no upstream to forward
+                          # the identity headers to, but the 401 -> login dance and
+                          # the RFC 9728 advertisement are identical.
+                          (lib.optionalString isIdentityMode ''
+                            auth_request /_identity/validate;
+                            more_set_headers 'WWW-Authenticate: Bearer resource_metadata="https://$host/.well-known/oauth-protected-resource"';
+                            error_page 401 = @identity_login;
+                          '')
                         ]
                       );
                     }

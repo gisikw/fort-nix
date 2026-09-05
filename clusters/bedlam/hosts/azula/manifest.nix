@@ -219,7 +219,38 @@ rec {
             groups = [ "admin" ];
           };
         }
+        # Static wireframe drafts, served straight out of the checkout in
+        # Kevin's home directory (no build step, no unit — just files).
+        {
+          name = "wireframes";
+          staticRoot = "${familiarHome}/Projects/wireframes";
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [
+              "admin"
+              "infra"
+            ];
+          };
+        }
       ];
+
+      # nginx's unit runs with ProtectHome=true, so the static root has to be
+      # bind-mounted into its namespace anyway (same idiom as apps/vault). That
+      # also means /home/familiar itself never has to become traversable: the
+      # only mode this host relaxes is the wireframes directory (0755 below).
+      config.systemd.services.nginx.serviceConfig = {
+        ProtectHome = pkgs.lib.mkForce "tmpfs";
+        BindReadOnlyPaths = [ "${familiarHome}/Projects/wireframes" ];
+      };
+
+      # Serve index.html for directories, with an autoindex fallback for the
+      # bare drafts. The generic static location (common/fort/nginx.nix) only
+      # emits try_files; extraConfig is types.lines, so this appends.
+      config.services.nginx.virtualHosts."wireframes.${domain}".locations."/".extraConfig = ''
+        index index.html;
+        autoindex on;
+      '';
 
       # Unfamiliar runtime (see ~/Projects/unfamiliar/docs/ARCHITECTURE.md).
       # Runs the checkout in place as familiar with Bun; state under
@@ -277,6 +308,10 @@ rec {
         # without restarting the resident conversation.
         "d ${kestrelDir}/state/pi/bin 0700 familiar users -"
         "L+ ${kestrelDir}/state/pi/bin/stuff - - - - ${stuffForFamiliar}"
+        # Wireframes static root: exists before nginx's BindReadOnlyPaths
+        # resolves it, and world-readable so the nginx user can read it.
+        "d ${familiarHome}/Projects - familiar users -"
+        "d ${familiarHome}/Projects/wireframes 0755 familiar users -"
       ];
 
       # Reuse the established developer SSH identity for outbound work from
