@@ -46,6 +46,17 @@ rec {
       # Workers resolve `pi` from PATH; the golem flake's wrapper only pins
       # tmux/git/bash, so the harness CLI rides in via the unit's path.
       pi-coding-agent = import ../../../../pkgs/pi-coding-agent { inherit pkgs; };
+      # Marvell's out-of-tree AQtion driver, built against this host's kernel.
+      # It installs to .../extra/atlantic.ko; depmod's default search order is
+      # "updates extra built-in" then "*" (i.e. kernel/), so the out-of-tree
+      # module wins over drivers/net/ethernet/aquantia/atlantic/atlantic.ko
+      # without blacklisting the name (which would kill both). Verified in the
+      # built system's modules.dep/modules.alias -- see the commit message.
+      # Revert = delete the boot.extraModulePackages line below.
+      aqtion = import ../../../../pkgs/aqtion {
+        inherit pkgs;
+        kernel = config.boot.kernelPackages.kernel;
+      };
       domain = config.fort.cluster.settings.domain;
       familiarHome = "/home/familiar";
       # Unfamiliar's shepherd peers into golem capsules through Bun.Terminal,
@@ -153,6 +164,11 @@ rec {
       # amdgpu already logs a DCN REG_WAIT timeout at every boot. Track the
       # newest kernel on this host only; other hosts keep the default.
       config.boot.kernelPackages = pkgs.linuxPackages_latest;
+
+      # Aquantia AQC113CS: the in-kernel `atlantic` driver wedges the NIC
+      # firmware every few hours ("Boot code hanged", aq_a2_fw_deinit) and the
+      # link never comes back; the vendor driver does not. See pkgs/aqtion.
+      config.boot.extraModulePackages = [ aqtion ];
 
       # Erase-your-darlings drops the journal with the boot, so a hang leaves
       # no body. Persist it so `journalctl -b -1 -k` can testify next time.
