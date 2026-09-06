@@ -59,6 +59,14 @@ rec {
       };
       domain = config.fort.cluster.settings.domain;
       familiarHome = "/home/familiar";
+      # NixOS installs privileged programs as wrappers here. systemd's `path`
+      # option expects package roots and appends /bin, so use the parent rather
+      # than adding pkgs.sudo (whose store binary is not privileged).
+      privilegedWrapperRoot = "/run/wrappers";
+      familiarPiServices = [
+        "familiar-instance-presence"
+        "golemd"
+      ];
       # Unfamiliar's shepherd peers into golem capsules through Bun.Terminal,
       # which landed after nixos-25.11's bun (1.3.3). Pin the same 1.3.13
       # release the unfamiliar flake resolves so the unit and the test suite
@@ -201,6 +209,26 @@ rec {
           ];
         }
       ];
+
+      # NixOS's wrapper module adds /run/wrappers/bin to login-shell PATH, but
+      # these services declare `path`, which gives them a closed, explicit PATH
+      # and bypasses shell initialization. Presence owns Exo's resident Pi;
+      # golemd owns delegated Pi workers. Put the privileged wrapper first in
+      # both inherited environments. Group/sudoers authorization alone cannot
+      # make an executable discoverable, and pkgs.sudo would select the
+      # unprivileged store program rather than NixOS's setuid wrapper.
+      config.systemd.services.familiar-instance-presence.path = pkgs.lib.mkBefore [
+        privilegedWrapperRoot
+      ];
+      config.systemd.services.golemd.path = pkgs.lib.mkBefore [ privilegedWrapperRoot ];
+
+      # Guard the effective generated PATH, not merely the input `path` list.
+      config.assertions = map (service: {
+        assertion = builtins.elem config.security.wrapperDir (
+          pkgs.lib.splitString ":" config.systemd.services.${service}.environment.PATH
+        );
+        message = "${service}: familiar's Pi environment must contain ${config.security.wrapperDir}";
+      }) familiarPiServices;
 
       config.users.groups.tiamat-router = { };
       config.users.users.tiamat-router = {
