@@ -235,6 +235,17 @@ rec {
             groups = [ "admin" ];
           };
         }
+        # Familiar 3 (~/Projects/familiar-three), dev mode: the unit below
+        # runs the checkout's own launcher. Formal packaging comes later.
+        {
+          name = "familiar3";
+          port = 8770;
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [ "admin" ];
+          };
+        }
         # Static wireframe drafts, served straight out of the checkout in
         # Kevin's home directory (no build step, no unit — just files).
         {
@@ -279,7 +290,8 @@ rec {
       config.security.polkit.extraConfig = ''
         polkit.addRule(function(action, subject) {
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
-              action.lookup("unit") == "unfamiliar.service" &&
+              (action.lookup("unit") == "unfamiliar.service" ||
+               action.lookup("unit") == "familiar3.service") &&
               subject.user == "familiar") {
             return polkit.Result.YES;
           }
@@ -305,6 +317,29 @@ rec {
           Group = "users";
           WorkingDirectory = "${familiarHome}/Projects/unfamiliar";
           ExecStart = "${unfamiliarBun}/bin/bun run apps/server/src/main.ts";
+          Restart = "on-failure";
+          RestartSec = "5s";
+        };
+      };
+
+      # Familiar 3, dev mode. Deliberately broad: the checkout's `just start`
+      # is the whole contract (build, then run). Deploy = merge to the checkout
+      # and `systemctl restart familiar3`. State in /var/lib/familiar3, sockets
+      # in /run/familiar3 — both created by systemd, both owned by familiar.
+      config.systemd.services.familiar3 = {
+        description = "Familiar 3 — dev-mode instance from ~/Projects/familiar-three";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        path = with pkgs; [ nix git just bashInteractive coreutils ];
+        environment.HOME = familiarHome;
+        serviceConfig = {
+          User = "familiar";
+          Group = "users";
+          WorkingDirectory = "${familiarHome}/Projects/familiar-three";
+          ExecStart = "${pkgs.nix}/bin/nix develop --command just start";
+          StateDirectory = "familiar3";
+          RuntimeDirectory = "familiar3";
           Restart = "on-failure";
           RestartSec = "5s";
         };
