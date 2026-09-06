@@ -1,7 +1,12 @@
-{ ... }:
+{ accelerator ? "vulkan"
+, gpuDevice ? null
+, modelNames ? null
+, ...
+}:
 { config, pkgs, lib, ... }:
 let
-  ollama-vulkan-latest = pkgs.ollama-vulkan.overrideAttrs (old: rec {
+  ollama-base = if accelerator == "cuda" then pkgs.ollama-cuda else pkgs.ollama-vulkan;
+  ollama-latest = ollama-base.overrideAttrs (old: rec {
     version = "0.23.0";
     src = old.src.override {
       tag = "v${version}";
@@ -11,8 +16,6 @@ let
     subPackages = [ "." ];
   });
 
-  ollama = ollama-vulkan-latest;
-
   dashboard = ./dashboard.py;
   dashboardPort = 11435;
 
@@ -21,7 +24,7 @@ let
   #   { name = "tuned"; from = "qwen3:30b-a3b-q8_0"; params = {...}; }  — Modelfile from tag
   #   { name = "heretic"; fromGguf = { url = "..."; sha256 = "..."; };   — Modelfile from GGUF
   #     params = {...}; renderer = "gemma4"; parser = "gemma4"; }
-  models = [
+  availableModels = [
     "devstral-small-2:latest"
     "nomic-embed-text:latest"
     "gpt-oss:20b"
@@ -52,6 +55,11 @@ let
       };
     }
   ];
+
+  modelName = m: if builtins.isString m then m else m.name;
+  models = if modelNames == null then availableModels else
+    lib.filter (m: builtins.elem (modelName m) modelNames) availableModels;
+  knownModelNames = map modelName availableModels;
 
   ggufDir = "/var/lib/ollama/gguf";
 
@@ -153,12 +161,24 @@ let
   '';
 in
 {
+  assertions = [
+    {
+      assertion = builtins.elem accelerator [ "cuda" "vulkan" ];
+      message = "ollama accelerator must be either 'cuda' or 'vulkan'";
+    }
+    {
+      assertion = modelNames == null || lib.all (name: builtins.elem name knownModelNames) modelNames;
+      message = "ollama modelNames contains a model not declared in availableModels";
+    }
+  ];
+
   hardware.graphics.enable = true;
 
   services.ollama = {
     enable = true;
+    # The selected custom package already has its GPU backend compiled in.
     acceleration = false;
-    package = ollama-vulkan-latest;
+    package = ollama-latest;
     openFirewall = false;
   };
 
@@ -166,6 +186,9 @@ in
     serviceConfig = {
       Environment = [
         "OLLAMA_HOST=0.0.0.0:11434"
+        # CUDA enumerates only the selected physical card. Leave unset for the
+        # Vulkan default, where CUDA device numbering is not applicable.
+      ] ++ lib.optional (accelerator == "cuda" && gpuDevice != null) "CUDA_VISIBLE_DEVICES=${toString gpuDevice}" ++ [
         "OLLAMA_CONTEXT_LENGTH=32768"
         "OLLAMA_USE_MMAP=true"
         "OLLAMA_KEEP_ALIVE=-1"

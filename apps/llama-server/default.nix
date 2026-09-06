@@ -11,6 +11,7 @@
 , extraModels ? [ ]
 , contextSize ? 262144
 , gpuLayers ? 999
+, gpuDevice ? null
 , enableMtp ? true
 , ...
 }:
@@ -158,7 +159,9 @@ in
       Restart = "on-failure";
       RestartSec = 5;
     } // lib.optionalAttrs (accelerator == "cuda") {
-      # GPU access
+      # CUDA_VISIBLE_DEVICES is applied before CUDA initializes, so llama.cpp
+      # sees only this card and cannot split layers onto another GPU.
+      Environment = lib.optional (gpuDevice != null) "CUDA_VISIBLE_DEVICES=${toString gpuDevice}";
       SupplementaryGroups = [ "video" "render" ];
     };
   };
