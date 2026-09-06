@@ -10,6 +10,10 @@ rec {
     "open-webui"
     "qmd"
     "sillytavern"
+    # Safe split rollout: Kokoro TTS and its unchanged encrypted voice remain
+    # live here. Moving it is blocked solely on an authorized recipient rewrap;
+    # retain this app until that rewrap and a separately coordinated cutover.
+    "tts"
   ];
 
   overlays = {
