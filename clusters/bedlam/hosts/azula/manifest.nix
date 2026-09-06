@@ -158,6 +158,18 @@ rec {
         path = "/var/lib/golem/projects/scratch"
         description = "Azula scratch repository"
 
+        # Golemd owns the bundled foreground Herdr child and its namespace.
+        # Never attach to a user's ambient Herdr or manage a sibling service.
+        [herdr]
+        root = "/var/lib/golem/herdr"
+        session = "golem"
+        server_startup_timeout = "15s"
+        startup_timeout_ms = 60000
+        reconcile_interval = "15s"
+
+        [herdr.kinds]
+        pi = "pi"
+
         [attach_ssh]
         port = 0
       '';
