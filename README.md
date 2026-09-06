@@ -145,7 +145,7 @@ For risky changes, push to a `<hostname>-test` branch. CI validates that host's 
 | sillytavern | LLM chat frontend |
 | silverbullet | Markdown-based personal knowledge management |
 | sonarr | TV show collection manager |
-| stt | Speech-to-text HTTP service (Whisper + Vulkan) |
+| stt | Speech-to-text HTTP service (NVIDIA Parakeet TDT + CUDA) |
 | super-productivity | Task and time management |
 | temporal | Workflow orchestration server |
 | termix | Terminal-based collaboration tool |
