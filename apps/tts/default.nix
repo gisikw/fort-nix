@@ -1,5 +1,14 @@
-{ rootManifest, ... }:
-{ config, pkgs, lib, ... }:
+{
+  rootManifest,
+  backendPort ? 8880,
+  ...
+}:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   domain = rootManifest.fortConfig.settings.domain;
@@ -14,7 +23,7 @@ let
     vendorHash = null;
 
     ldflags = [
-      "-X main.backendURL=http://127.0.0.1:${toString containerPort}/v1/audio/speech"
+      "-X main.backendURL=http://127.0.0.1:${toString backendPort}/v1/audio/speech"
       "-X main.listenAddr=127.0.0.1:${toString httpPort}"
     ];
 
@@ -37,7 +46,7 @@ in
 
   virtualisation.oci-containers.containers.kokoro-tts = {
     image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4";
-    ports = [ "127.0.0.1:${toString containerPort}:${toString containerPort}" ];
+    ports = [ "127.0.0.1:${toString backendPort}:${toString containerPort}" ];
     environment = {
       DEFAULT_VOICE = "af_exo";
     };
@@ -52,7 +61,10 @@ in
   # HTTP endpoint: tts.gisi.network
   systemd.services.tts-http = {
     description = "Text-to-Speech HTTP Service";
-    after = [ "network.target" "podman-kokoro-tts.service" ];
+    after = [
+      "network.target"
+      "podman-kokoro-tts.service"
+    ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
@@ -66,17 +78,19 @@ in
 
   # Proxy /v1/ directly to Kokoro's OpenAI-compatible API
   services.nginx.virtualHosts."tts.${domain}".locations."/v1/" = {
-    proxyPass = "http://127.0.0.1:${toString containerPort}/v1/";
+    proxyPass = "http://127.0.0.1:${toString backendPort}/v1/";
     extraConfig = "proxy_read_timeout 120s;";
   };
 
-  fort.cluster.services = [{
-    name = "tts";
-    port = httpPort;
-    visibility = "public";
-    sso = {
-      mode = "token";
-      vpnBypass = true;
-    };
-  }];
+  fort.cluster.services = [
+    {
+      name = "tts";
+      port = httpPort;
+      visibility = "public";
+      sso = {
+        mode = "token";
+        vpnBypass = true;
+      };
+    }
+  ];
 }

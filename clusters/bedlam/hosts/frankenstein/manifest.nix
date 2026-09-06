@@ -41,9 +41,13 @@ rec {
       name = "stt";
       gpuDevice = 1;
     }
-    # Existing CPU Kokoro synthesis moves unchanged: same `tts` service name,
-    # /v1 OpenAI-compatible route, voices, and public endpoint.
-    "tts"
+    # Existing CPU Kokoro synthesis keeps the same `tts` service name, /v1
+    # OpenAI-compatible route, voices, and public endpoint. Its usual host port
+    # 8880 is already owned here by qwen-tts, so bind the backend on 8879.
+    {
+      name = "tts";
+      backendPort = 8879;
+    }
     # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.
     # qwen-tts still asks for `nvidia.com/gpu=all` and loads its model into
     # whichever card has room, so it cannot coexist with qwen-vllm, which fills

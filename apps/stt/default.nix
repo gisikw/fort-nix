@@ -22,6 +22,12 @@ let
   # independent of any downloaded model data.
   image = "docker.io/pytorch/pytorch@sha256:eee11b3b3872a8c838e35ef48f08b2d5def2080902c7f666831310ca1a0ef2be";
   modelRevision = "541d1f99c6b0c3cd0b11a95167540bb8edefd82b";
+  # Parakeet support landed after the 5.6.0 release. Pin a tested upstream
+  # commit rather than installing a release which cannot recognize
+  # `parakeet_tdt`, or following Transformers main implicitly.
+  transformersRevision = "da7234ac435f6d7c75d8b88d1ac32f53fb1f19a6";
+  transformersUrl = "https://github.com/huggingface/transformers/archive/${transformersRevision}.tar.gz";
+  dependencyRevision = "1-${transformersRevision}";
   server = pkgs.writeTextFile {
     name = "parakeet-stt-server";
     text = builtins.readFile ./server.py;
@@ -61,14 +67,12 @@ in
     cmd = [
       "-c"
       (builtins.concatStringsSep " && " [
-        # The base image supplies CUDA PyTorch. Keep the comparatively small
-        # app environment persistent and version-pinned across restarts.
-        "apt-get update -qq"
-        "apt-get install -qq -y --no-install-recommends ffmpeg >/dev/null"
-        "python -m venv --system-site-packages /venv"
-        "/venv/bin/pip install --disable-pip-version-check --cache-dir /pip-cache 'transformers==5.6.0' 'flask==3.1.2' 'gunicorn==23.0.0' >/dev/null"
+        # Install into persistent state once. The immutable base supplies CUDA
+        # PyTorch; imageio-ffmpeg supplies a pinned static ffmpeg, avoiding
+        # mutable apt repositories and package installation on every restart.
+        "if [ ! -e /venv/.ready-${dependencyRevision} ]; then rm -rf /venv/* /venv/.[!.]* /venv/..?*; python -m pip install --disable-pip-version-check --cache-dir /pip-cache --target /venv '${transformersUrl}' 'librosa==0.11.0' 'imageio-ffmpeg==0.6.0' 'flask==3.1.2' 'gunicorn==23.0.0' 'click==8.2.1' >/dev/null; touch /venv/.ready-${dependencyRevision}; fi"
         # One worker serializes GPU inference and loads exactly one model copy.
-        "cd /app && exec /venv/bin/gunicorn --workers 1 --threads 1 --timeout 600 --bind 0.0.0.0:${toString port} server:app"
+        "cd /app && PYTHONPATH=/venv exec /venv/bin/gunicorn --workers 1 --threads 1 --timeout 600 --bind 0.0.0.0:${toString port} server:app"
       ])
     ];
     volumes = [

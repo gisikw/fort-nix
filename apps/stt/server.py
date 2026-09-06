@@ -7,6 +7,7 @@ import tempfile
 import wave
 from pathlib import Path
 
+import imageio_ffmpeg
 import numpy as np
 import torch
 from flask import Flask, jsonify, request
@@ -17,7 +18,7 @@ MODEL_ID = os.environ.get("PARAKEET_MODEL", "nvidia/parakeet-tdt-0.6b-v3")
 MODEL_REVISION = os.environ.get(
     "PARAKEET_REVISION", "541d1f99c6b0c3cd0b11a95167540bb8edefd82b"
 )
-FFMPEG = os.environ.get("FFMPEG", "/usr/bin/ffmpeg")
+FFMPEG = os.environ.get("FFMPEG") or imageio_ffmpeg.get_ffmpeg_exe()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("stt")
