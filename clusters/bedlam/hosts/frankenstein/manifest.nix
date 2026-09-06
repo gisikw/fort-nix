@@ -5,23 +5,26 @@ rec {
   roles = [ ];
 
   apps = [
+    # GPU 0: Qwen3.8-27B under vLLM, from syv-ai/qwen38-27b-rtx3090's prebuilt
+    # container. Replaces the llama.cpp llama-server that used to own this card:
+    # same host port (8012) and same fort service name ("llama"), so the router
+    # provider on lordhenry and the golem providers on azula/obrien are unchanged.
+    # Where llama.cpp fit 24K of q8_0 KV on a 24 GiB card, this stack's W4A16
+    # body plus requantized heads and int8 KV holds ~136k tokens of pool at
+    # 131072 max-model-len, with DFlash2 speculation at ~130 tok/s single-stream.
     {
-      name = "llama-server";
+      name = "qwen-vllm";
       gpuDevice = 0;
-      # HF reports 17,559,178,144 B (16.353 GiB) for the Q4_K_XL and
-      # 927,607,488 B (0.864 GiB) for mmproj.  The dense qwen35 GGUF has
-      # 65 layers, 4 KV heads, and 256-dimension K and V heads.  q8_0's
-      # 34/32-byte block ratio therefore costs 141,440 B/token, or 3.237 GiB
-      # at 24,576 tokens.  That leaves 3.546 GiB on a 24 GiB card: reserve
-      # 2 GiB for CUDA/compute buffers and retain >=1.5 GiB free.  32K would
-      # leave only 2.466 GiB before compute buffers.  q8_0 (set by the app)
-      # meaningfully raises the conservative context from 16K with f16 KV.
-      contextSize = 24576;
-      mmproj = {
-        repo = "unsloth/Qwen3.8-27B-GGUF";
-        file = "mmproj-F16.gguf";
-        sha256 = "cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e";
-      };
+      # README, "If you are the only user, do this": SPEC=dflash2 + PREFIX_CACHE
+      # are worth more than every other knob. CTX=long buys the long context
+      # this box is used for (int8 KV, 131072 max-model-len on the dflash2 path).
+      # DFLASH_TOKENS stays at the default 7 — 15 is the document-quoting
+      # profile and halves the request slots.
+      ctx = "long";
+      spec = "dflash2";
+      # Text only: the router never sends images, and dropping the vision tower
+      # gives its weights back to the KV pool.
+      vision = false;
     }
     {
       name = "ollama";
@@ -30,8 +33,10 @@ rec {
       modelNames = [ "gemma4-heretic" ];
     }
     # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.
-    # qwen-tts and GPU-0 llama-server cannot coexist. Ollama now shares this
-    # box too, but is isolated on GPU 1; stop the conflicting unit explicitly.
+    # qwen-tts still asks for `nvidia.com/gpu=all` and loads its model into
+    # whichever card has room, so it cannot coexist with qwen-vllm, which fills
+    # GPU 0. Ollama shares this box too but is isolated on GPU 1. Stop
+    # podman-qwen-vllm before generating voice, and start it again after.
     "qwen-tts"
   ];
 
