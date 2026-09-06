@@ -32,11 +32,24 @@ rec {
       gpuDevice = 1;
       modelNames = [ "gemma4-heretic" ];
     }
+    # Speech migration from lordhenry: Parakeet is ASR/STT (not TTS) and keeps
+    # the public `stt` service name and /transcribe API. GPU 0 is unavailable
+    # because qwen-vllm fills it, so the ~0.6B model is explicitly confined to
+    # GPU 1 alongside Ollama. Expect transient latency/VRAM pressure if both
+    # infer concurrently; do not broaden either workload to all GPUs.
+    {
+      name = "stt";
+      gpuDevice = 1;
+    }
+    # Existing CPU Kokoro synthesis moves unchanged: same `tts` service name,
+    # /v1 OpenAI-compatible route, voices, and public endpoint.
+    "tts"
     # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.
     # qwen-tts still asks for `nvidia.com/gpu=all` and loads its model into
     # whichever card has room, so it cannot coexist with qwen-vllm, which fills
-    # GPU 0. Ollama shares this box too but is isolated on GPU 1. Stop
-    # podman-qwen-vllm before generating voice, and start it again after.
+    # GPU 0. Ollama and Parakeet STT share GPU 1. Stop podman-qwen-vllm before
+    # generating voice, and start it again after; the coordinator must schedule
+    # this because service restarts are intentionally outside this change.
     "qwen-tts"
   ];
 
