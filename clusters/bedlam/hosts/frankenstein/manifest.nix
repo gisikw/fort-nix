@@ -43,7 +43,12 @@ rec {
     }
     # Kokoro is CPU-only. During cutover it is briefly dual-homed with
     # lordhenry; remove the old app only after this instance is verified.
-    "tts"
+    # qwen-tts already owns 8880 on this host, so Kokoro's private backend
+    # uses 8890 while the stable public wrapper remains on 8788.
+    {
+      name = "tts";
+      backendPort = 8890;
+    }
     # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.
     # qwen-tts still asks for `nvidia.com/gpu=all` and loads its model into
     # whichever card has room, so it cannot coexist with qwen-vllm, which fills
