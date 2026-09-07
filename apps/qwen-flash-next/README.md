@@ -18,18 +18,20 @@ Sparse Attention → MoE))`, 262144 native context.
   architecture (`src/llama-arch.cpp`), the PLE tensor family
   (`blk.N.ple_key` / `ple_value` / …), server slots, and
   `--ctx-checkpoints` / `--checkpoint-min-step`.
-* **"EngramHalo.cpp" was evaluated and rejected as the primary source.** The
-  only artefacts that exist under that name are `MorezMartin/engramhalo-rocm10`
-  (a 2-star ROCm-10 *container image* repo) and `Heretek-AI/EngramHalo-BUILDER`
-  (empty, no description). Neither is a taggable, auditable fork, and neither
-  can be pinned by commit with any confidence about what it contains. Pinning a
-  signed upstream release tag is the reproducible choice; if a Strix-Halo fork
-  later earns trust, swap `src` in `pkgs/llama-cpp-halo` and nothing else in
-  this app changes.
-* **Vulkan, not ROCm/HIP.** lordhenry boots with `amdgpu.cwsr_enable=0`
-  precisely because the gfx1151 MES firmware hangs the GPU under ROCm
-  workloads (ROCm #5590), and this host's other accelerated services (ollama,
-  whisper) are already on the Vulkan/RADV path.
+* **EngramHalo.cpp is real and is the current performance reference.**
+  [`Aristo94/EngramHalo.cpp`](https://github.com/Aristo94/EngramHalo.cpp), branch
+  `strix-halo-qwen4exp`, contains the ROCm/gfx1151 sparse-QSA, MTP, and
+  SSD-backed engram work measured by the abliter8 recipe. Its moving branch can
+  be pinned (the published recipe used `4ff3affc2`), and it is the likely
+  performance upgrade after a host-specific ROCm soak. The initial deployment
+  deliberately uses a pinned upstream release instead: fewer patches and a
+  backend already exercised on lordhenry are preferable while validating a new
+  84 GiB model and its two-slot state semantics.
+* **Vulkan first, not because ROCm is impossible.** lordhenry carries
+  `amdgpu.cwsr_enable=0` as a workaround for the gfx1151 MES hang (ROCm #5590),
+  and its existing accelerated services use Vulkan/RADV. EngramHalo's ROCm
+  recipe uses compatible host tuning and may be faster; switching remains an
+  explicit measured follow-up rather than an unsupported claim.
 
 ## Quant ladder and memory budget
 
@@ -52,7 +54,13 @@ Two further levers:
 * **PLE on CPU.** `--override-tensor "ple_key|ple_value=CPU"` keeps the 51B
   n-gram lookup table mmap-backed in host memory instead of resident in GTT.
   It is a large, sparsely-touched table; the page cache handles it far better
-  than the GPU allocator does. Set `ngramOverrideTensor = null` to disable.
+  than the GPU allocator does. This is also the reason the initial Vulkan path
+  does not bind the published single ~47.7 GiB PLE tensor as one Vulkan buffer
+  (which exceeds the commonly reported 4 GiB binding limit). Actual model-load
+  validation on lordhenry remains mandatory; if upstream still constructs a
+  giant backend buffer before honoring the override, use EngramHalo's
+  SSD-streamed path or split-PLE utility rather than weakening the memory gate.
+  Set `ngramOverrideTensor = null` only after proving the resulting allocation.
 
 ## MTP speculative decoding: off, on purpose
 

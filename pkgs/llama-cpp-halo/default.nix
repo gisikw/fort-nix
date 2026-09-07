@@ -1,21 +1,19 @@
 # llama.cpp built for AMD Strix Halo (Ryzen AI Max+ / gfx1151) via Vulkan.
 #
-# Why upstream llama.cpp and not a Strix-Halo fork:
-#   * Upstream master already carries the architecture this host needs —
-#     `qwen4exp` (Qwen3.8-Flash-Next: hybrid Gated DeltaNet + Qwen Sparse
-#     Attention, PLE n-gram embeddings, MTP draft head) is in src/llama-arch.cpp,
-#     and the server carries `--ctx-checkpoints` / `--checkpoint-min-step`.
-#   * The "EngramHalo" material that circulates for this box is a two-star
-#     ROCm-10 *container image* repo plus an empty BUILDER repo — no auditable
-#     fork, no tags, nothing pinnable. Pinning a release tag of the upstream
-#     tree is the reproducible option; if a fork later proves out, swap `src`
-#     here and nothing else changes.
+# Why upstream llama.cpp for the initial deployment:
+#   * Upstream carries the architecture this host needs — `qwen4exp`
+#     (Qwen3.8-Flash-Next: hybrid Gated DeltaNet + Qwen Sparse Attention and PLE
+#     n-gram embeddings) — plus the server's context checkpoints.
+#   * Aristo94/EngramHalo.cpp is a real, pinnable Strix-Halo fork and the current
+#     performance reference. It adds ROCm sparse-QSA, MTP, and SSD-backed PLE
+#     work, but is a larger patch surface. Start with a pinned upstream release
+#     and lordhenry's already-used Vulkan lane; evaluate the EngramHalo pin as a
+#     measured upgrade once model load and two-slot correctness are established.
 #
-# Why Vulkan and not ROCm/HIP: lordhenry already boots with
-# `amdgpu.cwsr_enable=0` because the gfx1151 MES firmware hangs the GPU under
-# ROCm workloads (ROCm #5590), and the host's other accelerated services
-# (ollama, whisper) are on the Vulkan path. Vulkan/RADV is the supported lane
-# on this machine.
+# Why Vulkan first: lordhenry already carries `amdgpu.cwsr_enable=0` for the
+# gfx1151 MES hang (ROCm #5590), and existing accelerated services use
+# Vulkan/RADV. This does not claim ROCm is impossible; EngramHalo's ROCm path is
+# expected to be faster and deserves a separate host soak.
 {
   pkgs,
   # Pinned upstream release tag. Bump tag + hash together.
