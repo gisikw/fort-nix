@@ -4,14 +4,54 @@ rec {
 
   roles = [ ];
 
+  # Retired 2026-09-07 (lordhenry cleanup): comfyui, open-webui, qmd and
+  # sillytavern. All four were declared only here (verified: no other host
+  # manifest, role or aspect references them), so dropping them from this list
+  # removes the units and vhosts and nothing else. Their app modules are kept
+  # in apps/ so a redeploy is a one-line revert, and NO data was touched —
+  # /var/lib/{comfyui,open-webui,qmd,sillytavern} and the container volumes
+  # stay on disk until someone deliberately reclaims them.
+  #
+  # ollama stays: ratched's scoring path calls Ollama on lordhenry (see
+  # clusters/bedlam/hosts/ratched/manifest.nix), and the tiamat ratecard still
+  # prices the ollama/* arm.
   apps = [
-    "comfyui"
     "ollama"
-    "open-webui"
-    "qmd"
-    "sillytavern"
   ];
 
+  # ---- Overlay retention inventory (2026-09-07 cleanup) ----
+  # Every overlay below was checked for live consumers before the cleanup pass;
+  # each is RETAINED for the reason recorded on it. Nothing here was removed.
+  #
+  #   grotto        RETAINED — cranium on ratched is configured with
+  #                 grottoUrl = https://grotto.gisi.network, and so is the
+  #                 tiamat overlay below. Blob storage with live readers.
+  #   tiamat        RETAINED — the "legacy/ancestor" Tiamat gateway was on the
+  #                 cleanup candidate list, but it still has three live
+  #                 consumers that this change is not allowed to repoint:
+  #                   * joker: the Wings flight harness issues entitlements and
+  #                     runs wardens against http://lordhenry:8900/v1/tiamat/*
+  #                     (issuance, terminal invocations, inference base URL).
+  #                   * joker: the herdr-fleet aspect points
+  #                     ANTHROPIC_BASE_URL at http://lordhenry:8900.
+  #                   * ratched: kobold's coordinator sets
+  #                     tiamatBaseUrl = https://tiamat.gisi.network for
+  #                     inference-node turns (tiamat.turn.request.v1).
+  #                 Retiring it therefore needs a joker+ratched cutover onto
+  #                 tiamat-router first; that is out of scope here (this pass
+  #                 touches lordhenry only).
+  #   tiamat-router RETAINED — current golem routing (azula, obrien) and the
+  #                 dev-sandbox token both target azula's router.gisi.network,
+  #                 so this instance is not on the hot path today; it is kept
+  #                 because it is the successor surface Tiamat's consumers must
+  #                 move onto, and because no evidence rules out out-of-repo
+  #                 clients of tiamat-router.gisi.network.
+  #   kobold        RETAINED — chieftain is lordhenry's resident presence /
+  #                 assignment reconciler and the absorbed batch worker for
+  #                 nodes tagged "lordhenry"; it runs as the tiamat user.
+  #   coffer        RETAINED — cofferd is the only supplier of
+  #                 fort/anthropic/cred and fort/openai/cred to tiamat's
+  #                 Claude Code and Sol/GPT arms. Dies with tiamat, not before.
   overlays = {
     grotto = {
       package = "infra/grotto";
