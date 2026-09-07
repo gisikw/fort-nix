@@ -700,11 +700,11 @@ rec {
         autoUpdate = true;
         pollInterval = "15m";
         exec = "projects-browser";
-        # Fetch/build/checkout run as the service account, so the tracked
-        # tree and profile live under /var/lib/fort-tracked/projects — never
-        # inside the browsed home directory.
-        user = "projects";
-        group = "projects";
+        # Fetch/build needs Familiar's GitHub credential because this is a
+        # private repository. The runtime below still runs as the isolated
+        # projects account; tracked state stays outside the browsed tree.
+        user = "familiar";
+        group = "users";
         expose = {
           subdomain = "projects";
           port = projectsPort;
@@ -780,6 +780,17 @@ rec {
             IPAddressAllow = "localhost";
           };
         };
+      };
+
+      # fort.tracked deliberately gives fetchers an isolated HOME. Point only
+      # this private-repository fetch at Familiar's gh credential and install a
+      # per-process helper; the token is read at runtime and never enters the
+      # Nix store. The projects runner does not inherit this environment.
+      config.systemd.services.fort-tracked-projects-fetch.environment = {
+        GH_CONFIG_DIR = "${familiarHome}/.config/gh";
+        GIT_CONFIG_COUNT = "1";
+        GIT_CONFIG_KEY_0 = "credential.https://github.com.helper";
+        GIT_CONFIG_VALUE_0 = "!${pkgs.gh}/bin/gh auth git-credential";
       };
 
       config.environment.variables = {
