@@ -32,20 +32,18 @@ rec {
       gpuDevice = 1;
       modelNames = [ "gemma4-heretic" ];
     }
-    # Split speech rollout: migrate only Parakeet ASR/STT from lordhenry. It
-    # keeps the public `stt` service name and /transcribe API. GPU 0 is
-    # unavailable because qwen-vllm fills it, so the ~0.6B model is explicitly
-    # confined to GPU 1 alongside Ollama. Expect transient latency/VRAM pressure
-    # if both infer concurrently; do not broaden either workload to all GPUs.
-    #
-    # Kokoro TTS intentionally remains live on lordhenry until an authorized
-    # recipient can rewrap its unchanged encrypted voice for this host. Roll STT
-    # back by removing this app and restoring `stt` on lordhenry; do not alter
-    # service discovery or the retained lordhenry TTS during that rollback.
+    # Speech workloads moved from lordhenry. Parakeet keeps the public `stt`
+    # service name and /transcribe API. GPU 0 is unavailable because qwen-vllm
+    # fills it, so the ~0.6B model is explicitly confined to GPU 1 alongside
+    # Ollama. Expect transient latency/VRAM pressure if both infer concurrently;
+    # do not broaden either workload to all GPUs.
     {
       name = "stt";
       gpuDevice = 1;
     }
+    # Kokoro is CPU-only. During cutover it is briefly dual-homed with
+    # lordhenry; remove the old app only after this instance is verified.
+    "tts"
     # Wyvern voice campaign (c-713b2161) — temporary; remove after voice elicitation.
     # qwen-tts still asks for `nvidia.com/gpu=all` and loads its model into
     # whichever card has room, so it cannot coexist with qwen-vllm, which fills
