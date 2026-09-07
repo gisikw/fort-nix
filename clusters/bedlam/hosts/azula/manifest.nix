@@ -79,6 +79,10 @@ rec {
         };
       });
       kestrelDir = "/var/lib/kestrel";
+      # Projects browser: fixed loopback port, unused elsewhere on this host
+      # (see config.fort.tracked.projects near the bottom of this module).
+      projectsPort = 8794;
+      projectsStateDir = "/var/lib/projects";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
         set -euo pipefail
@@ -377,7 +381,10 @@ rec {
         "L+ ${kestrelDir}/state/pi/bin/stuff - - - - ${stuffForFamiliar}"
         # Wireframes static root: exists before nginx's BindReadOnlyPaths
         # resolves it, and world-readable so the nginx user can read it.
-        "d ${familiarHome}/Projects - familiar users -"
+        # 0755 (the tmpfiles default this rule already produced, now
+        # explicit): services outside the familiar account traverse this
+        # directory — nginx for wireframes, projects-browser for the tree.
+        "d ${familiarHome}/Projects 0755 familiar users -"
         "d ${familiarHome}/Projects/wireframes 0755 familiar users -"
       ];
 
@@ -572,6 +579,19 @@ rec {
       # Stuff is a small CouchDB-backed Item/Note gateway. Its binary follows
       # the public repository independently of host evaluation, while the
       # runner itself remains declarative and least-privileged.
+      # The Projects browser runs as its own least-privileged system account:
+      # it only ever reads Kevin's Projects tree and writes its own database.
+      config.users.groups.projects = { };
+      config.users.users.projects = {
+        isSystemUser = true;
+        group = "projects";
+        description = "Projects browser service user";
+        # Home points at the state directory rather than anything under
+        # /home, so nothing this account does can scribble into the tree it
+        # browses (or leave a checkout there).
+        home = projectsStateDir;
+      };
+
       config.users.groups.stuff = { };
       config.users.users.stuff = {
         isSystemUser = true;
@@ -658,6 +678,106 @@ rec {
               "AF_INET6"
               "AF_UNIX"
             ];
+          };
+        };
+      };
+
+      # Projects browser: read-only window onto ~familiar/Projects, tracked
+      # from gisikw/projects main. Deployment cadence is the app repo's, not
+      # this manifest's (see common/fort/tracked.nix); autoUpdate is safe here
+      # because that branch is solely ours.
+      #
+      # Trust boundary: the service reads a human's working tree, so it gets
+      # nothing else. ProtectHome=tmpfs blanks /home inside the namespace and
+      # exactly one path is bound back in, read-only; the only writable
+      # location is its own StateDirectory. IPAddressAllow=localhost is the
+      # belt to the loopback bind's braces — even a misconfigured listener
+      # cannot be reached off-box.
+      config.fort.tracked.projects = {
+        repo = "gisikw/projects";
+        branch = "main";
+        flakeAttr = "default";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = "projects-browser";
+        # Fetch/build/checkout run as the service account, so the tracked
+        # tree and profile live under /var/lib/fort-tracked/projects — never
+        # inside the browsed home directory.
+        user = "projects";
+        group = "projects";
+        expose = {
+          subdomain = "projects";
+          port = projectsPort;
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [
+              "admin"
+              "infra"
+            ];
+          };
+          # No health.endpoint: the app has no documented health route yet.
+          # Add one here only after the app actually serves it.
+        };
+        unit = {
+          description = "Projects browser — read-only view of ~familiar/Projects";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          environment = {
+            PROJECTS_ROOT = "${familiarHome}/Projects";
+            PROJECTS_DATABASE = "${projectsStateDir}/projects.db";
+            PROJECTS_HOST = "127.0.0.1";
+            PROJECTS_PORT = toString projectsPort;
+          };
+          serviceConfig = {
+            User = "projects";
+            Group = "projects";
+            StateDirectory = "projects";
+            StateDirectoryMode = "0700";
+            WorkingDirectory = projectsStateDir;
+            Restart = "on-failure";
+            RestartSec = "5s";
+            UMask = "0077";
+
+            # ProtectHome=tmpfs hides every home directory; the single bind
+            # below hands back only the tree being browsed, read-only. Same
+            # idiom as nginx/wireframes above — /home/familiar as a whole is
+            # never exposed.
+            ProtectHome = "tmpfs";
+            BindReadOnlyPaths = [ "${familiarHome}/Projects" ];
+            ProtectSystem = "strict";
+            ProtectProc = "invisible";
+            ProcSubset = "pid";
+            PrivateTmp = true;
+            PrivateDevices = true;
+            NoNewPrivileges = true;
+            CapabilityBoundingSet = "";
+            AmbientCapabilities = "";
+            LockPersonality = true;
+            RestrictRealtime = true;
+            RestrictSUIDSGID = true;
+            RestrictNamespaces = true;
+            ProtectClock = true;
+            ProtectHostname = true;
+            ProtectKernelLogs = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            ProtectControlGroups = true;
+            RemoveIPC = true;
+            SystemCallArchitectures = "native";
+            SystemCallFilter = [
+              "@system-service"
+              "~@privileged"
+              "~@resources"
+            ];
+            SystemCallErrorNumber = "EPERM";
+            RestrictAddressFamilies = [
+              "AF_INET"
+              "AF_INET6"
+              "AF_UNIX"
+            ];
+            IPAddressDeny = "any";
+            IPAddressAllow = "localhost";
           };
         };
       };
