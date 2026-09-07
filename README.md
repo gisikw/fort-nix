@@ -139,6 +139,7 @@ For risky changes, push to a `<hostname>-test` branch. CI validates that host's 
 | prowlarr | Indexer manager for *arr stack |
 | qbittorrent | BitTorrent client (egress VPN) |
 | qmd | Markdown search and embedding service |
+| qwen-flash-next | Qwen3.8-Flash-Next (180B/6B active) on Strix Halo via llama.cpp/Vulkan |
 | radarr | Movie collection manager |
 | radicale | CalDAV/CardDAV server |
 | readarr | Book collection manager |

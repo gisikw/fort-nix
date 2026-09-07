@@ -17,6 +17,27 @@ rec {
   # prices the ollama/* arm.
   apps = [
     "ollama"
+    # Qwen3.8-Flash-Next (180B total / ~6B active) on the Strix Halo APU via a
+    # pinned Vulkan llama.cpp build. Read apps/qwen-flash-next/README.md before
+    # touching any of these knobs — the two-slot / context-checkpoint shape is
+    # a correctness requirement (hybrid GDN recurrent state is NOT preserved by
+    # llama.cpp's disk slot cache), not a tuning preference.
+    #
+    # Provisioning is managed and capacity-gated: the reconciler refuses to
+    # start the ~84 GiB fetch unless the store's filesystem has the bytes plus
+    # a 16 GiB margin, and the server unit stays down (ConditionPathExists +
+    # empty wantedBy) until every shard is on disk and sha256-verified. So a
+    # switch cannot be failed, and no blind download can be started, by this.
+    #
+    # tuneGtt raises amdgpu/TTM limits to 112 GiB so the weights can live in
+    # GTT on this unified-memory box — KERNEL PARAMS, needs a reboot.
+    {
+      name = "qwen-flash-next";
+      quant = "UD-Q3_K_XL"; # 83.8 GiB; UD-IQ3_XXS (76.3) is the fallback rung
+      slots = 2; # one resident slot per live cache trajectory
+      contextSize = 131072; # total; 65536 per trajectory
+      ctxCheckpoints = 8;
+    }
   ];
 
   # ---- Overlay retention inventory (2026-09-07 cleanup) ----
