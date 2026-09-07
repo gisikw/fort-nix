@@ -39,6 +39,12 @@ later with those semantics.
   and cleartext listeners, ensuring the dedicated logs also cover HTTP; its
   HTTPS redirect uses a literal origin and deliberately drops the requested
   path and all arguments rather than reflecting attacker-controlled data.
+- Both custom proxy locations explicitly disable NixOS
+  `recommendedProxySettings`. The common nginx module enables those defaults
+  globally, but inheriting them would append a second `Host $host` after each
+  boundary's deliberate Host header. The descriptor sends exactly the public
+  Host; `/v1/` sends exactly `Host 127.0.0.1:8795` for the bridge's
+  DNS-rebinding check.
 - `/v1/` explicitly uses HTTP/1.1, an empty upstream `Connection` header, and
   disables proxy buffering, proxy caching, and gzip. Combined with the
   bridge's `X-Accel-Buffering: no`, this preserves incremental SSE. The read
@@ -112,6 +118,7 @@ sequence is:
 Activation/restart edges: nginx may reload/restart for the vhost;
 `familiar-ui-broker` may start/restart; `familiar-ui-stage` may run. None of
 those may propagate to Presence. The Fort evaluation assertions enforce the
-SSE directives, safe logging format, correct Pi auto-discovery path, absence of
-the duplicate explicit-extension environment, reviewed branch, and all
-Presence lifecycle exclusions.
+SSE directives, one boundary-specific Host header with recommended proxy
+settings disabled on each custom location, safe logging format, correct Pi
+auto-discovery path, absence of the duplicate explicit-extension environment,
+reviewed branch, and all Presence lifecycle exclusions.

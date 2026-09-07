@@ -95,10 +95,15 @@ rec {
       # global auto-discovered, /reload-compatible extension location.
       familiarUiExtensionDir = "${familiarPiAgentDir}/extensions/familiar-ui";
       familiarUiExtensionPath = "${familiarUiExtensionDir}/index.js";
-      familiarUiProfileExtension =
-        "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
-      familiarUiAccessLogFormat =
-        ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+      familiarUiProfileExtension = "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
+      familiarUiAccessLogFormat = ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+      familiarUiDescriptorProxyConfig = ''
+        auth_request /_identity/validate;
+        error_page 401 = @identity_login;
+        proxy_set_header Host $host;
+        proxy_set_header Cookie "";
+        proxy_set_header Authorization "";
+      '';
       familiarUiProxyConfig = ''
         auth_request /_identity/validate;
         error_page 401 = @identity_login;
@@ -114,6 +119,18 @@ rec {
         proxy_set_header Cookie "";
         proxy_read_timeout 600s;
       '';
+      # Extract exact Host values from a location's explicit config. Together
+      # with recommendedProxySettings=false, this proves nginx can render only
+      # the one Host directive required by each trust boundary.
+      proxyHostValues =
+        extraConfig:
+        map builtins.head (
+          builtins.filter (match: match != null) (
+            map (builtins.match "[[:space:]]*proxy_set_header Host ([^;]+);[[:space:]]*") (
+              pkgs.lib.splitString "\n" extraConfig
+            )
+          )
+        );
       projectsStateDir = "/var/lib/projects";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
@@ -297,15 +314,12 @@ rec {
             message = "familiar-ui: production must track reviewed main";
           }
           {
-            assertion =
-              familiarUiExtensionPath
-              == "/var/lib/kestrel/state/pi/extensions/familiar-ui/index.js";
+            assertion = familiarUiExtensionPath == "/var/lib/kestrel/state/pi/extensions/familiar-ui/index.js";
             message = "familiar-ui: wrapper must use Kestrel's actual Pi global extension directory";
           }
           {
             assertion =
-              !(builtins.hasAttr "FAMILIAR_PI_EXTRA_EXTENSIONS_JSON"
-                config.systemd.services.familiar-instance-presence.environment);
+              !(builtins.hasAttr "FAMILIAR_PI_EXTRA_EXTENSIONS_JSON" config.systemd.services.familiar-instance-presence.environment);
             message = "familiar-ui: auto-discovery must not be duplicated through explicit settings";
           }
           {
@@ -320,9 +334,22 @@ rec {
             message = "familiar-ui: /v1 must preserve SSE and strip ingress cookies";
           }
           {
-            assertion = pkgs.lib.hasInfix
-              ''proxy_set_header Authorization "";''
-              config.services.nginx.virtualHosts."familiar-ui.${domain}".locations."= /_identity/validate".extraConfig;
+            assertion =
+              let
+                locations = config.services.nginx.virtualHosts."familiar-ui.${domain}".locations;
+                descriptor = locations."= /__familiar/bridge.json";
+                bridge = locations."^~ /v1/";
+              in
+              !descriptor.recommendedProxySettings
+              && !bridge.recommendedProxySettings
+              && proxyHostValues descriptor.extraConfig == [ "$host" ]
+              && proxyHostValues bridge.extraConfig == [ "127.0.0.1:${toString familiarUiPort}" ];
+            message = "familiar-ui: custom proxy locations must render exactly one boundary-specific Host header without NixOS proxy defaults";
+          }
+          {
+            assertion =
+              pkgs.lib.hasInfix ''proxy_set_header Authorization "";''
+                config.services.nginx.virtualHosts."familiar-ui.${domain}".locations."= /_identity/validate".extraConfig;
             message = "familiar-ui: identity SSO must not consume the bridge bearer";
           }
           {
@@ -336,9 +363,7 @@ rec {
               let
                 vhostConfig = config.services.nginx.virtualHosts."familiar-ui.${domain}".extraConfig;
               in
-              pkgs.lib.hasInfix
-                "error_log /var/log/nginx/familiar-ui-error.log warn;"
-                vhostConfig
+              pkgs.lib.hasInfix "error_log /var/log/nginx/familiar-ui-error.log warn;" vhostConfig
               && !(pkgs.lib.hasInfix " debug;" vhostConfig);
             message = "familiar-ui: vhost error logging must never use debug";
           }
@@ -465,16 +490,16 @@ rec {
         '';
         locations."= /__familiar/bridge.json" = {
           proxyPass = "http://unix:${familiarUiSocket}";
-          extraConfig = ''
-            auth_request /_identity/validate;
-            error_page 401 = @identity_login;
-            proxy_set_header Host $host;
-            proxy_set_header Cookie "";
-            proxy_set_header Authorization "";
-          '';
+          # Global recommended proxy settings would append another Host header.
+          # This boundary intentionally sends only the public request Host.
+          recommendedProxySettings = false;
+          extraConfig = familiarUiDescriptorProxyConfig;
         };
         locations."^~ /v1/" = {
           proxyPass = "http://127.0.0.1:${toString familiarUiPort}";
+          # The bridge's DNS-rebinding check requires its loopback authority;
+          # never append NixOS's conflicting `Host $host` proxy default.
+          recommendedProxySettings = false;
           extraConfig = familiarUiProxyConfig;
         };
         # The /v1 Authorization header is the bridge bearer, not an identity
