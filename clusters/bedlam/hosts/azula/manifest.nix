@@ -88,7 +88,32 @@ rec {
       familiarUiProfile = "/nix/var/nix/profiles/fort-tracked-familiar-ui/profile";
       familiarUiDescriptor = "/run/familiar-ui/bridge.json";
       familiarUiSocket = "/run/familiar-ui/broker.sock";
-      familiarUiExtensionPath = "/etc/familiar-ui-extension/index.js";
+      # familiar.sh derives this from Kestrel's config directory as
+      # $STATE_DIR/pi, then exports it as PI_CODING_AGENT_DIR.
+      familiarPiAgentDir = "${kestrelDir}/state/pi";
+      # Pi 0.84 documents $PI_CODING_AGENT_DIR/extensions/*/index.js as its
+      # global auto-discovered, /reload-compatible extension location.
+      familiarUiExtensionDir = "${familiarPiAgentDir}/extensions/familiar-ui";
+      familiarUiExtensionPath = "${familiarUiExtensionDir}/index.js";
+      familiarUiProfileExtension =
+        "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
+      familiarUiAccessLogFormat =
+        ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+      familiarUiProxyConfig = ''
+        auth_request /_identity/validate;
+        error_page 401 = @identity_login;
+        client_max_body_size 128k;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_set_header Connection "";
+        proxy_set_header Host 127.0.0.1:${toString familiarUiPort};
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Cookie "";
+        proxy_read_timeout 600s;
+      '';
       projectsStateDir = "/var/lib/projects";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
@@ -116,16 +141,28 @@ rec {
         export STUFF_TOKEN_FILE="''${STUFF_TOKEN_FILE:-/run/secrets/stuff-api-token}"
         exec /nix/var/nix/profiles/fort-tracked-stuff/profile/bin/stuff "$@"
       '';
-      # Loaded by the resident Pi on Kevin's explicit /reload. Setting the
-      # extension environment in-process avoids restarting Presence merely to
-      # teach its already-running tmux worker about deployment settings.
+      # Loaded by the resident Pi only on Kevin's explicit /reload (or its next
+      # birth). Set the process environment before resolving the mutable tracked
+      # profile to an immutable store file URL. The dynamic URL prevents Node's
+      # ESM cache from retaining an old profile generation across /reload.
       familiarUiExtension = pkgs.writeText "familiar-ui-extension.js" ''
-        import extension from "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
-        export default function familiarUi(pi) {
+        import { realpath } from "node:fs/promises";
+        import { pathToFileURL } from "node:url";
+
+        export default async function familiarUi(pi) {
           process.env.FAMILIAR_UI_ORIGIN = ${builtins.toJSON familiarUiOrigin};
           process.env.FAMILIAR_UI_PORT = ${builtins.toJSON (toString familiarUiPort)};
           process.env.FAMILIAR_UI_DESCRIPTOR = ${builtins.toJSON familiarUiDescriptor};
-          return extension(pi);
+
+          const target = await realpath(${builtins.toJSON familiarUiProfileExtension});
+          if (!target.startsWith("/nix/store/")) {
+            throw new Error("familiar-ui profile did not resolve into the immutable Nix store");
+          }
+          const module = await import(pathToFileURL(target).href);
+          if (typeof module.default !== "function") {
+            throw new Error("familiar-ui extension has no default factory");
+          }
+          return module.default(pi);
         }
       '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
@@ -255,6 +292,56 @@ rec {
               !(builtins.elem "familiar-instance-presence.service" config.fort.tracked.familiar-ui.restartUnits);
             message = "familiar-ui: tracked updates must not restart resident Presence";
           }
+          {
+            assertion = config.fort.tracked.familiar-ui.branch == "main";
+            message = "familiar-ui: production must track reviewed main";
+          }
+          {
+            assertion =
+              familiarUiExtensionPath
+              == "/var/lib/kestrel/state/pi/extensions/familiar-ui/index.js";
+            message = "familiar-ui: wrapper must use Kestrel's actual Pi global extension directory";
+          }
+          {
+            assertion =
+              !(builtins.hasAttr "FAMILIAR_PI_EXTRA_EXTENSIONS_JSON"
+                config.systemd.services.familiar-instance-presence.environment);
+            message = "familiar-ui: auto-discovery must not be duplicated through explicit settings";
+          }
+          {
+            assertion = builtins.all (directive: pkgs.lib.hasInfix directive familiarUiProxyConfig) [
+              "proxy_http_version 1.1;"
+              "proxy_buffering off;"
+              "proxy_cache off;"
+              "gzip off;"
+              ''proxy_set_header Connection "";''
+              ''proxy_set_header Cookie "";''
+            ];
+            message = "familiar-ui: /v1 must preserve SSE and strip ingress cookies";
+          }
+          {
+            assertion = pkgs.lib.hasInfix
+              ''proxy_set_header Authorization "";''
+              config.services.nginx.virtualHosts."familiar-ui.${domain}".locations."= /_identity/validate".extraConfig;
+            message = "familiar-ui: identity SSO must not consume the bridge bearer";
+          }
+          {
+            assertion =
+              familiarUiAccessLogFormat
+              == ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+            message = "familiar-ui: dedicated access log format must remain credential/query safe";
+          }
+          {
+            assertion =
+              let
+                vhostConfig = config.services.nginx.virtualHosts."familiar-ui.${domain}".extraConfig;
+              in
+              pkgs.lib.hasInfix
+                "error_log /var/log/nginx/familiar-ui-error.log warn;"
+                vhostConfig
+              && !(pkgs.lib.hasInfix " debug;" vhostConfig);
+            message = "familiar-ui: vhost error logging must never use debug";
+          }
         ];
 
       config.users.groups.tiamat-router = { };
@@ -352,8 +439,27 @@ rec {
       # /v1 rewrites Host to the bridge's actual bound address: familiar-ui
       # still performs its own exact Origin, Host/DNS-rebinding, and bearer
       # checks rather than trusting reverse-proxy headers.
+      # This vhost gets a private log format: its request field contains only
+      # method plus nginx's normalized, argument-free $uri. In particular it
+      # can never serialize the bridge bearer or an accidental query token.
+      config.services.nginx.commonHttpConfig = pkgs.lib.mkAfter ''
+        log_format familiar_ui_safe '${familiarUiAccessLogFormat}';
+      '';
       config.services.nginx.virtualHosts."familiar-ui.${domain}" = {
+        # Use one server block for both listeners so the dedicated safe access
+        # and warn-level error logs also cover cleartext redirect requests.
+        # The literal-origin redirect drops path and query rather than reflect
+        # any attacker-controlled request data into its Location header.
+        forceSSL = pkgs.lib.mkForce false;
+        addSSL = true;
         extraConfig = pkgs.lib.mkAfter ''
+          if ($scheme = http) {
+            return 301 ${familiarUiOrigin}/;
+          }
+          access_log /var/log/nginx/familiar-ui-access.log familiar_ui_safe;
+          # Debug-level nginx errors can include request headers. Pin this
+          # credential-bearing vhost at warn even if global verbosity changes.
+          error_log /var/log/nginx/familiar-ui-error.log warn;
           more_set_headers "Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
           more_set_headers "Referrer-Policy: no-referrer";
         '';
@@ -369,17 +475,26 @@ rec {
         };
         locations."^~ /v1/" = {
           proxyPass = "http://127.0.0.1:${toString familiarUiPort}";
-          extraConfig = ''
-            auth_request /_identity/validate;
-            error_page 401 = @identity_login;
-            client_max_body_size 128k;
-            proxy_set_header Host 127.0.0.1:${toString familiarUiPort};
-            proxy_set_header Origin $http_origin;
-            proxy_set_header Authorization $http_authorization;
-            proxy_set_header Cookie "";
-            proxy_read_timeout 600s;
-          '';
+          extraConfig = familiarUiProxyConfig;
         };
+        # The /v1 Authorization header is the bridge bearer, not an identity
+        # token. Replace the generic identity subrequest configuration so this
+        # browser lane authenticates solely with the SSO cookie, then pass the
+        # untouched bearer only to the loopback bridge. mkForce avoids emitting
+        # two Authorization directives whose duplicate-header behavior would
+        # otherwise depend on nginx internals.
+        locations."= /_identity/validate".extraConfig = pkgs.lib.mkForce ''
+          internal;
+          client_max_body_size 0;
+          proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+          proxy_set_header X-Original-URI $request_uri;
+          proxy_set_header X-Original-Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Identity-Required-Groups "admin";
+          proxy_set_header Authorization "";
+        '';
       };
 
       # Unfamiliar runtime (see ~/Projects/unfamiliar/docs/ARCHITECTURE.md).
@@ -589,7 +704,7 @@ rec {
       # broker/stager; Presence is deliberately absent from restartUnits.
       config.fort.tracked.familiar-ui = {
         repo = "gisikw/familiar-ui";
-        branch = "feature/azula-production-deployment";
+        branch = "main";
         flakeAttr = "familiar-ui";
         autoUpdate = true;
         pollInterval = "15m";
@@ -602,41 +717,25 @@ rec {
         ];
       };
 
-      config.environment.etc."familiar-ui-extension/index.js".source = familiarUiExtension;
-      config.environment.etc."familiar-ui-extension/package.json".text = builtins.toJSON {
-        type = "module";
-      };
-
-      # Add, never replace, the extension in Pi's durable settings. This unit
-      # does not signal or restart Presence: Kevin must explicitly run /reload.
+      # Stage in Pi's documented global auto-discovery directory. This never
+      # reads or writes settings.json, so it cannot race Pi 0.84's own
+      # proper-lockfile-coordinated settings persistence. /reload rescans this
+      # directory; the same lane also persists naturally across the next birth.
       config.systemd.services.familiar-ui-stage = {
-        description = "Stage familiar-ui extension for explicit Pi /reload";
-        unitConfig.ConditionPathExists = "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
+        description = "Stage familiar-ui in Pi's global extension directory";
+        wantedBy = [ "multi-user.target" ];
+        unitConfig.ConditionPathExists = familiarUiProfileExtension;
         serviceConfig = {
           Type = "oneshot";
           User = "familiar";
           Group = "users";
         };
-        path = [
-          pkgs.coreutils
-          pkgs.jq
-          pkgs.util-linux
-        ];
+        path = [ pkgs.coreutils ];
         script = ''
           set -euo pipefail
-          settings=${kestrelDir}/state/pi/settings.json
-          install -d -m 0700 "$(dirname "$settings")"
-          exec 9>"$settings.familiar-ui.lock"
-          flock 9
-          previous=$(jq -ce . "$settings" 2>/dev/null || printf '{}')
-          tmp=$(mktemp "$settings.familiar-ui.XXXXXX")
-          trap 'rm -f "$tmp"' EXIT
-          jq --arg extension ${pkgs.lib.escapeShellArg familiarUiExtensionPath} \
-            '.extensions = (((.extensions // []) + [$extension]) | unique)' \
-            <<<"$previous" > "$tmp"
-          chmod 0600 "$tmp"
-          mv -f "$tmp" "$settings"
-          trap - EXIT
+          install -d -m 0700 ${familiarPiAgentDir}/extensions
+          install -d -m 0700 ${familiarUiExtensionDir}
+          ln -sfn ${familiarUiExtension} ${familiarUiExtensionPath}
         '';
       };
 
@@ -673,13 +772,13 @@ rec {
         };
       };
 
-      # Hard activation gate: changing the declared environment for the next
-      # Presence birth must never bounce the current Exo. This is intentionally
-      # redundant with the app's lifecycle split and is asserted below.
+      # Hard activation gate: staging an extension for the next /reload or birth
+      # must never bounce the current Exo. Auto-discovery makes
+      # FAMILIAR_PI_EXTRA_EXTENSIONS_JSON unnecessary; omitting an explicit
+      # settings entry also guarantees the extension is loaded exactly once.
       config.systemd.services.familiar-instance-presence = {
         restartIfChanged = false;
         stopIfChanged = false;
-        environment.FAMILIAR_PI_EXTRA_EXTENSIONS_JSON = builtins.toJSON [ familiarUiExtensionPath ];
       };
 
       # Familiar code tree: tracked from main, tree-only (exec = null — the
