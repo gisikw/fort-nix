@@ -79,9 +79,16 @@ rec {
         };
       });
       kestrelDir = "/var/lib/kestrel";
-      # Projects browser: fixed loopback port, unused elsewhere on this host
-      # (see config.fort.tracked.projects near the bottom of this module).
+      # Projects browser and Familiar UI bridge: fixed loopback ports, unused
+      # elsewhere on this host. Familiar UI must be stable because nginx is the
+      # same-origin broker; the bridge itself remains bound to 127.0.0.1.
       projectsPort = 8794;
+      familiarUiPort = 8795;
+      familiarUiOrigin = "https://familiar-ui.${domain}";
+      familiarUiProfile = "/nix/var/nix/profiles/fort-tracked-familiar-ui/profile";
+      familiarUiDescriptor = "/run/familiar-ui/bridge.json";
+      familiarUiSocket = "/run/familiar-ui/broker.sock";
+      familiarUiExtensionPath = "/etc/familiar-ui-extension/index.js";
       projectsStateDir = "/var/lib/projects";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
@@ -108,6 +115,18 @@ rec {
         export STUFF_URL="''${STUFF_URL:-http://127.0.0.1:7847}"
         export STUFF_TOKEN_FILE="''${STUFF_TOKEN_FILE:-/run/secrets/stuff-api-token}"
         exec /nix/var/nix/profiles/fort-tracked-stuff/profile/bin/stuff "$@"
+      '';
+      # Loaded by the resident Pi on Kevin's explicit /reload. Setting the
+      # extension environment in-process avoids restarting Presence merely to
+      # teach its already-running tmux worker about deployment settings.
+      familiarUiExtension = pkgs.writeText "familiar-ui-extension.js" ''
+        import extension from "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
+        export default function familiarUi(pi) {
+          process.env.FAMILIAR_UI_ORIGIN = ${builtins.toJSON familiarUiOrigin};
+          process.env.FAMILIAR_UI_PORT = ${builtins.toJSON (toString familiarUiPort)};
+          process.env.FAMILIAR_UI_DESCRIPTOR = ${builtins.toJSON familiarUiDescriptor};
+          return extension(pi);
+        }
       '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
         name = "azula"
@@ -215,12 +234,28 @@ rec {
       config.systemd.services.golemd.path = pkgs.lib.mkBefore [ privilegedWrapperRoot ];
 
       # Guard the effective generated PATH, not merely the input `path` list.
-      config.assertions = map (service: {
-        assertion = builtins.elem config.security.wrapperDir (
-          pkgs.lib.splitString ":" config.systemd.services.${service}.environment.PATH
-        );
-        message = "${service}: familiar's Pi environment must contain ${config.security.wrapperDir}";
-      }) familiarPiServices;
+      config.assertions =
+        (map (service: {
+          assertion = builtins.elem config.security.wrapperDir (
+            pkgs.lib.splitString ":" config.systemd.services.${service}.environment.PATH
+          );
+          message = "${service}: familiar's Pi environment must contain ${config.security.wrapperDir}";
+        }) familiarPiServices)
+        ++ [
+          {
+            assertion = !config.systemd.services.familiar-instance-presence.restartIfChanged;
+            message = "familiar-ui: Nix activation must not restart resident Presence";
+          }
+          {
+            assertion = !config.systemd.services.familiar-instance-presence.stopIfChanged;
+            message = "familiar-ui: Nix activation must not stop resident Presence";
+          }
+          {
+            assertion =
+              !(builtins.elem "familiar-instance-presence.service" config.fort.tracked.familiar-ui.restartUnits);
+            message = "familiar-ui: tracked updates must not restart resident Presence";
+          }
+        ];
 
       config.users.groups.tiamat-router = { };
       config.users.users.tiamat-router = {
@@ -266,6 +301,19 @@ rec {
             groups = [ "admin" ];
           };
         }
+        # Reproducibly built familiar-ui shell. Only static assets are served
+        # here; the descriptor broker and /v1 bridge routes are overridden
+        # below, behind the same identity wall.
+        {
+          name = "familiar-ui";
+          staticRoot = "${familiarUiProfile}/share/familiar-ui/web";
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [ "admin" ];
+          };
+          health.enabled = false;
+        }
         # Static wireframe drafts, served straight out of the checkout in
         # Kevin's home directory (no build step, no unit — just files).
         {
@@ -299,6 +347,41 @@ rec {
         autoindex on;
       '';
 
+      # The generic static vhost handles /. These two exact trust-boundary
+      # routes retain identity auth, then proxy to private local transports.
+      # /v1 rewrites Host to the bridge's actual bound address: familiar-ui
+      # still performs its own exact Origin, Host/DNS-rebinding, and bearer
+      # checks rather than trusting reverse-proxy headers.
+      config.services.nginx.virtualHosts."familiar-ui.${domain}" = {
+        extraConfig = pkgs.lib.mkAfter ''
+          more_set_headers "Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+          more_set_headers "Referrer-Policy: no-referrer";
+        '';
+        locations."= /__familiar/bridge.json" = {
+          proxyPass = "http://unix:${familiarUiSocket}";
+          extraConfig = ''
+            auth_request /_identity/validate;
+            error_page 401 = @identity_login;
+            proxy_set_header Host $host;
+            proxy_set_header Cookie "";
+            proxy_set_header Authorization "";
+          '';
+        };
+        locations."^~ /v1/" = {
+          proxyPass = "http://127.0.0.1:${toString familiarUiPort}";
+          extraConfig = ''
+            auth_request /_identity/validate;
+            error_page 401 = @identity_login;
+            client_max_body_size 128k;
+            proxy_set_header Host 127.0.0.1:${toString familiarUiPort};
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header Cookie "";
+            proxy_read_timeout 600s;
+          '';
+        };
+      };
+
       # Unfamiliar runtime (see ~/Projects/unfamiliar/docs/ARCHITECTURE.md).
       # Runs the checkout in place as familiar with Bun; state under
       # /var/lib/unfamiliar; identity read from Kestrel's stack read-only.
@@ -321,11 +404,22 @@ rec {
       config.systemd.services.unfamiliar = {
         description = "Unfamiliar — persistent presence on the pi SDK";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-online.target" "sops-nix.service" "golemd.service" ];
+        after = [
+          "network-online.target"
+          "sops-nix.service"
+          "golemd.service"
+        ];
         wants = [ "network-online.target" ];
         # tmux is the client half of shepherd's peer-in terminal: it attaches
         # to golemd's worker sessions at /var/lib/golem/tmux.sock.
-        path = with pkgs; [ unfamiliarBun nodejs_22 git bashInteractive coreutils tmux ];
+        path = with pkgs; [
+          unfamiliarBun
+          nodejs_22
+          git
+          bashInteractive
+          coreutils
+          tmux
+        ];
         environment = {
           HOME = familiarHome;
           UNFAMILIAR_CONFIG = "${familiarHome}/Projects/unfamiliar/deploy/azula.toml";
@@ -351,7 +445,13 @@ rec {
         wantedBy = [ "multi-user.target" ];
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
-        path = with pkgs; [ nix git just bashInteractive coreutils ];
+        path = with pkgs; [
+          nix
+          git
+          just
+          bashInteractive
+          coreutils
+        ];
         environment.HOME = familiarHome;
         serviceConfig = {
           User = "familiar";
@@ -481,6 +581,105 @@ rec {
           Requires=tiamat-router-bootstrap-provision.service
           After=tiamat-router-bootstrap-provision.service
         '';
+      };
+
+      # Production familiar-ui package. The private repository is fetched by
+      # the established Familiar gh credential below, never by an evaluation-
+      # time unauthenticated fetch. Updates may restart only the stateless
+      # broker/stager; Presence is deliberately absent from restartUnits.
+      config.fort.tracked.familiar-ui = {
+        repo = "gisikw/familiar-ui";
+        branch = "feature/azula-production-deployment";
+        flakeAttr = "familiar-ui";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = null;
+        user = "familiar";
+        group = "users";
+        restartUnits = [
+          "familiar-ui-stage.service"
+          "familiar-ui-broker.service"
+        ];
+      };
+
+      config.environment.etc."familiar-ui-extension/index.js".source = familiarUiExtension;
+      config.environment.etc."familiar-ui-extension/package.json".text = builtins.toJSON {
+        type = "module";
+      };
+
+      # Add, never replace, the extension in Pi's durable settings. This unit
+      # does not signal or restart Presence: Kevin must explicitly run /reload.
+      config.systemd.services.familiar-ui-stage = {
+        description = "Stage familiar-ui extension for explicit Pi /reload";
+        unitConfig.ConditionPathExists = "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "familiar";
+          Group = "users";
+        };
+        path = [
+          pkgs.coreutils
+          pkgs.jq
+          pkgs.util-linux
+        ];
+        script = ''
+          set -euo pipefail
+          settings=${kestrelDir}/state/pi/settings.json
+          install -d -m 0700 "$(dirname "$settings")"
+          exec 9>"$settings.familiar-ui.lock"
+          flock 9
+          previous=$(jq -ce . "$settings" 2>/dev/null || printf '{}')
+          tmp=$(mktemp "$settings.familiar-ui.XXXXXX")
+          trap 'rm -f "$tmp"' EXIT
+          jq --arg extension ${pkgs.lib.escapeShellArg familiarUiExtensionPath} \
+            '.extensions = (((.extensions // []) + [$extension]) | unique)' \
+            <<<"$previous" > "$tmp"
+          chmod 0600 "$tmp"
+          mv -f "$tmp" "$settings"
+          trap - EXIT
+        '';
+      };
+
+      config.systemd.services.familiar-ui-broker = {
+        description = "Familiar UI protected descriptor broker";
+        after = [ "fort-tracked-familiar-ui-fetch.service" ];
+        unitConfig.ConditionPathExists = "${familiarUiProfile}/bin/familiar-ui-broker";
+        wantedBy = [ "multi-user.target" ];
+        environment = {
+          FAMILIAR_UI_DESCRIPTOR = familiarUiDescriptor;
+          FAMILIAR_UI_PUBLIC_ORIGIN = familiarUiOrigin;
+          FAMILIAR_UI_ORIGIN = familiarUiOrigin;
+          FAMILIAR_UI_PORT = toString familiarUiPort;
+          FAMILIAR_UI_BROKER_SOCKET = familiarUiSocket;
+        };
+        serviceConfig = {
+          User = "familiar";
+          Group = "nginx";
+          ExecStart = "${familiarUiProfile}/bin/familiar-ui-broker";
+          RuntimeDirectory = "familiar-ui";
+          RuntimeDirectoryMode = "0750";
+          RuntimeDirectoryPreserve = "restart";
+          Restart = "on-failure";
+          RestartSec = "5s";
+          UMask = "0007";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ProtectProc = "invisible";
+          ProcSubset = "pid";
+          CapabilityBoundingSet = "";
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+        };
+      };
+
+      # Hard activation gate: changing the declared environment for the next
+      # Presence birth must never bounce the current Exo. This is intentionally
+      # redundant with the app's lifecycle split and is asserted below.
+      config.systemd.services.familiar-instance-presence = {
+        restartIfChanged = false;
+        stopIfChanged = false;
+        environment.FAMILIAR_PI_EXTRA_EXTENSIONS_JSON = builtins.toJSON [ familiarUiExtensionPath ];
       };
 
       # Familiar code tree: tracked from main, tree-only (exec = null — the
@@ -792,6 +991,12 @@ rec {
         GIT_CONFIG_KEY_0 = "credential.https://github.com.helper";
         GIT_CONFIG_VALUE_0 = "!${pkgs.gh}/bin/gh auth git-credential";
       };
+      config.systemd.services.fort-tracked-familiar-ui-fetch.environment = {
+        GH_CONFIG_DIR = "${familiarHome}/.config/gh";
+        GIT_CONFIG_COUNT = "1";
+        GIT_CONFIG_KEY_0 = "credential.https://github.com.helper";
+        GIT_CONFIG_VALUE_0 = "!${pkgs.gh}/bin/gh auth git-credential";
+      };
 
       config.environment.variables = {
         GOLEM_ENDPOINT = "http://127.0.0.1:9920";
@@ -824,7 +1029,11 @@ rec {
         description = "Bounce eno1 when carrier stays lost";
         wantedBy = [ "multi-user.target" ];
         after = [ "network.target" ];
-        path = with pkgs; [ coreutils iproute2 systemd ];
+        path = with pkgs; [
+          coreutils
+          iproute2
+          systemd
+        ];
         serviceConfig = {
           Restart = "always";
           RestartSec = "10s";
