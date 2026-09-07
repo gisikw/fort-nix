@@ -114,42 +114,18 @@ rec {
         base_url = "https://llama.gisi.network/v1"
         api_key_env = ""
 
-        # Router-backed providers are registered dynamically inside each
-        # isolated pi worker. Golem owns no upstream OAuth state.
-        [providers.tiamat-anthropic-claude-code-personal]
-        kind = "tiamat"
-
-        [providers.tiamat-responses-codex-personal]
-        kind = "tiamat"
-
-        [providers.tiamat-openai-llama-frankenstein]
-        kind = "tiamat"
+        # Tiamat owns the compatible model/provider inventory. Golem pins the
+        # authorized catalogue row per job; no upstream OAuth state lives here.
+        [tiamat]
+        cache_ttl = "30s"
+        stale_ttl = "10m"
+        timeout = "5s"
+        max_models = 5000
+        max_response_bytes = 8388608
 
         [harnesses.pi]
-        models = [
-          "tiamat-anthropic-claude-code-personal/claude-fable-5",
-          "tiamat-anthropic-claude-code-personal/claude-fable-5-1",
-          "tiamat-anthropic-claude-code-personal/claude-haiku-4-5-20251001",
-          "tiamat-anthropic-claude-code-personal/claude-opus-4-5-20251101",
-          "tiamat-anthropic-claude-code-personal/claude-opus-4-6",
-          "tiamat-anthropic-claude-code-personal/claude-opus-4-7",
-          "tiamat-anthropic-claude-code-personal/claude-opus-4-8",
-          "tiamat-anthropic-claude-code-personal/claude-opus-5",
-          "tiamat-anthropic-claude-code-personal/claude-sonnet-4-5-20250929",
-          "tiamat-anthropic-claude-code-personal/claude-sonnet-4-6",
-          "tiamat-anthropic-claude-code-personal/claude-sonnet-5",
-          "tiamat-responses-codex-personal/codex-auto-review",
-          "tiamat-responses-codex-personal/gpt-5.4",
-          "tiamat-responses-codex-personal/gpt-5.4-mini",
-          "tiamat-responses-codex-personal/gpt-5.5",
-          "tiamat-responses-codex-personal/gpt-5.6-luna",
-          "tiamat-responses-codex-personal/gpt-5.6-sol",
-          "tiamat-responses-codex-personal/gpt-5.6-terra",
-          "tiamat-responses-codex-personal/gpt-reserve",
-          "tiamat-openai-llama-frankenstein/Qwen3.8-27B-UD-Q4_K_XL",
-          # Keep the direct path as a fallback while Router wiring settles.
-          "llama/Qwen3.8-27B-UD-Q4_K_XL",
-        ]
+        # Explicit non-router fallback; dynamic models are discovered above.
+        models = [ "llama/Qwen3.8-27B-UD-Q4_K_XL" ]
 
         [harnesses.fake]
         models = []
