@@ -41,10 +41,8 @@ rec {
       name = "stt";
       gpuDevice = 1;
     }
-    # Kokoro is CPU-only. During cutover it is briefly dual-homed with
-    # lordhenry; remove the old app only after this instance is verified.
-    # qwen-tts already owns 8880 on this host, so Kokoro's private backend
-    # uses 8890 while the stable public wrapper remains on 8788.
+    # Kokoro is CPU-only. qwen-tts already owns 8880 on this host, so its
+    # private backend uses 8890 while the stable public wrapper remains on 8788.
     {
       name = "tts";
       backendPort = 8890;
