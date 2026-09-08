@@ -58,7 +58,7 @@
   ...
 }:
 let
-  llamaHalo = import ../../pkgs/llama-cpp-strix { inherit pkgs; };
+  llamaHalo = import ../../pkgs/llama-cpp-halo { inherit pkgs; };
 
   repo = "unsloth/Qwen3.8-Flash-Next-GGUF";
   modelStore = "/var/lib/qwen-flash-next/models";
