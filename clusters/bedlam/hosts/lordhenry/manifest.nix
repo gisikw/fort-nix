@@ -19,9 +19,9 @@ rec {
     "ollama"
     # Qwen3.8-Flash-Next (180B total / ~6B active) on the Strix Halo APU via a
     # pinned Vulkan llama.cpp build. Read apps/qwen-flash-next/README.md before
-    # touching any of these knobs — the two-slot / context-checkpoint shape is
-    # a correctness requirement (hybrid GDN recurrent state is NOT preserved by
-    # llama.cpp's disk slot cache), not a tuning preference.
+    # touching these knobs. Benchmarking showed that the two-slot shadow path
+    # adds contention, while source inspection confirmed b10840 serializes the
+    # hybrid recurrent state as well as attention KV/indexer state.
     #
     # Provisioning is managed and capacity-gated: the reconciler refuses to
     # start the ~84 GiB fetch unless the store's filesystem has the bytes plus
@@ -34,8 +34,8 @@ rec {
     {
       name = "qwen-flash-next";
       quant = "UD-Q3_K_XL"; # 83.8 GiB; UD-IQ3_XXS (76.3) is the fallback rung
-      slots = 2; # one resident slot per live cache trajectory
-      contextSize = 131072; # total; 65536 per trajectory
+      slots = 1; # one 131k trajectory; formerly two 65k trajectories
+      contextSize = 131072; # total and per-slot with slots = 1
       ctxCheckpoints = 8;
     }
   ];

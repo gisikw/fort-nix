@@ -1,0 +1,577 @@
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/CMakeLists.txt:35:            llama-memory-recurrent.cpp
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-arch.cpp:294:    { LLM_KV_ATTENTION_RECURRENT_LAYERS,             "%s.attention.recurrent_layers"             },
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-arch.cpp:1053:bool llm_arch_is_recurrent(const llm_arch & arch) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-arch.h:299:    LLM_KV_ATTENTION_RECURRENT_LAYERS,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-arch.h:786:bool llm_arch_is_recurrent      (const llm_arch & arch);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:106:        LLAMA_LOG_DEBUG("%s: n_rs_seq=%u requested but model does not support recurrent partial rollback; clamping to 0\n",
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:2003:        // note: this is mostly relevant for recurrent models atm
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3038:        return state_write_data(io);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3048:        return state_write_data(io);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3067:size_t llama_context::state_seq_get_size(llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3068:    llama_io_write_dummy io(flags & LLAMA_STATE_SEQ_FLAGS_ON_DEVICE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3073:        return state_seq_write_data(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3080:size_t llama_context::state_seq_get_data(llama_seq_id seq_id, uint8_t * dst, size_t size, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3082:    if (flags & LLAMA_STATE_SEQ_FLAGS_ON_DEVICE) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3092:        return state_seq_write_data(*io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3099:size_t llama_context::state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3101:    if (flags & LLAMA_STATE_SEQ_FLAGS_ON_DEVICE) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3131:        return state_seq_read_data(*io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3193:    state_write_data(io);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3198:size_t llama_context::state_seq_load_file(llama_seq_id seq_id, const char * filepath, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3206:        if (magic != LLAMA_STATE_SEQ_MAGIC || version != LLAMA_STATE_SEQ_VERSION) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3240:        const size_t nread = state_seq_read_data(io, seq_id, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3252:size_t llama_context::state_seq_save_file(llama_seq_id seq_id, const char * filepath, const llama_token * tokens, size_t n_token_count) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3255:    file.write_u32(LLAMA_STATE_SEQ_MAGIC);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3256:    file.write_u32(LLAMA_STATE_SEQ_VERSION);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3264:    state_seq_write_data(io, seq_id, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3272:size_t llama_context::state_write_data(llama_io_write_i & io) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3286:        memory->state_write(io);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3318:size_t llama_context::state_seq_write_data(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3320:        memory->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:3326:size_t llama_context::state_seq_read_data(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4182:size_t llama_state_seq_get_size(llama_context * ctx, llama_seq_id seq_id) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4183:    return llama_state_seq_get_size_ext(ctx, seq_id, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4186:size_t llama_state_seq_get_data(llama_context * ctx, uint8_t * dst, size_t size, llama_seq_id seq_id) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4187:    return llama_state_seq_get_data_ext(ctx, dst, size, seq_id, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4190:size_t llama_state_seq_set_data(llama_context * ctx, const uint8_t * src, size_t size, llama_seq_id seq_id) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4191:    return llama_state_seq_set_data_ext(ctx, src, size, seq_id, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4194:size_t llama_state_seq_get_size_ext(llama_context * ctx, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4195:    return ctx->state_seq_get_size(seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4198:size_t llama_state_seq_get_data_ext(llama_context * ctx, uint8_t * dst, size_t size, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4201:    return ctx->state_seq_get_data(seq_id, dst, size, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4203:size_t llama_state_seq_set_data_ext(llama_context * ctx, const uint8_t * src, size_t size, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4206:    return ctx->state_seq_set_data(seq_id, src, size, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4209:size_t llama_state_seq_save_file(llama_context * ctx, const char * filepath, llama_seq_id seq_id, const llama_token * tokens, size_t n_token_count) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4213:        return ctx->state_seq_save_file(seq_id, filepath, tokens, n_token_count);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4220:size_t llama_state_seq_load_file(llama_context * ctx, const char * filepath, llama_seq_id dest_seq_id, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.cpp:4224:        return ctx->state_seq_load_file(dest_seq_id, filepath, tokens_out, n_token_capacity, n_token_count_out);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:154:    size_t state_seq_get_size(llama_seq_id seq_id, llama_state_seq_flags flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:156:    size_t state_seq_get_data(llama_seq_id seq_id,       uint8_t * dst, size_t size, llama_state_seq_flags flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:157:    size_t state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size, llama_state_seq_flags flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:170:    size_t state_seq_load_file(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:177:    size_t state_seq_save_file(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:270:    size_t state_write_data(llama_io_write_i & io);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:273:    size_t state_seq_write_data(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-context.h:274:    size_t state_seq_read_data (llama_io_read_i  & io, llama_seq_id seq_id, llama_state_seq_flags flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-cparams.h:16:    uint32_t n_rs_seq;        // number of recurrent-state snapshots per seq for rollback
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:17:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:346:    const auto * mctx = static_cast<const llama_memory_recurrent_context *>(params.mctx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:882:    dsv4_set_i64(inp.state_write_idxs, plan.state_write_idxs);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:883:    dsv4_set_i32(inp.state_write_pos, plan.state_write_pos);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:887:        LLAMA_LOG_INFO("%s: %s n_tokens=%u, n_stream=%d, state_persist_dst=%s, state_write_pos=%s\n",
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:890:                dsv4_plan_positions(plan.state_write_pos).c_str());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:930:    res &= dsv4_can_reuse_tensor_1d(inp.state_write_idxs, plan.state_write_idxs.size());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:931:    res &= dsv4_can_reuse_tensor_1d(inp.state_write_pos, plan.state_write_pos.size());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:968:    inp.state_write_idxs = dsv4_build_input_1d(ctx, GGML_TYPE_I64, plan.state_write_idxs.size(), std::string("dsv4_") + name + "_state_write_idxs");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:969:    inp.state_write_pos = dsv4_build_input_1d(ctx, GGML_TYPE_I32, plan.state_write_pos.size(), std::string("dsv4_") + name + "_state_write_pos");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:3505:    const llama_memory_recurrent_context * mctx_cur) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:3525:    const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:3549:    const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.cpp:3570:    const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:31:class llama_memory_recurrent_context;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:263:    llm_graph_input_rs(const llama_memory_recurrent_context * mctx) : mctx(mctx) {}
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:277:    const llama_memory_recurrent_context * mctx;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:606:        ggml_tensor * state_read_idxs  = nullptr; // I32 [ratio*n_state_write]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:607:        ggml_tensor * state_write_idxs = nullptr; // I64 [n_state_write]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:608:        ggml_tensor * state_write_pos  = nullptr; // I32 [n_state_write]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:1314:    // recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:1317:    // TODO: move this implementation to llama_memory_recurrent.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-graph.h:1321:    //         `llama_memory_recurrent`
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-hparams.cpp:244:        // Full recurrent state: head_dim * head_dim * n_head
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-hparams.cpp:251:        // Full recurrent state: head_dim * head_dim * n_head
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-hparams.h:393:    // whether or not the given layer is recurrent (for hybrid models)
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-hparams.h:444:    // dimension of the recurrent state embeddings
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.cpp:236:void llama_kv_cache_dsa_iswa::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.cpp:237:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.cpp:238:        kv_dsa->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.cpp:241:    kv_swa->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.cpp:244:void llama_kv_cache_dsa_iswa::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.cpp:245:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.h:63:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa-iswa.h:64:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa.cpp:164:void llama_kv_cache_dsa::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa.cpp:165:    kv_mla->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa.cpp:166:    kv_lid->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa.cpp:169:void llama_kv_cache_dsa::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa.h:65:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsa.h:66:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:249:static void dsv4_state_write_tensor_streams(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:332:static void dsv4_state_write_k_cache(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:336:        llama_state_seq_flags flags,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:360:        dsv4_state_write_tensor_streams(io, kv->get_k_storage(il), kv_size, n_rows, s0, ns);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:368:        llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:465:    std::map<llama_seq_id, uint32_t> state_write_counts;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:526:            plan.state_write_idxs.push_back(cache_off + pos/ratio);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:527:            plan.state_write_pos.push_back((int32_t) source_start);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:528:            ++state_write_counts[seq_id];
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:555:            plan.state_write_idxs.push_back(cache_off + kv_size - 1);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:556:            plan.state_write_pos .push_back(0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:571:            if (plan.state_write_idxs.empty()) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:584:                const uint32_t n_writes = state_write_counts[seq_id];
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:602:    if (ratio == DSV4_HCA_RATIO && !plan.state_pos.empty() && plan.state_write_idxs.empty()) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:621:        plan.state_write_idxs.push_back(cache_off + kv_size - 1);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:622:        plan.state_write_pos .push_back(0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:724:        LLAMA_LOG_DEBUG("%s: ratio=%u, n_tokens=%u, n_seqs_unq=%u, state_persist_dst=%s, state_write_pos=%s\n",
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:727:                dsv4_plan_positions(plan.state_write_pos).c_str());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:877:    plan.state_write_idxs.resize(n_blocks);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:878:    plan.state_write_pos .resize(n_blocks);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1080:void llama_dsv4_comp_state::state_write(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1083:        llama_state_seq_flags flags,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1095:            throw std::runtime_error("DSV4 recurrent state rollback index out of range");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1113:        dsv4_state_write_tensor_streams(io, layer.kv,    state_size, state_size, s0, ns, &stream_ids);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1114:        dsv4_state_write_tensor_streams(io, layer.score, state_size, state_size, s0, ns, &stream_ids);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1118:void llama_dsv4_comp_state::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1411:                // [TAG_RECURRENT_ROLLBACK_SPLITS]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1594:void llama_kv_cache_dsv4::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1595:    const bool partial_only = flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1605:    kv_raw->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1618:        dsv4_state_write_k_cache(io, kv_csa.get(), seq_id, flags, n_rows_csa);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1619:        dsv4_state_write_k_cache(io, kv_hca.get(), seq_id, flags, n_rows_hca);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1620:        dsv4_state_write_k_cache(io, kv_lid.get(), seq_id, flags, n_rows_lid);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1623:    csa_state->state_write(io, seq_id, flags, rs_idx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1624:    hca_state->state_write(io, seq_id, flags, rs_idx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1625:    lid_state->state_write(io, seq_id, flags, rs_idx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1628:void llama_kv_cache_dsv4::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.cpp:1649:    if (partial_only != !!(flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.h:41:    void state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags, const std::vector<uint32_t> & rs_idx) const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.h:42:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id, llama_state_seq_flags flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.h:136:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.h:137:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.h:305:        std::vector<int64_t> state_write_idxs;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-dsv4.h:308:        std::vector<int32_t> state_write_pos;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.cpp:259:void llama_kv_cache_iswa::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.cpp:260:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.cpp:261:        kv_base->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.cpp:264:    kv_swa->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.cpp:267:void llama_kv_cache_iswa::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.cpp:268:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.h:83:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-iswa.h:84:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-msa.cpp:160:void llama_kv_cache_msa::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-msa.cpp:161:    kv_base->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-msa.cpp:162:    kv_idx ->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-msa.cpp:165:void llama_kv_cache_msa::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-msa.h:62:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache-msa.h:63:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2053:void llama_kv_cache::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2118:        state_write_meta(io, cr, seq_id);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2119:        state_write_data(io, cr);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2123:void llama_kv_cache::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2130:  llama_state_seq_flags   flags,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2203:void llama_kv_cache::state_write_meta(llama_io_write_i & io, const cell_ranges_t & cr, llama_seq_id seq_id) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2236:void llama_kv_cache::state_write_data(llama_io_write_i & io, const cell_ranges_t & cr) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2396:                LLAMA_LOG_ERROR("%s: mirrored slot layout holds %d cells, this cache restores %d\n", __func__,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2459:            LLAMA_LOG_ERROR("%s: mirrored slot layout holds %d cells, this cache restores %d\n", __func__,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.cpp:2492:        // Create contiguous slot_info for whole cache restore
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.h:151:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.h:152:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.h:178:      llama_state_seq_flags   flags,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.h:342:    void state_write_meta(llama_io_write_i & io, const cell_ranges_t & cr, llama_seq_id seq_id = -1) const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-kv-cache.h:343:    void state_write_data(llama_io_write_i & io, const cell_ranges_t & cr) const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:29:                            /* recurrent */
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:71:        // follow the recurrent pattern for creating the ubatch splits
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:84:                // [TAG_RECURRENT_ROLLBACK_SPLITS]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:104:        // prepare the recurrent batches first
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:106:            // TODO: will the recurrent cache be in an undefined context at this point?
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:107:            LLAMA_LOG_ERROR("%s: failed to prepare recurrent ubatches\n", __func__);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:148:    // same order as llama_memory_hybrid::seq_rm: the recurrent cache can refuse, so try it first
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:204:void llama_memory_hybrid_idx::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:205:    llama_memory_hybrid::state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:209:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:211:            mem_idx->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:217:void llama_memory_hybrid_idx::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:223:    // two find_slot calls agree only while both caches see the same occupancy, which a restore cannot promise
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:227:        if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:233:        // [TAG_HYBRID_IDX_STATE] must mirror the write order in state_write
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:234:        if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.cpp:250:    // dropped directly, not via seq_rm: the recurrent cache may refuse it and then only the other two get cleared
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.h:27:                            /* recurrent */
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.h:69:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-idx.h:70:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0)       override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:21:                            /* recurrent */
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:53:    mem_recr(new llama_memory_recurrent(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:70:        // follow the recurrent pattern for creating the ubatch splits
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:83:                // [TAG_RECURRENT_ROLLBACK_SPLITS]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:103:        // prepare the recurrent batches first
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:105:            // TODO: will the recurrent cache be in an undefined context at this point?
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:106:            LLAMA_LOG_ERROR("%s: failed to prepare recurrent ubatches\n", __func__);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:139:    // Shifting is trivially supported for recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:149:    // Try removing from the recurrent cache first since it may fail. If it does
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:195:void llama_memory_hybrid_iswa::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:196:    mem_attn->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:197:    mem_recr->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:200:void llama_memory_hybrid_iswa::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:209:llama_memory_recurrent * llama_memory_hybrid_iswa::get_mem_recr() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:242:    ctx_recr(new llama_memory_recurrent_context(mem->get_mem_recr(), this->ubatches)),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:283:const llama_memory_recurrent_context * llama_memory_hybrid_iswa_context::get_recr() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.cpp:284:    return static_cast<const llama_memory_recurrent_context *>(ctx_recr.get());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:7:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:16:// utilizes instances of llama_memory_recurrent and llama_kv_cache_iswa to
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:17://   support models where each layer may be either attention-based (with SWA support) or recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:31:                            /* recurrent */
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:76:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:77:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0)       override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:84:    llama_memory_recurrent * get_mem_recr() const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:90:    const std::unique_ptr<llama_memory_recurrent> mem_recr;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid-iswa.h:129:    const llama_memory_recurrent_context * get_recr() const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:21:                            /* recurrent */
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:54:    mem_recr(new llama_memory_recurrent(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:71:        // follow the recurrent pattern for creating the ubatch splits
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:84:                // [TAG_RECURRENT_ROLLBACK_SPLITS]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:104:        // prepare the recurrent batches first
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:106:            // TODO: will the recurrent cache be in an undefined context at this point?
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:107:            LLAMA_LOG_ERROR("%s: failed to prepare recurrent ubatches\n", __func__);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:134:    // Shifting is trivially supported for recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:144:    // Try removing from the recurrent cache first since it may fail. If it does
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:190:void llama_memory_hybrid::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:191:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:192:        mem_attn->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:194:    mem_recr->state_write(io, seq_id, flags);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:197:void llama_memory_hybrid::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:198:    if ((flags & LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY) == 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:208:llama_memory_recurrent * llama_memory_hybrid::get_mem_recr() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:236:    ctx_recr(new llama_memory_recurrent_context(mem->get_mem_recr(), this->ubatches)),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:277:const llama_memory_recurrent_context * llama_memory_hybrid_context::get_recr() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.cpp:278:    return static_cast<const llama_memory_recurrent_context *>(ctx_recr.get());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:7:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:16:// utilizes instances of llama_memory_recurrent and llama_kv_cache to
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:17://   support models where each layer may be either attention-based or recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:31:                            /* recurrent */
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:76:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:77:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0)       override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:84:    llama_memory_recurrent * get_mem_recr() const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:90:    const std::unique_ptr<llama_memory_recurrent> mem_recr;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-hybrid.h:128:    const llama_memory_recurrent_context * get_recr() const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:17:// llama_memory_recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:20:llama_memory_recurrent::llama_memory_recurrent(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:141:void llama_memory_recurrent::clear(bool data) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:161:bool llama_memory_recurrent::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:213:            //printf("[DEBUG] inside `llama_memory_recurrent::seq_rm`: `seq_id` is negative, so returning false\n");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:249:void llama_memory_recurrent::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:286:void llama_memory_recurrent::seq_keep(llama_seq_id seq_id) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:318:void llama_memory_recurrent::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos shift) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:348:void llama_memory_recurrent::seq_div(llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:378:llama_pos llama_memory_recurrent::seq_pos_min(llama_seq_id seq_id) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:394:llama_pos llama_memory_recurrent::seq_pos_max(llama_seq_id seq_id) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:406:void llama_memory_recurrent::set_rs_idx(llama_seq_id seq_id, uint32_t idx) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:420:std::map<ggml_backend_buffer_type_t, size_t> llama_memory_recurrent::memory_breakdown() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:428:llama_memory_context_ptr llama_memory_recurrent::init_batch(llama_batch_allocr & balloc, uint32_t n_ubatch, bool embd_all) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:442:                // [TAG_RECURRENT_ROLLBACK_SPLITS]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:464:        return std::make_unique<llama_memory_recurrent_context>(this, std::move(ubatches));
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:467:    return std::make_unique<llama_memory_recurrent_context>(LLAMA_MEMORY_STATUS_FAILED_PREPARE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:470:llama_memory_context_ptr llama_memory_recurrent::init_full() {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:471:    return std::make_unique<llama_memory_recurrent_context>(this);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:474:llama_memory_context_ptr llama_memory_recurrent::init_update(llama_context * lctx, bool optimize) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:478:    return std::make_unique<llama_memory_recurrent_context>(LLAMA_MEMORY_STATUS_NO_UPDATE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:481:bool llama_memory_recurrent::prepare(const std::vector<llama_ubatch> & ubatches) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:505:bool llama_memory_recurrent::find_slot(const llama_ubatch & ubatch) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:515:    // For recurrent state architectures (like Mamba or RWKV),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:716:bool llama_memory_recurrent::get_can_shift() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:717:    // shifting the pos is trivial for recurrent models
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:721:size_t llama_memory_recurrent::total_size() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:730:size_t llama_memory_recurrent::size_r_bytes() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:742:size_t llama_memory_recurrent::size_s_bytes() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:754:size_t llama_memory_recurrent::size_p_bytes() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:766:void llama_memory_recurrent::state_write(llama_io_write_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:797:                            GGML_ABORT("cannot write shared recurrent state with different rollback indices");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:824:    if ((flags & LLAMA_STATE_SEQ_FLAGS_ON_DEVICE) && cell_ranges.size() > 1) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:843:    state_write_meta(io, cell_ranges, seq_id);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:844:    state_write_data(io, cell_ranges_data);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:847:void llama_memory_recurrent::state_read(llama_io_read_i & io, llama_seq_id seq_id, llama_state_seq_flags flags) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:878:void llama_memory_recurrent::state_write_meta(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, llama_seq_id seq_id) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:897:void llama_memory_recurrent::state_write_data(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:918:        // Write each logical cell row range. With pending recurrent rollback,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:926:        // the PLE conv history is a second recurrent row, so it has to travel with the first
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:951:            // Write each logical cell row range. With pending recurrent rollback,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:992:bool llama_memory_recurrent::state_read_meta(llama_io_read_i & io, uint32_t cell_count, llama_seq_id dest_seq_id) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1081:        // make sure the recurrent states will keep their restored state
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1088:bool llama_memory_recurrent::state_read_data(llama_io_read_i & io, uint32_t cell_count) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1227:// llama_memory_recurrent_context
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1230:llama_memory_recurrent_context::llama_memory_recurrent_context(llama_memory_status status) : status(status) {}
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1232:llama_memory_recurrent_context::llama_memory_recurrent_context(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1233:        llama_memory_recurrent * mem) : status(LLAMA_MEMORY_STATUS_SUCCESS), mem(mem), is_full(true) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1236:llama_memory_recurrent_context::llama_memory_recurrent_context(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1237:        llama_memory_recurrent * mem,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1240:llama_memory_recurrent_context::~llama_memory_recurrent_context() = default;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1242:bool llama_memory_recurrent_context::next() {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1252:bool llama_memory_recurrent_context::apply() {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1257:        // recurrent cache never performs updates
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1268:llama_memory_status llama_memory_recurrent_context::get_status() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1272:const llama_ubatch & llama_memory_recurrent_context::get_ubatch() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1278:uint32_t llama_memory_recurrent_context::get_n_rs() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1282:uint32_t llama_memory_recurrent_context::get_head() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1286:int32_t llama_memory_recurrent_context::get_rs_z() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1290:uint32_t llama_memory_recurrent_context::get_size() const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1294:ggml_tensor * llama_memory_recurrent_context::get_r_l(int32_t il) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1298:ggml_tensor * llama_memory_recurrent_context::get_s_l(int32_t il) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1302:ggml_tensor * llama_memory_recurrent_context::get_p_l(int32_t il) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.cpp:1306:int32_t llama_memory_recurrent_context::s_copy(int i) const {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:12:// llama_memory_recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:15:// TODO: extract the cache state used for graph computation into llama_memory_recurrent_context_i
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:17:class llama_memory_recurrent : public llama_memory_i {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:19:    llama_memory_recurrent(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:29:    ~llama_memory_recurrent() = default;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:66:    void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:67:    void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) override;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:73:    // number of recurrent-state snapshots per seq for rollback; tensors are widened to (1 + n_rs_seq) groups
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:87:    // TODO: optimize for recurrent state needs
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:132:    void state_write_meta(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges, llama_seq_id seq_id = -1) const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:133:    void state_write_data(llama_io_write_i & io, const std::vector<std::pair<uint32_t, uint32_t>> & cell_ranges) const;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:139:class llama_memory_recurrent_context : public llama_memory_context_i {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:142:    llama_memory_recurrent_context(llama_memory_status status);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:145:    llama_memory_recurrent_context(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:146:            llama_memory_recurrent * mem);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:149:    llama_memory_recurrent_context(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:150:            llama_memory_recurrent * mem,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:153:    virtual ~llama_memory_recurrent_context();
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:166:    // llama_memory_recurrent_context specific API
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory-recurrent.h:183:    llama_memory_recurrent * mem;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory.h:125:    virtual void state_write(llama_io_write_i & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) const = 0;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-memory.h:126:    virtual void state_read (llama_io_read_i  & io, llama_seq_id seq_id = -1, llama_state_seq_flags flags = 0) = 0;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model-saver.cpp:265:    // add_kv(LLM_KV_FULL_ATTENTION_INTERVAL,           ???); // saved as LLM_KV_ATTENTION_RECURRENT_LAYERS instead
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model-saver.cpp:303:    add_kv(LLM_KV_ATTENTION_RECURRENT_LAYERS,        hparams.is_recr_impl, true);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:20:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:1286:    std::fill(hparams.is_recr_impl.begin(),  hparams.is_recr_impl.end(),  llm_arch_is_recurrent(ml.get_arch()) ? 1 : 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:1580:            // recurrent / linear-attention weight scales (per-tensor, shape {1})
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2492:        // Models that need standard caching should rely on recurrent/hybrid
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2505:                if (llm_arch_is_recurrent(arch)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2506:                    res = new llama_memory_recurrent(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2561:                            /* recurrent_type_r  */ GGML_TYPE_F32,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2562:                            /* recurrent_type_s  */ GGML_TYPE_F32,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2563:                            /* recurrent_rs_size */ std::max((uint32_t) 1, cparams.n_seq_max),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2581:                            /* recurrent_type_k  */ GGML_TYPE_F32,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2582:                            /* recurrent_type_v  */ GGML_TYPE_F32,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2583:                            /* recurrent_kv_size */ std::max((uint32_t) 1, cparams.n_seq_max),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2601:                            /* recurrent_type_k  */ GGML_TYPE_F32,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2602:                            /* recurrent_type_v  */ GGML_TYPE_F32,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:2603:                            /* recurrent_kv_size */ std::max((uint32_t) 1, cparams.n_seq_max),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:3161:bool llama_model_is_recurrent(const llama_model * model) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/llama-model.cpp:3162:    return llm_arch_is_recurrent(model->arch);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/bailingmoe3.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/bailingmoe3.cpp:290:            ggml_tensor * out = ggml_cont(ctx0, build_recurrent_attn(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:973:        GGML_ASSERT(inp_dsv4->get_csa().state_write_idxs);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:990:                inp_dsv4->get_csa().state_write_pos,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1003:                    kv_comp_csa_state, inp_dsv4->get_csa().state_write_idxs, il));
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1042:        GGML_ASSERT(inp_dsv4->get_lid().state_write_idxs);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1059:                inp_dsv4->get_lid().state_write_pos,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1072:                    kv_comp_lid_state, inp_dsv4->get_lid().state_write_idxs, il));
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1102:    if (ratio == DSV4_HCA_RATIO && inp_dsv4->get_hca().state_write_idxs) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1120:                inp_dsv4->get_hca().state_write_pos,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/deepseek4.cpp:1132:                    kv_comp_hca, inp_dsv4->get_hca().state_write_idxs, il));
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/delta-net-base.cpp:4:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/delta-net-base.cpp:196:    //   last_recurrent_state = last_recurrent_state * g_last + kgdmulvnew
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/delta-net-base.cpp:268:        // last_recurrent_state = last_recurrent_state * g_last + kgdmulvnew
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/delta-net-base.cpp:498:        // [TAG_RECURRENT_ROLLBACK_SPLITS]
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/delta-net-base.cpp:527:ggml_tensor * llm_build_delta_net_base::build_recurrent_attn(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/delta-net-base.cpp:590:    // write the produced snapshots into the recurrent cache (snapshot slot i -> rollback group i)
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/falcon-h1.cpp:124:    // Build the inputs in the recurrent & kv cache
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/gemma4.cpp:411:    // recurrent h input. This matches the reference (transformers/vLLM/SGLang),
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/granite-hybrid.cpp:22:    // A layer is recurrent IFF the n_head_kv value is set to 0
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-k3.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-k3.cpp:28:    // n_head_kv == 0 marks a KDA (recurrent) layer, as in kimi-linear
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:15:    // Mark KDA layers as recurrent using n_head_kv pattern (like Jamba)
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:16:    // Set n_head_kv = 0 for KDA layers (recurrent), n_head_kv = n_head for MLA layers (attention)
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:18:        hparams.is_recr_impl[i] = hparams.n_head_kv(i) == 0;  // KDA layers are recurrent
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:262:    // Verify batch consistency for recurrent layers
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:289:            // === KDA Layer (Kimi Delta Attention) with Recurrent State ===
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:351:            // Choose between build_delta_net_chunking and build_delta_net_recurrent based on n_tokens
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/kimi-linear.cpp:359:            // Update the recurrent states
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/mamba-base.cpp:3:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/mamba-base.cpp:114:        // use the states and the indices provided by build_recurrent_state
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/mamba-base.cpp:253:        // use the states and the indices provided by build_recurrent_state
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/minimax-01.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/minimax-01.cpp:8:    // we use n_embd_head_la to set recurrent memory n_embd_s
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/minimax-01.cpp:11:    // Mark recurrent layers (lightning attention layers).
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/minimax-01.cpp:12:    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/minimax-01.cpp:282:            // TODO unneeded - any way to make conv states optional in recurrent memory?
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/models.h:89:    // run delta-net attention and write the new recurrent state(s) back to ssm_states_all
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/models.h:91:    ggml_tensor * build_recurrent_attn(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/nemotron-h.cpp:12:    // A layer is recurrent IFF the n_head_kv value is set to 0 and
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/nemotron-h.cpp:13:    // the n_ff value is set to 0. Appended MTP blocks are dense (non-recurrent)
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/plamo2.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/plamo2.cpp:376:        // use the states and the indices provided by build_recurrent_state
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35.cpp:15:    // Mark recurrent layers (linear attention layers). MTP layers are dense
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35.cpp:16:    // attention-only and must be flagged non-recurrent.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35.cpp:17:    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35.cpp:448:    ggml_tensor * output = build_recurrent_attn(inp, ssm_states_all, q_conv, k_conv, v_conv, gate, beta, state, il);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35moe.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35moe.cpp:18:    // Mark recurrent layers (linear attention layers). MTP layers are dense
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35moe.cpp:19:    // attention-only and must be flagged non-recurrent.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35moe.cpp:20:    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen35moe.cpp:472:    ggml_tensor * output = build_recurrent_attn(inp, ssm_states_all, q_conv, k_conv, v_conv, gate, beta, state, il);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen3next.cpp:2:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen3next.cpp:16:    // Mark recurrent layers (linear attention layers).
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen3next.cpp:17:    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen3next.cpp:543:    ggml_tensor * output = build_recurrent_attn(inp, ssm_states_all, q_conv, k_conv, v_conv, gate, beta, state, il);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen4exp.cpp:4:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen4exp.cpp:128:    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen4exp.cpp:137:    // the PLE conv history is a row of the recurrent cache, which linear layers alone have
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen4exp.cpp:956:    ggml_tensor * output = build_recurrent_attn(inp, ssm_states_all, q_conv, k_conv, v_conv, gate, beta, state, il);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen4exp.cpp:1115:// Read a conv history out of its own recurrent row and write the new tail back.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/qwen4exp.cpp:1145:    // [TAG_RECURRENT_ROLLBACK_SPLITS] keep the last state_cols columns once per rollback slot,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/rwkv6-base.cpp:3:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/rwkv6-base.cpp:36:    const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/rwkv7-base.cpp:3:#include "llama-memory-recurrent.h"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/src/models/rwkv7-base.cpp:36:    const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README-dev.md:58:- `server_prompt_checkpoint`: For recurrent (e.g., RWKV) and SWA models, stores snapshots of KV cache state. Enables reuse when subsequent requests share the same prompt prefix, saving redundant computation.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:168:| `-ctxcp, --ctx-checkpoints, --swa-checkpoints N` | max number of context checkpoints to create per slot (default: 32)[(more info)](https://github.com/ggml-org/llama.cpp/pull/15293)<br/>(env: LLAMA_ARG_CTX_CHECKPOINTS) |
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:169:| `-cms, --checkpoint-min-step N` | minimum spacing between context checkpoints in tokens (default: 8192, 0 = no minimum)<br/>(env: LLAMA_ARG_CHECKPOINT_MIN_SPACING_NT) |
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:172:| `--cache-idle-slots, --no-cache-idle-slots` | save idle slots to the prompt cache on new task, and clear them when using unified KV (default: enabled, requires cache-ram)<br/>(env: LLAMA_ARG_CACHE_IDLE_SLOTS) |
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:223:| `--cache-prompt, --no-cache-prompt` | whether to enable prompt caching (default: enabled)<br/>(env: LLAMA_ARG_CACHE_PROMPT) |
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:228:| `--slot-save-path PATH` | path to save slot kv cache (default: disabled) |
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:494:`prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. A `BOS` token is inserted at the start, if all of the following conditions are true:
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:590:`cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `true`
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:1151:### POST `/slots/{id_slot}?action=save`: Save the prompt cache of the specified slot to a file.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:1155:`filename`: Name of the file to save the slot's prompt cache. The file will be saved in the directory specified by the `--slot-save-path` server parameter.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:1162:    "filename": "slot_save_file.bin",
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:1171:### POST `/slots/{id_slot}?action=restore`: Restore the prompt cache of the specified slot from a file.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:1175:`filename`: Name of the file to restore the slot's prompt cache from. The file should be located in the directory specified by the `--slot-save-path` server parameter.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/README.md:1182:    "filename": "slot_save_file.bin",
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-common.cpp:278:class server_tokens_state_writer {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-common.cpp:556:    server_tokens_state_writer writer;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:304:        const size_t cur_size_tgt =           llama_state_seq_get_size_ext(ctx_tgt, id, LLAMA_STATE_SEQ_FLAGS_NONE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:305:        const size_t cur_size_dft = ctx_dft ? llama_state_seq_get_size_ext(ctx_dft, id, LLAMA_STATE_SEQ_FLAGS_NONE) : 0;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:317:        llama_state_seq_get_data_ext(ctx_tgt, cur->data.main.data(), cur_size_tgt, id, LLAMA_STATE_SEQ_FLAGS_NONE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:319:            llama_state_seq_get_data_ext(ctx_dft, cur->data.drft.data(), cur_size_dft, id, LLAMA_STATE_SEQ_FLAGS_NONE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:1365:        if (params_base.n_ctx_checkpoints > 0) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:1367:                    params_base.n_ctx_checkpoints, params_base.checkpoint_min_step);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:1426:                    SRV_TRC("%s", "idle slots will be saved to prompt cache and cleared upon starting a new task\n");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:1430:                    SRV_TRC("%s", "idle slots will be saved to prompt cache upon starting a new task\n");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2316:            if (it->id_task != id_task && last >= 0 && it->n_tokens <= last + params_base.checkpoint_min_step) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2328:        while (slot.prompt.checkpoints.size() >= (size_t) params_base.n_ctx_checkpoints) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2347:        cur.update_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2348:        cur.update_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2354:                (int) slot.prompt.checkpoints.size(), params_base.n_ctx_checkpoints, cur.pos_min,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2425:                                if (slot.prompt_save(*prompt_cache)) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2529:            case SERVER_TASK_TYPE_SLOT_SAVE:
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2558:                    const size_t nwrite = llama_state_seq_save_file(
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2569:                    auto res = std::make_unique<server_task_result_slot_save_load>();
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2579:            case SERVER_TASK_TYPE_SLOT_RESTORE:
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2603:                        nread = llama_state_seq_load_file(ctx_tgt, filepath.c_str(), slot->id, nullptr, 0, &n_packed);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2606:                            nread = llama_state_seq_load_file(ctx_tgt, filepath.c_str(), slot->id, packed.data(), packed.size(), &n_packed);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2609:                            throw std::runtime_error("No available space in KV cache or invalid slot save file");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2620:                            throw std::runtime_error("Invalid tokens in slot save file");
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2624:                        slot->prompt.tokens = std::move(restored);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:2634:                    auto res = std::make_unique<server_task_result_slot_save_load>();
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3007:                            slot.spec_ckpt.update_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3046:                    ckpt.load_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3065:                    ckpt.update_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3077:                    ckpt.update_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3201:                            if (slot.task->params.cache_prompt) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3353:                                        it->load_tgt(ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3354:                                        it->load_dft(ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3360:                                        SLT_TRC(slot, "restored context checkpoint (pos_min = %d, pos_max = %d, n_tokens = %" PRId64 ", n_past = %d, size = %.3f MiB)\n", it->pos_min, it->pos_max, it->n_tokens, n_past, (float) it->size() / 1024 / 1024);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3364:                                        SLT_TRC(slot, "forcing full prompt re-processing due to lack of cache data (likely due to SWA or hybrid/recurrent memory, see %s)\n",
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3444:                    bool do_checkpoint = params_base.n_ctx_checkpoints > 0;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3538:                            if (pos == last_user_pos || checkpoints.empty() || pos > checkpoints.back().n_tokens + params_base.checkpoint_min_step) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3612:                            n_tokens_start > slot.prompt.checkpoints.back().n_tokens + params_base.checkpoint_min_step);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3918:                            SLT_INF(slot, "accepted %2zu/%2zu draft tokens (restore checkpoint)\n", accepted.size() - 1, slot.spec_draft.size());
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3929:                        ckpt.load_tgt(slot.ctx_tgt, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:3932:                            ckpt.load_dft(slot.ctx_dft, slot.id, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:4757:        if (params.slot_save_path.empty()) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:4758:            res->error(format_error_response("This server does not support slots action. Start it with `--slot-save-path`", ERROR_TYPE_NOT_SUPPORTED));
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:4775:            return handle_slots_save(req, id_slot);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:4778:            return handle_slots_restore(req, id_slot);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5274:std::unique_ptr<server_res_generator> server_routes::handle_slots_save(const server_http_req & req, int id_slot) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5282:    std::string filepath = params.slot_save_path + filename;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5286:        server_task task(SERVER_TASK_TYPE_SLOT_SAVE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5310:std::unique_ptr<server_res_generator> server_routes::handle_slots_restore(const server_http_req & req, int id_slot) {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5318:    std::string filepath = params.slot_save_path + filename;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5322:        server_task task(SERVER_TASK_TYPE_SLOT_RESTORE);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.cpp:5342:    GGML_ASSERT(dynamic_cast<server_task_result_slot_save_load*>(result.get()) != nullptr);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.h:168:    std::unique_ptr<server_res_generator> handle_slots_save(const server_http_req & req, int id_slot);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-context.h:169:    std::unique_ptr<server_res_generator> handle_slots_restore(const server_http_req & req, int id_slot);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-schema.cpp:31:    add((new field_bool("cache_prompt", params.cache_prompt))
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-schema.cpp:528:    params.cache_prompt  = params_base.cache_prompt;
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.cpp:1620:// server_task_result_slot_save_load
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.cpp:1622:json server_task_result_slot_save_load::to_json() {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.cpp:1832:            const size_t n = llama_state_seq_set_data_ext(ctx_tgt, data.data(), size, id_slot, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.cpp:1850:                const size_t n = llama_state_seq_set_data_ext(ctx_dft, data.data(), size, id_slot, 0);
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.h:25:    SERVER_TASK_TYPE_SLOT_SAVE,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.h:26:    SERVER_TASK_TYPE_SLOT_RESTORE,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.h:53:    bool cache_prompt    = true; // remember the prompt to avoid reprocessing all prompt
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.h:164:    // used by SERVER_TASK_TYPE_SLOT_SAVE, SERVER_TASK_TYPE_SLOT_RESTORE, SERVER_TASK_TYPE_SLOT_ERASE
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/server-task.h:521:struct server_task_result_slot_save_load : server_task_result {
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:165:            "cache_prompt": False,  # TODO: remove this once test_cache_vs_nocache_prompt is fixed
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:183:            "cache_prompt": False,  # TODO: remove this once test_cache_vs_nocache_prompt is fixed
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:203:            "cache_prompt": False,  # TODO: remove this once test_cache_vs_nocache_prompt is fixed
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:211:def test_cache_vs_nocache_prompt():
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:218:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:224:        "cache_prompt": False,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:236:        "cache_prompt": False,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:247:        "cache_prompt": False,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_completion.py:258:        "cache_prompt": False,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:44:# idle slot cleared on launch should restore from cache-ram
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:56:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:68:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:76:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:86:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:104:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_kv_keep_only_active.py:112:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_lora.py:59:            "cache_prompt": False, # TODO: remove this once test_cache_vs_nocache_prompt is fixed
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_lora.py:108:            "cache_prompt": False, # TODO: remove this once test_cache_vs_nocache_prompt is fixed
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:16:    server.slot_save_path = str(tmp_path)
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:20:def test_slot_save_restore():
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:28:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:35:    res = server.make_request("POST", "/slots/1?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:45:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:52:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:62:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:72:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:79:def test_slot_restore_legacy_token_list():
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:86:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:90:    res = server.make_request("POST", "/slots/1?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:97:    path = os.path.join(server.slot_save_path, "slot_legacy.bin")
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:117:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:126:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:140:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:154:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:162:# Multimodal server (mmproj loaded) slot save/restore.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:164:# A pure-text slot on a multimodal server and a slot containing images must both support save/restore.
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:183:    mm_server.slot_save_path = "./tmp"
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:188:def test_slot_save_restore_text_only_on_multimodal(mmproj_server):
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:196:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:203:    res = server.make_request("POST", "/slots/1?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:211:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:221:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:226:def test_slot_save_restore_with_image(mmproj_server):
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:240:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:249:    res = server.make_request("POST", "/slots/1?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:261:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:273:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:285:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:295:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:304:def test_slot_save_restore_with_two_images(mmproj_server):
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:318:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:325:    res = server.make_request("POST", "/slots/1?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:331:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:341:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:349:    res = server.make_request("POST", "/slots/1?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:359:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:370:def test_slot_save_restore_with_image_across_restart(mmproj_server):
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:383:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:390:    res = server.make_request("POST", "/slots/0?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:400:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:410:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:419:def test_slot_save_restore_image_payload_larger_than_context(mmproj_server):
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:438:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:454:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:460:    res = server.make_request("POST", "/slots/0?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:465:    path = os.path.join(server.slot_save_path, "mm_slot_large_payload.bin")
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:471:    # drop the image from the slot, then restore it from the file
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:475:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:479:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:488:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:496:def test_slot_restore_media_file_without_mmproj(mmproj_server):
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:504:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:512:    res = server.make_request("POST", "/slots/0?action=save", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:522:    res = server.make_request("POST", "/slots/0?action=restore", data={
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:533:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/unit/test_slot_save.py:543:        "cache_prompt": True,
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/utils.py:77:    slot_save_path: str | None = None
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/utils.py:79:    cache_prompt: bool | None = None
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/utils.py:229:        if self.slot_save_path:
+/nix/store/6c7cbwxnfj6312rrcyhmzzmi1bhwb2bg-source/tools/server/tests/utils.py:230:            server_args.extend(["--slot-save-path", self.slot_save_path])

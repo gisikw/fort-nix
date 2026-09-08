@@ -97,74 +97,54 @@ store at `/var/lib/qwen-flash-next/models`:
 the first shard, so a host switch never starts a server whose weights are
 absent — activation cannot be failed by this app.
 
-## Two live cache trajectories
+## Context shape and hybrid-state persistence
 
-**The constraint:** the Gated DeltaNet layers carry *recurrent* state.
-llama.cpp's disk slot cache (`--slot-save-path`, `POST /slots/{id}?action=save`
-and `…=restore`) does not preserve it. A restore therefore reinstates the
-attention KV alongside stale/absent recurrent state — the server answers
-happily and the trajectory is quietly wrong. That failure is silent, which is
-the worst kind.
+Production uses `--parallel 1 --ctx-size 131072`: one 131072-token context.
+The former setting was two separate 65536-token slots. Measurements and the
+source audit that motivated the change are retained in
+`benchmarks/qwen-flash-next/` and the operator report.
 
-**The architecture that follows:**
+Qwen3.8-Flash-Next is not a KV-only transformer. Its hybrid memory consists of:
 
-* `--parallel 2` (asserted `>= 2`): one **resident** slot per trajectory. The
-  slot *is* the trajectory; it is never evicted, never serialised, never
-  reloaded.
-* `--no-kv-unified`: separate KV per slot, so trajectory A's prefill cannot
-  evict trajectory B's cache.
-* `--ctx-checkpoints 8` + `--checkpoint-min-step 4096`: rewind points **inside
-  the live context**. When the coordinator rewrites history (swapping a skill
-  block out, see below), the server rolls back to the nearest checkpoint and
-  re-runs only the tail instead of re-prefilling from token zero. Checkpoints
-  are in-process state, not bytes on disk — that is exactly why they are legal
-  here and slot save/restore is not.
-* `--cache-ram 0` + `--no-cache-idle-slots`: nothing gets serialised behind our
-  back. (The default 8 GiB RAM prompt cache would spill idle slots through the
-  same state path.)
-* `--no-context-shift`: with recurrent state, silently shifting positions
-  corrupts a trajectory rather than truncating it. Fail loudly instead.
-* No `--slot-save-path` is passed anywhere in this module. Do not add it.
+* sparse-attention K/V plus the QSA indexer cache;
+* Gated DeltaNet recurrent **R** convolution and **S** matrix state for each
+  recurrent layer; and
+* a separate PLE convolution-history row.
 
-Consequence to accept: **the trajectories do not survive a restart.** A server
-restart (deploy, OOM, reboot) loses both. That is a correctness choice, not an
-oversight — the alternative on this architecture is a restore that lies.
+A serializer that writes only attention KV cannot restore the trajectory. That
+is an algorithmic constraint, not something more RAM can fix. However, the
+pinned llama.cpp **b10840 does implement full sequence-state persistence**:
+`llama_memory_hybrid_idx::state_write/read` chains the attention cache, the
+recurrent cache, and the indexer cache; `llama_memory_recurrent::state_write`
+explicitly writes R, S, and PLE rows. `llama_state_seq_save_file` and the
+server's slot save action use that sequence-state path.
 
-## Coordinator contract (future work, not implemented here)
+The distinction is therefore:
 
-`llama-server` does not understand rooms, sessions, personas or skills. It
-understands slots and token prefixes. Everything below is the **coordinator's**
-responsibility; this app only guarantees the substrate.
+* KV-only restore: invalid for this architecture.
+* Full hybrid-state serialization: architecturally possible and implemented by
+  the pinned C API/server internals.
+* Disk slot API in this deployment: **not exposed**, because no
+  `--slot-save-path` is configured. The endpoint returns HTTP 501.
+* RAM prompt cache: **disabled** with `--cache-ram 0` and
+  `--no-cache-idle-slots`; if enabled, this build uses
+  `llama_state_seq_get_data_ext(..., FLAGS_NONE)` and therefore includes full
+  hybrid state.
+* In-process context checkpoints: enabled (`8`, minimum spacing `4096`). They
+  use `LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`; for hybrid memory that deliberately
+  skips attention KV and captures recurrent state, while the resident KV prefix
+  remains in place. They are rollback aids, not restart persistence.
 
-The intended shape, written down now so the substrate is not misread later:
+The service still uses `--no-context-shift` and deliberately loses continuity
+on restart. Those are conservative operational choices, not claims that this
+version cannot serialize or shift recurrent state. Disk save/restore has not
+been end-to-end qualified with this exact 90 GB GGUF, so enabling it should be
+a separate correctness test despite the clear implementation path.
 
-1. **Active transcript (slot 0).** The live conversation, with skills injected
-   into it as `<skill>…</skill>` blocks at the point of use.
-2. **Shadow transcript (slot 1).** The same conversation with the *removed*
-   injections replaced by the literal marker:
-
-   ```
-   <skill>This was loaded and has since been removed</skill>
-   ```
-
-   The shadow is prefilled **opportunistically** — the coordinator pushes it
-   into slot 1 while slot 0 is idle, so that when the active transcript grows
-   past the point where a skill must be dropped, the compacted continuation is
-   already warm. Swap the roles of the slots, and the trajectory continues with
-   no user-visible prefill stall.
-3. **Slot affinity is explicit.** Pin each trajectory with `id_slot` on the
-   **native** `POST /completion` endpoint — the OpenAI-compatible
-   `/v1/chat/completions` path does **not** accept `id_slot`. A coordinator
-   that speaks only OAI-compat gets round-robin slot assignment and both
-   trajectories will trample each other.
-4. **Prefix stability is the whole game.** The shadow transcript must be a
-   *stable* prefix rewrite: change the marker text, the whitespace, or the
-   ordering, and the reuse (`--cache-prompt` / `--cache-reuse 256`) collapses
-   into a full re-prefill. The marker string above is therefore a wire
-   constant, not a message to be edited freely.
-5. **Never emulate rooms with slot save/restore.** If a third concurrent
-   trajectory is needed, raise `slots` (and pay the KV) — do not spill one to
-   disk. See the constraint at the top of this section.
+`llama-server` still has no concept of rooms or conversations. With more than
+one slot, a coordinator must use `id_slot` on native `POST /completion`; the
+OpenAI-compatible route does not provide the same explicit affinity contract.
+Prefix stability remains necessary for resident prompt reuse.
 
 ## Endpoints
 

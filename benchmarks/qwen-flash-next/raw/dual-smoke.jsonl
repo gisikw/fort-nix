@@ -1,0 +1,3 @@
+{"base": "https://qwen-next.gisi.network", "kind": "metadata", "label": "dual-smoke", "props": {"model_alias": "Qwen3.8-Flash-Next", "model_ftype": "Q3_K - Medium", "n_ctx": 65536, "total_slots": 2}, "unix": 1788845675.3653946}
+{"actual_tokens": 64, "bytes": 199, "kind": "payload", "tag": "cold-64-r0", "target_tokens": 64}
+{"content": "", "decode_ms": 629.513, "decode_tps": 23.827943187829323, "input_tokens_local": 64, "kind": "completion", "prompt_ms": 1383.094, "prompt_tps": 46.2730660388954, "slot": 0, "started_unix": 1788845675.4584765, "stop_type": "limit", "tag": "cold-64-r0", "tokens_cached": 79, "tokens_evaluated": 64, "tokens_predicted": 16, "truncated": false, "ttft_s": 1.3886104460107163, "wall_s": 2.0178938310127705}

@@ -5,25 +5,14 @@
 # Served by a pinned Vulkan llama.cpp build (pkgs/llama-cpp-halo).
 #
 # READ apps/qwen-flash-next/README.md BEFORE CHANGING ANYTHING HERE. It carries
-# the memory budget, the quant ladder, the two-trajectory cache architecture,
-# and the coordinator contract this module is shaped around.
+# the memory budget, state-persistence findings, and measured slot trade-offs.
 #
-# Two facts drive the whole design:
-#
-#   1. The hybrid Gated DeltaNet layers hold *recurrent* state. llama.cpp's
-#      disk slot cache (`--slot-save-path` + POST /slots/{id}?action=save) does
-#      not preserve it, so a "restore" resurrects the attention KV with stale
-#      recurrent state. This module therefore never enables slot save/restore,
-#      never enables the RAM prompt cache (`--cache-ram 0`), and never lets
-#      idle slots be serialised (`--no-cache-idle-slots`). Continuity comes
-#      from keeping trajectories *resident* in dedicated slots and from
-#      in-process context checkpoints (`--ctx-checkpoints`), which are rebuilt
-#      inside the live context rather than round-tripped through bytes.
-#
-#   2. llama-server has no concept of rooms, sessions or conversations. A slot
-#      is a KV/recurrent-state arena, nothing more. Any "two live trajectories"
-#      story is the coordinator's job, expressed as slot affinity + prefix
-#      stability (see README § Coordinator contract).
+# The hybrid Gated DeltaNet layers hold recurrent R/S state and PLE convolution
+# history in addition to sparse-attention KV/indexer data. As of the pinned
+# b10840 source, llama.cpp's sequence-state serializer includes all of those
+# components; KV-only persistence would be invalid, but full slot persistence
+# is architecturally implemented. This deployment does not expose disk slot
+# save/restore or the RAM prompt cache: continuity is intentionally in-process.
 {
   subdomain ? null,
   serviceName ? "qwen-next",
@@ -32,11 +21,12 @@
   # that leaves working room on a 128 GB unified-memory box that also hosts
   # ollama. See README § Quant ladder for the fallbacks and their sizes.
   quant ? "UD-Q3_K_XL",
-  # Server slots. MUST be >= 2: one slot per live cache trajectory.
-  slots ? 2,
+  # Server slots. Production uses one slot after benchmarking the two-slot
+  # shadow-prefill design; callers can still raise this for explicit testing.
+  slots ? 1,
   # TOTAL context across all slots; llama.cpp divides it by `slots` when the KV
-  # cache is not unified. 131072 total => 65536 per trajectory. The model
-  # supports 262144 natively; raise only after measuring real GTT headroom.
+  # cache is not unified. 131072 with one slot gives one 131072-token context.
+  # The model supports 262144 natively; raise only after measuring headroom.
   contextSize ? 131072,
   # Context checkpoints per slot. These are what let a trajectory rewind to an
   # earlier point (e.g. when the coordinator swaps a skill block out of the
@@ -249,25 +239,24 @@ let
     "--jinja"
     "--gpu-layers 999"
     "--flash-attn auto"
-    # Two live cache trajectories: one resident slot each.
     "--parallel ${toString slots}"
-    # Per-slot KV. A unified buffer would let one trajectory's prefill evict
-    # the other's cache, which is exactly what this design must prevent.
+    # Keep allocation and affinity behavior explicit. With one slot this is
+    # equivalent in capacity to unified KV.
     "--no-kv-unified"
     "--ctx-size ${toString contextSize}"
     # In-process rewind points. NOT a disk cache: see the header comment.
     "--ctx-checkpoints ${toString ctxCheckpoints}"
     "--checkpoint-min-step ${toString checkpointMinStep}"
-    # Prefix reuse within a slot (the shadow-transcript prefill depends on it).
+    # Prefix reuse within the resident conversation.
     "--cache-prompt"
     "--cache-reuse 256"
-    # Recurrent state is not serialisable in a way we can trust, so nothing
-    # gets serialised: no RAM prompt cache, no idle-slot spill, and no
-    # --slot-save-path anywhere in this unit.
+    # Keep persistence disabled operationally: no RAM prompt cache, idle-slot
+    # spill, or --slot-save-path. The pinned serializer does include recurrent
+    # state, but it has not been enabled or end-to-end qualified here.
     "--cache-ram 0"
     "--no-cache-idle-slots"
-    # Context shift silently rewrites positions; with GDN recurrent state that
-    # produces a corrupt trajectory rather than a truncated one. Fail instead.
+    # Preserve the existing fail-at-the-bound policy. The pinned memory module
+    # reports shift support, but production has not qualified long-run shifts.
     "--no-context-shift"
     "--metrics"
   ]
@@ -285,8 +274,8 @@ in
       message = "qwen-flash-next: unknown quant '${quant}' (have: ${lib.concatStringsSep ", " (builtins.attrNames quants)})";
     }
     {
-      assertion = slots >= 2;
-      message = "qwen-flash-next: slots must be >= 2 — the design needs one resident slot per live cache trajectory";
+      assertion = slots >= 1;
+      message = "qwen-flash-next: slots must be at least one";
     }
   ];
 
