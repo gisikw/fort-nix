@@ -145,7 +145,11 @@ let
     }:$PATH
 
     STORE="${modelStore}"
+    RESTART_REQUIRED="/var/lib/qwen-flash-next/restart-required"
     mkdir -p "$STORE"
+    # Set this whenever an artifact is installed. It deliberately survives a
+    # failed partial reconciliation; ExecStartPost removes it only after a
+    # later successful run can safely request the server restart.
 
     # ---- capacity gate -------------------------------------------------
     needed=0
@@ -197,6 +201,7 @@ let
         actual=$(sha256sum "$partial" | cut -d' ' -f1)
         if [ "$actual" = "$want" ]; then
           mv "$partial" "$target"
+          touch "$RESTART_REQUIRED"
           echo "DONE: $file (validated partial)"
           continue
         fi
@@ -218,6 +223,7 @@ let
         continue
       fi
       mv "$partial" "$target"
+      touch "$RESTART_REQUIRED"
       echo "DONE: $file"
     done
 
@@ -348,9 +354,21 @@ in
       User = "qwen-flash-next";
       Group = "qwen-flash-next";
       ExecStart = reconcileScript;
-      # Start (or restart) the server once the store is complete. Runs as root;
-      # --no-block avoids a deadlock against this unit's own ordering.
-      ExecStartPost = "+${pkgs.systemd}/bin/systemctl restart --no-block qwen-flash-next.service";
+      # Start after initial provisioning, and restart only when this run
+      # installed a changed artifact. An unconditional restart here used to
+      # reload the healthy 90 GB server after every hourly no-op reconcile.
+      # This runs as root; --no-block avoids ordering against this oneshot.
+      ExecStartPost = "+${pkgs.writeShellScript "qwen-flash-next-reconcile-post" ''
+        set -eu
+        restart_required=/var/lib/qwen-flash-next/restart-required
+        if [ -e "$restart_required" ]; then
+          rm -f "$restart_required"
+          exec ${pkgs.systemd}/bin/systemctl restart --no-block qwen-flash-next.service
+        fi
+        if ! ${pkgs.systemd}/bin/systemctl is-active --quiet qwen-flash-next.service; then
+          exec ${pkgs.systemd}/bin/systemctl start --no-block qwen-flash-next.service
+        fi
+      ''}";
       TimeoutStartSec = "infinity";
     };
   };

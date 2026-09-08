@@ -91,7 +91,11 @@ store at `/var/lib/qwen-flash-next/models`:
    non-zero. **No ~90 GB download is ever started blind.**
 2. Resumable `curl -C -` per shard, sha256-verified against the HF LFS oid,
    atomic rename into place.
-3. On a complete store, `systemctl restart --no-block qwen-flash-next`.
+3. On a complete store, start the server if it is inactive, or restart it only
+   when this reconciliation installed a changed artifact. The former
+   unconditional `ExecStartPost=systemctl restart` reloaded the healthy 90 GB
+   server after every hourly no-op reconciliation; the reconciler now uses a
+   per-run `restart-required` marker to avoid that disruption.
 
 `qwen-flash-next.service` has `wantedBy = [ ]` and a `ConditionPathExists` on
 the first shard, so a host switch never starts a server whose weights are
