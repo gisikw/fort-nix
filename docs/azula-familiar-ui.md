@@ -48,7 +48,25 @@ later with those semantics.
 - `/v1/` explicitly uses HTTP/1.1, an empty upstream `Connection` header, and
   disables proxy buffering, proxy caching, and gzip. Combined with the
   bridge's `X-Accel-Buffering: no`, this preserves incremental SSE. The read
-  timeout is 600 seconds and request bodies are capped at 128 KiB.
+  timeout is 600 seconds. Only this location raises the request ceiling, to
+  exactly `16842752` bytes (16 MiB + 64 KiB), matching familiar-ui's
+  authenticated JSON parser limit; it is bounded, not nginx's `0`/unlimited.
+  The descriptor, static, and identity locations do not receive this override.
+- Request buffering is disabled only for `/v1/`. nginx performs
+  `auth_request` in the access phase before the proxy content handler starts
+  reading and forwarding the client body, and `client_max_body_size` remains
+  active as nginx reads fixed-length or chunked bodies. Streaming therefore
+  avoids staging a roughly 16 MiB base64 JSON request in nginx's client-body
+  temp area without exposing the loopback bridge to unauthenticated body bytes
+  or relaxing the byte limit. Response-side `proxy_buffering off` remains a
+  separate SSE requirement.
+- This host's public traffic first crosses the generic public-ingress nginx,
+  whose canonical NixOS `services.nginx.clientMaxBodySize` is deliberately
+  generous (`100m`) so the edge does not preempt backend policy. Fort's
+  per-service `maxBodySize` abstraction can add a backend location override,
+  but familiar-ui is a static service with multiple trust-boundary locations;
+  its precise limit therefore belongs directly on `^~ /v1/`. The edge ceiling
+  does not supersede this tighter location-level limit.
 - A Pi reload creates a new extension runtime, epoch, and token. Existing
   action ids, session ids, and cursors retain familiar-ui's stale/reset
   semantics. A stale browser waits for the replacement descriptor after a 401
@@ -68,17 +86,25 @@ auto-discovered extension location compatible with `/reload`. The stateless
 /var/lib/kestrel/state/pi/extensions/familiar-ui/index.js
 ```
 
-as a symlink to the declarative wrapper. It does **not** read or mutate
-`settings.json`, avoiding races with Pi's own `proper-lockfile` settings
-persistence. This auto-discovered location is rescanned by `/reload` and is
-present on the next Presence birth, so `FAMILIAR_PI_EXTRA_EXTENSIONS_JSON` is
-not needed. The wrapper is deliberately absent from explicit Pi settings,
-which prevents loading the same extension once by auto-discovery and once by
-settings.
+as a symlink to the declarative wrapper. The same stateless stage creates the
+private parent directory `/var/lib/kestrel/state/plate` as `familiar:users`
+mode `0700`, but never creates, reads, truncates, or otherwise touches
+`plate.json`. The Plate itself can consequently remain durable and private at
+`/var/lib/kestrel/state/plate/plate.json`.
+
+Staging does **not** read or mutate `settings.json`, avoiding races with Pi's
+own `proper-lockfile` settings persistence. This auto-discovered location is
+rescanned by `/reload` and is present on the next Presence birth, so
+`FAMILIAR_PI_EXTRA_EXTENSIONS_JSON` is not needed. The wrapper is deliberately
+absent from explicit Pi settings, which prevents loading the same extension
+once by auto-discovery and once by settings.
 
 The wrapper's default factory is async. Before importing familiar-ui it sets
-`FAMILIAR_UI_ORIGIN`, `FAMILIAR_UI_PORT`, and `FAMILIAR_UI_DESCRIPTOR`. It then
-uses `realpath()` on the extension beneath the mutable tracked profile,
+`FAMILIAR_UI_ORIGIN`, `FAMILIAR_UI_PORT`, `FAMILIAR_UI_DESCRIPTOR`, and the
+canonical `FAMILIAR_PLATE_FILE=/var/lib/kestrel/state/plate/plate.json`. It does
+not set display names; `FAMILIAR_USER_NAME` and `FAMILIAR_AGENT_NAME` remain
+inherited from Presence when configured through `familiar.toml`. It then uses
+`realpath()` on the extension beneath the mutable tracked profile,
 requires the result to be in `/nix/store/`, converts that immutable target with
 `pathToFileURL()`, dynamically imports it, and invokes its default factory.
 Each `/reload` therefore gets the current profile generation rather than a
@@ -118,7 +144,10 @@ sequence is:
 Activation/restart edges: nginx may reload/restart for the vhost;
 `familiar-ui-broker` may start/restart; `familiar-ui-stage` may run. None of
 those may propagate to Presence. The Fort evaluation assertions enforce the
-SSE directives, one boundary-specific Host header with recommended proxy
-settings disabled on each custom location, safe logging format, correct Pi
-auto-discovery path, absence of the duplicate explicit-extension environment,
-reviewed branch, and all Presence lifecycle exclusions.
+exact bounded `/v1/` body ceiling and its absence from unrelated locations,
+request and response buffering policy, SSE/security directives, one
+boundary-specific Host header with recommended proxy settings disabled on each
+custom location, safe logging format, canonical Plate export, directory-only
+private Plate staging, correct Pi auto-discovery path, absence of the duplicate
+explicit-extension environment, reviewed branch, and all Presence lifecycle
+exclusions.

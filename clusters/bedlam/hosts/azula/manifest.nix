@@ -96,6 +96,12 @@ rec {
       familiarUiExtensionDir = "${familiarPiAgentDir}/extensions/familiar-ui";
       familiarUiExtensionPath = "${familiarUiExtensionDir}/index.js";
       familiarUiProfileExtension = "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
+      familiarPlateDir = "${kestrelDir}/state/plate";
+      familiarPlateFile = "${familiarPlateDir}/plate.json";
+      # Exact familiar-ui authenticated JSON limit: 16 MiB + 64 KiB. Keep
+      # this location boundary in bytes so nginx and the backend cannot drift
+      # through unit rounding.
+      familiarUiMaxBodySize = "16842752";
       familiarUiAccessLogFormat = ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
       familiarUiDescriptorProxyConfig = ''
         auth_request /_identity/validate;
@@ -107,8 +113,13 @@ rec {
       familiarUiProxyConfig = ''
         auth_request /_identity/validate;
         error_page 401 = @identity_login;
-        client_max_body_size 128k;
+        client_max_body_size ${familiarUiMaxBodySize};
         proxy_http_version 1.1;
+        # auth_request runs in nginx's access phase before the proxy content
+        # handler reads this body. Streaming therefore avoids a temp-file copy
+        # without sending unauthenticated bytes upstream; client_max_body_size
+        # remains enforced while nginx reads a chunked request.
+        proxy_request_buffering off;
         proxy_buffering off;
         proxy_cache off;
         gzip off;
@@ -127,6 +138,15 @@ rec {
         map builtins.head (
           builtins.filter (match: match != null) (
             map (builtins.match "[[:space:]]*proxy_set_header Host ([^;]+);[[:space:]]*") (
+              pkgs.lib.splitString "\n" extraConfig
+            )
+          )
+        );
+      clientMaxBodyValues =
+        extraConfig:
+        map builtins.head (
+          builtins.filter (match: match != null) (
+            map (builtins.match "[[:space:]]*client_max_body_size ([^;]+);[[:space:]]*") (
               pkgs.lib.splitString "\n" extraConfig
             )
           )
@@ -162,7 +182,7 @@ rec {
       # birth). Set the process environment before resolving the mutable tracked
       # profile to an immutable store file URL. The dynamic URL prevents Node's
       # ESM cache from retaining an old profile generation across /reload.
-      familiarUiExtension = pkgs.writeText "familiar-ui-extension.js" ''
+      familiarUiExtensionSource = ''
         import { realpath } from "node:fs/promises";
         import { pathToFileURL } from "node:url";
 
@@ -170,6 +190,7 @@ rec {
           process.env.FAMILIAR_UI_ORIGIN = ${builtins.toJSON familiarUiOrigin};
           process.env.FAMILIAR_UI_PORT = ${builtins.toJSON (toString familiarUiPort)};
           process.env.FAMILIAR_UI_DESCRIPTOR = ${builtins.toJSON familiarUiDescriptor};
+          process.env.FAMILIAR_PLATE_FILE = ${builtins.toJSON familiarPlateFile};
 
           const target = await realpath(${builtins.toJSON familiarUiProfileExtension});
           if (!target.startsWith("/nix/store/")) {
@@ -181,6 +202,14 @@ rec {
           }
           return module.default(pi);
         }
+      '';
+      familiarUiExtension = pkgs.writeText "familiar-ui-extension.js" familiarUiExtensionSource;
+      familiarUiStageScript = ''
+        set -euo pipefail
+        install -d -m 0700 ${familiarPiAgentDir}/extensions
+        install -d -m 0700 ${familiarUiExtensionDir}
+        install -d -m 0700 ${familiarPlateDir}
+        ln -sfn ${familiarUiExtension} ${familiarUiExtensionPath}
       '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
         name = "azula"
@@ -324,14 +353,48 @@ rec {
           }
           {
             assertion = builtins.all (directive: pkgs.lib.hasInfix directive familiarUiProxyConfig) [
+              "auth_request /_identity/validate;"
+              "error_page 401 = @identity_login;"
+              "client_max_body_size ${familiarUiMaxBodySize};"
               "proxy_http_version 1.1;"
+              "proxy_request_buffering off;"
               "proxy_buffering off;"
               "proxy_cache off;"
               "gzip off;"
               ''proxy_set_header Connection "";''
+              "proxy_set_header Origin $http_origin;"
+              "proxy_set_header Authorization $http_authorization;"
               ''proxy_set_header Cookie "";''
+              "proxy_read_timeout 600s;"
             ];
-            message = "familiar-ui: /v1 must preserve SSE and strip ingress cookies";
+            message = "familiar-ui: /v1 must preserve its exact body limit and SSE/security directives";
+          }
+          {
+            assertion =
+              let
+                locations = config.services.nginx.virtualHosts."familiar-ui.${domain}".locations;
+              in
+              familiarUiMaxBodySize != "0"
+              && clientMaxBodyValues locations."^~ /v1/".extraConfig == [ familiarUiMaxBodySize ]
+              && clientMaxBodyValues locations."/".extraConfig == [ ]
+              && clientMaxBodyValues locations."= /__familiar/bridge.json".extraConfig == [ ]
+              && clientMaxBodyValues locations."= /_identity/validate".extraConfig == [ "0" ]
+              && clientMaxBodyValues locations."/_identity/".extraConfig == [ ];
+            message = "familiar-ui: only /v1 may receive the exact bounded image request ceiling";
+          }
+          {
+            assertion =
+              familiarPlateFile == "/var/lib/kestrel/state/plate/plate.json"
+              && pkgs.lib.hasInfix "process.env.FAMILIAR_PLATE_FILE = ${builtins.toJSON familiarPlateFile};" familiarUiExtensionSource;
+            message = "familiar-ui: wrapper must export the canonical private durable Plate path";
+          }
+          {
+            assertion =
+              config.systemd.services.familiar-ui-stage.serviceConfig.User == "familiar"
+              && config.systemd.services.familiar-ui-stage.serviceConfig.Group == "users"
+              && pkgs.lib.hasInfix "install -d -m 0700 ${familiarPlateDir}" familiarUiStageScript
+              && !(pkgs.lib.hasInfix familiarPlateFile familiarUiStageScript);
+            message = "familiar-ui: staging must create only Plate's private parent directory as familiar:users";
           }
           {
             assertion =
@@ -756,12 +819,7 @@ rec {
           Group = "users";
         };
         path = [ pkgs.coreutils ];
-        script = ''
-          set -euo pipefail
-          install -d -m 0700 ${familiarPiAgentDir}/extensions
-          install -d -m 0700 ${familiarUiExtensionDir}
-          ln -sfn ${familiarUiExtension} ${familiarUiExtensionPath}
-        '';
+        script = familiarUiStageScript;
       };
 
       config.systemd.services.familiar-ui-broker = {
