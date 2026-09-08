@@ -58,6 +58,10 @@ rec {
         kernel = config.boot.kernelPackages.kernel;
       };
       domain = config.fort.cluster.settings.domain;
+      # The admin principal's Fort public key is also selected for root by its
+      # `root` role in common/host.nix. Reuse that exact principal here rather
+      # than copying public-key material into this host manifest.
+      kevinFortPublicKey = config.fort.cluster.settings.principals.admin.publicKey;
       familiarHome = "/home/familiar";
       # NixOS installs privileged programs as wrappers here. systemd's `path`
       # option expects package roots and appends /bin, so use the parent rather
@@ -314,7 +318,9 @@ rec {
         shell = pkgs.bashInteractive;
         # systemd-journal: plain journalctl works without escalation.
         extraGroups = [ "systemd-journal" ];
-        openssh.authorizedKeys.keys = [ config.fort.cluster.settings.principals.admin.publicKey ];
+        # Add Kevin's existing Fort identity without replacing keys contributed
+        # by another module. This enables direct interactive SSH and SCP/SFTP.
+        openssh.authorizedKeys.keys = pkgs.lib.mkAfter [ kevinFortPublicKey ];
       };
 
       # Familiar operates this host (service state dirs, unit debugging) and
@@ -352,6 +358,17 @@ rec {
           message = "${service}: familiar's Pi environment must contain ${config.security.wrapperDir}";
         }) familiarPiServices)
         ++ [
+          {
+            assertion =
+              builtins.elem kevinFortPublicKey config.users.users.root.openssh.authorizedKeys.keys
+              &&
+                builtins.length (
+                  builtins.filter (
+                    key: key == kevinFortPublicKey
+                  ) config.users.users.familiar.openssh.authorizedKeys.keys
+                ) == 1;
+            message = "azula SSH: Kevin's Fort key must remain authorized for root and occur exactly once for familiar";
+          }
           {
             assertion = !config.systemd.services.familiar-instance-presence.restartIfChanged;
             message = "familiar-ui: Nix activation must not restart resident Presence";
