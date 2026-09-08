@@ -151,6 +151,33 @@ rec {
             )
           )
         );
+      # Kevin's Slidev workspace. Only the generated `public/` output tree is
+      # ever published: the repository root (Markdown sources, node_modules,
+      # .git) is outside both the vhost root and the nginx bind mount.
+      slidesRepoDir = "${familiarHome}/Projects/slides";
+      slidesPublicRoot = "${slidesRepoDir}/public";
+      # Regex location, so a deep link inside a deck falls back to that deck's
+      # own index.html (Slidev's history router) rather than 404ing or leaking
+      # into a neighbouring deck. nginx normalizes $uri before matching and the
+      # capture cannot contain "/" or start with ".", so the fallback target is
+      # always exactly <root>/asg/<deck>/index.html.
+      slidesDeckLocation = "~ ^/asg/(?<deck>[A-Za-z0-9][A-Za-z0-9._-]*)/";
+      # Regex locations win over the generic module's "/" prefix location, so
+      # this block has to restate the identity wall it would otherwise inherit
+      # from it. (There is no other regex location on this vhost.)
+      slidesDeckConfig = ''
+        auth_request /_identity/validate;
+        more_set_headers 'WWW-Authenticate: Bearer resource_metadata="https://$host/.well-known/oauth-protected-resource"';
+        error_page 401 = @identity_login;
+        # Slidev's build output contains no Markdown, but refuse to serve deck
+        # source even if a future build step copies it into public/.
+        if ($uri ~* "\.(md|markdown)$") {
+          return 404;
+        }
+        index index.html;
+        autoindex off;
+        try_files $uri $uri/ /asg/$deck/index.html =404;
+      '';
       projectsStateDir = "/var/lib/projects";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
@@ -430,6 +457,89 @@ rec {
               && !(pkgs.lib.hasInfix " debug;" vhostConfig);
             message = "familiar-ui: vhost error logging must never use debug";
           }
+          # --- slides.gisi.network -------------------------------------------
+          {
+            assertion =
+              slidesPublicRoot == "/home/familiar/Projects/slides/public"
+              && config.services.nginx.virtualHosts."slides.${domain}".root == slidesPublicRoot;
+            message = "slides: vhost root must be exactly the generated public/ output tree";
+          }
+          {
+            assertion =
+              let
+                locations = config.services.nginx.virtualHosts."slides.${domain}".locations;
+              in
+              pkgs.lib.hasInfix "auth_request /_identity/validate;" locations."/".extraConfig
+              && pkgs.lib.hasInfix "auth_request /_identity/validate;" locations.${slidesDeckLocation}.extraConfig
+              &&
+                pkgs.lib.hasInfix ''X-Identity-Required-Groups "admin"''
+                  locations."= /_identity/validate".extraConfig
+              && locations ? "@identity_login";
+            message = "slides: every content location must sit behind the identity wall (admin)";
+          }
+          {
+            assertion =
+              let
+                binds = config.systemd.services.nginx.serviceConfig.BindReadOnlyPaths;
+              in
+              config.systemd.services.nginx.serviceConfig.ProtectHome == "tmpfs"
+              && builtins.elem "-${slidesPublicRoot}" binds
+              && !(builtins.elem slidesRepoDir binds)
+              && !(builtins.elem "-${slidesRepoDir}" binds)
+              && !(builtins.elem familiarHome binds)
+              && !(builtins.elem "-${familiarHome}" binds);
+            message = "slides: nginx may bind only the public output tree, never the repository or home";
+          }
+          {
+            assertion =
+              builtins.elem "d ${slidesRepoDir} 0711 familiar users -" config.systemd.tmpfiles.rules
+              && builtins.elem "d ${slidesPublicRoot} 0755 familiar users -" config.systemd.tmpfiles.rules
+              && !(builtins.elem "d ${slidesRepoDir} 0755 familiar users -" config.systemd.tmpfiles.rules);
+            message = "slides: only the generated output tree may be world-traversable/readable";
+          }
+          {
+            assertion =
+              let
+                locations = config.services.nginx.virtualHosts."slides.${domain}".locations;
+                rendered = pkgs.lib.concatStringsSep "\n" (
+                  map (name: locations.${name}.extraConfig) (builtins.attrNames locations)
+                );
+              in
+              !(pkgs.lib.hasInfix "autoindex on" rendered)
+              && pkgs.lib.hasInfix "autoindex off;" locations."/".extraConfig
+              && pkgs.lib.hasInfix "autoindex off;" locations.${slidesDeckLocation}.extraConfig
+              && pkgs.lib.hasInfix "index index.html;" locations."/".extraConfig
+              && pkgs.lib.hasInfix "index index.html;" locations.${slidesDeckLocation}.extraConfig;
+            message = "slides: directories must resolve through index.html with autoindex disabled";
+          }
+          {
+            assertion =
+              let
+                deck =
+                  config.services.nginx.virtualHosts."slides.${domain}".locations.${slidesDeckLocation}.extraConfig;
+              in
+              slidesDeckLocation == "~ ^/asg/(?<deck>[A-Za-z0-9][A-Za-z0-9._-]*)/"
+              && pkgs.lib.hasInfix "try_files $uri $uri/ /asg/$deck/index.html =404;" deck
+              && pkgs.lib.hasInfix ''if ($uri ~* "\.(md|markdown)$")'' deck
+              && pkgs.lib.hasInfix "return 404;" deck;
+            message = "slides: per-deck fallback must stay inside one deck and never serve source Markdown";
+          }
+          {
+            assertion =
+              let
+                presence = config.systemd.services.familiar-instance-presence;
+                presenceUnitRefs =
+                  presence.after ++ presence.wants ++ presence.requires ++ presence.bindsTo ++ presence.wantedBy;
+              in
+              !(builtins.elem "nginx.service" presenceUnitRefs)
+              && !(pkgs.lib.hasInfix slidesRepoDir (toString (presence.serviceConfig.ExecStart or "")))
+              && !(pkgs.lib.hasInfix slidesRepoDir (toString (presence.serviceConfig.WorkingDirectory or "")))
+              && !(builtins.elem "familiar-instance-presence.service" config.systemd.services.nginx.after)
+              && !(builtins.any (unit: pkgs.lib.hasInfix "presence" (toString unit)) (
+                config.systemd.services.nginx.restartTriggers or [ ]
+              ));
+            message = "slides: static publishing must be unrelated to the Familiar Presence lifecycle";
+          }
         ];
 
       config.users.groups.tiamat-router = { };
@@ -503,15 +613,50 @@ rec {
             ];
           };
         }
+        # Slides: Kevin's Slidev workspace, published as generated files only.
+        # staticRoot is the build output tree, so https://slides.<domain>/asg/<deck>/
+        # resolves to <root>/asg/<deck>/index.html. Health checks are off: the
+        # identity wall answers 302, and the tree is legitimately empty until a
+        # deck has been built.
+        {
+          name = "slides";
+          staticRoot = slidesPublicRoot;
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [ "admin" ];
+          };
+          health.enabled = false;
+        }
       ];
 
       # nginx's unit runs with ProtectHome=true, so the static root has to be
       # bind-mounted into its namespace anyway (same idiom as apps/vault). That
       # also means /home/familiar itself never has to become traversable: the
       # only mode this host relaxes is the wireframes directory (0755 below).
+      # The slides entry binds only the generated output tree, never the
+      # repository root. Its "-" prefix keeps a missing directory from failing
+      # the whole nginx unit (every other vhost on this host lives in it); the
+      # tmpfiles rules below create it first, so the prefix is belt-and-braces.
       config.systemd.services.nginx.serviceConfig = {
         ProtectHome = pkgs.lib.mkForce "tmpfs";
-        BindReadOnlyPaths = [ "${familiarHome}/Projects/wireframes" ];
+        BindReadOnlyPaths = [
+          "${familiarHome}/Projects/wireframes"
+          "-${slidesPublicRoot}"
+        ];
+      };
+
+      # Slides vhost. The generic static location already emits
+      # `try_files $uri $uri/ =404` plus the identity wall; extraConfig is
+      # types.lines, so this appends the index/no-autoindex policy. Per-deck
+      # SPA fallback lives in its own regex location (a second try_files in
+      # "/" would be a duplicate-directive error).
+      config.services.nginx.virtualHosts."slides.${domain}" = {
+        locations."/".extraConfig = ''
+          index index.html;
+          autoindex off;
+        '';
+        locations.${slidesDeckLocation}.extraConfig = slidesDeckConfig;
       };
 
       # Serve index.html for directories, with an autoindex fallback for the
@@ -689,6 +834,15 @@ rec {
         # directory — nginx for wireframes, projects-browser for the tree.
         "d ${familiarHome}/Projects 0755 familiar users -"
         "d ${familiarHome}/Projects/wireframes 0755 familiar users -"
+        # Slides: the repository directory only has to exist and be traversable
+        # by its owner, so it stays 0711 -- Markdown sources and git history are
+        # not readable by other local accounts. Only the generated output tree
+        # is 0755, which is the minimum for the nginx worker (a different uid)
+        # to traverse it and read 0644 build artifacts. Both rules run before
+        # nginx starts, so the bind mount always has a source even when the
+        # checkout has never been built (or does not exist yet).
+        "d ${slidesRepoDir} 0711 familiar users -"
+        "d ${slidesPublicRoot} 0755 familiar users -"
       ];
 
       # Reuse the established developer SSH identity for outbound work from
