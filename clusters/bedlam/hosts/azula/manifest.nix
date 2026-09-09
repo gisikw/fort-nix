@@ -58,6 +58,133 @@ rec {
         kernel = config.boot.kernelPackages.kernel;
       };
       domain = config.fort.cluster.settings.domain;
+      # `/private` locality is deliberately pinned to the one reviewed router
+      # artifact and one Fort-owned mesh address. A new router build or mesh
+      # address requires another reviewed Fort change; DNS is not authority for
+      # this boundary.
+      privateRouterStore = "/nix/store/qz4cczf1hhsk6m4p0lgg3ck3q6a2mz8l-tiamat-router-2bfc122";
+      privateRouterRevision = "2bfc122";
+      privateProviderId = "llama-frankenstein";
+      privateProviderBaseUrl = "https://llama.gisi.network/v1";
+      privateProviderAddress = "100.101.0.18";
+      privateLocalityActivationSql = pkgs.writeText "tiamat-router-private-locality-activate.sql" ''
+        .bail on
+        PRAGMA busy_timeout=5000;
+        BEGIN IMMEDIATE;
+        CREATE TEMP TABLE fort_assert (value INTEGER NOT NULL CHECK (value = 1));
+        CREATE TEMP TABLE fort_state (mode TEXT NOT NULL CHECK (mode IN ('apply', 'already')));
+        INSERT INTO fort_state
+        SELECT CASE
+          WHEN json_type(config, '$.locality') IS NULL
+           AND json_type(config, '$.localAddresses') IS NULL THEN 'apply'
+          WHEN json_type(config, '$.locality') = 'text'
+           AND json_extract(config, '$.locality') = 'local'
+           AND json_type(config, '$.localAddresses') = 'array'
+           AND json_array_length(json_extract(config, '$.localAddresses')) = 1
+           AND json_type(config, '$.localAddresses[0]') = 'text'
+           AND json_extract(config, '$.localAddresses[0]') = '${privateProviderAddress}' THEN 'already'
+          ELSE NULL
+        END
+        FROM providers
+        WHERE id = '${privateProviderId}'
+          AND json_valid(config)
+          AND json_type(config, '$.kind') = 'text'
+          AND json_extract(config, '$.kind') = 'api-key'
+          AND json_type(config, '$.preset') IS NULL
+          AND json_type(config, '$.baseUrl') = 'text'
+          AND json_extract(config, '$.baseUrl') = '${privateProviderBaseUrl}';
+        INSERT INTO fort_assert SELECT count(*) FROM fort_state;
+        INSERT INTO fort_assert SELECT count(*) FROM metadata WHERE key = 'catalog_modified';
+        CREATE TEMP TABLE fort_now (value TEXT NOT NULL);
+        INSERT INTO fort_now VALUES (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        UPDATE providers
+        SET config = json_set(config,
+              '$.locality', 'local',
+              '$.localAddresses', json_array('${privateProviderAddress}')),
+            updated_at = (SELECT value FROM fort_now)
+        WHERE id = '${privateProviderId}'
+          AND (SELECT mode FROM fort_state) = 'apply'
+          AND json_valid(config)
+          AND json_type(config, '$.kind') = 'text'
+          AND json_extract(config, '$.kind') = 'api-key'
+          AND json_type(config, '$.preset') IS NULL
+          AND json_type(config, '$.baseUrl') = 'text'
+          AND json_extract(config, '$.baseUrl') = '${privateProviderBaseUrl}'
+          AND json_type(config, '$.locality') IS NULL
+          AND json_type(config, '$.localAddresses') IS NULL;
+        CREATE TEMP TABLE fort_provider_change (value INTEGER NOT NULL);
+        INSERT INTO fort_provider_change VALUES (changes());
+        INSERT INTO fort_assert
+        SELECT value = (SELECT mode = 'apply' FROM fort_state) FROM fort_provider_change;
+        UPDATE metadata
+        SET value = (SELECT value FROM fort_now)
+        WHERE key = 'catalog_modified'
+          AND (SELECT mode FROM fort_state) = 'apply';
+        INSERT INTO fort_assert
+        SELECT changes() = (SELECT mode = 'apply' FROM fort_state);
+        COMMIT;
+        SELECT 'locality activation: ' || mode FROM fort_state;
+      '';
+      privateLocalityRollbackSql = pkgs.writeText "tiamat-router-private-locality-rollback.sql" ''
+        .bail on
+        PRAGMA busy_timeout=5000;
+        BEGIN IMMEDIATE;
+        CREATE TEMP TABLE fort_assert (value INTEGER NOT NULL CHECK (value = 1));
+        CREATE TEMP TABLE fort_state (mode TEXT NOT NULL CHECK (mode IN ('remove', 'already')));
+        INSERT INTO fort_state
+        SELECT CASE
+          WHEN json_type(config, '$.locality') = 'text'
+           AND json_extract(config, '$.locality') = 'local'
+           AND json_type(config, '$.localAddresses') = 'array'
+           AND json_array_length(json_extract(config, '$.localAddresses')) = 1
+           AND json_type(config, '$.localAddresses[0]') = 'text'
+           AND json_extract(config, '$.localAddresses[0]') = '${privateProviderAddress}' THEN 'remove'
+          WHEN json_type(config, '$.locality') IS NULL
+           AND json_type(config, '$.localAddresses') IS NULL THEN 'already'
+          ELSE NULL
+        END
+        FROM providers
+        WHERE id = '${privateProviderId}'
+          AND json_valid(config)
+          AND json_type(config, '$.kind') = 'text'
+          AND json_extract(config, '$.kind') = 'api-key'
+          AND json_type(config, '$.preset') IS NULL
+          AND json_type(config, '$.baseUrl') = 'text'
+          AND json_extract(config, '$.baseUrl') = '${privateProviderBaseUrl}';
+        INSERT INTO fort_assert SELECT count(*) FROM fort_state;
+        INSERT INTO fort_assert SELECT count(*) FROM metadata WHERE key = 'catalog_modified';
+        CREATE TEMP TABLE fort_now (value TEXT NOT NULL);
+        INSERT INTO fort_now VALUES (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        UPDATE providers
+        SET config = json_remove(config, '$.locality', '$.localAddresses'),
+            updated_at = (SELECT value FROM fort_now)
+        WHERE id = '${privateProviderId}'
+          AND (SELECT mode FROM fort_state) = 'remove'
+          AND json_valid(config)
+          AND json_type(config, '$.kind') = 'text'
+          AND json_extract(config, '$.kind') = 'api-key'
+          AND json_type(config, '$.preset') IS NULL
+          AND json_type(config, '$.baseUrl') = 'text'
+          AND json_extract(config, '$.baseUrl') = '${privateProviderBaseUrl}'
+          AND json_type(config, '$.locality') = 'text'
+          AND json_extract(config, '$.locality') = 'local'
+          AND json_type(config, '$.localAddresses') = 'array'
+          AND json_array_length(json_extract(config, '$.localAddresses')) = 1
+          AND json_type(config, '$.localAddresses[0]') = 'text'
+          AND json_extract(config, '$.localAddresses[0]') = '${privateProviderAddress}';
+        CREATE TEMP TABLE fort_provider_change (value INTEGER NOT NULL);
+        INSERT INTO fort_provider_change VALUES (changes());
+        INSERT INTO fort_assert
+        SELECT value = (SELECT mode = 'remove' FROM fort_state) FROM fort_provider_change;
+        UPDATE metadata
+        SET value = (SELECT value FROM fort_now)
+        WHERE key = 'catalog_modified'
+          AND (SELECT mode FROM fort_state) = 'remove';
+        INSERT INTO fort_assert
+        SELECT changes() = (SELECT mode = 'remove' FROM fort_state);
+        COMMIT;
+        SELECT 'locality rollback: ' || mode FROM fort_state;
+      '';
       # The admin principal's Fort public key is also selected for root by its
       # `root` role in common/host.nix. Reuse that exact principal here rather
       # than copying public-key material into this host manifest.
@@ -293,7 +420,10 @@ rec {
       # Drover MVP rendezvous validation: independent OpenSSH and TLS/control
       # listeners. Node SSH and reverse routes stay loopback-only; no route
       # range is opened. Service lifecycle remains manually managed for now.
-      config.networking.firewall.allowedTCPPorts = [ 9840 9841 ];
+      config.networking.firewall.allowedTCPPorts = [
+        9840
+        9841
+      ];
 
       # Hard-hang mitigation (2026-09-04). Three whole-host lock-ups in one
       # evening, each showing ~27 GB free, load < 1, temps < 60 °C on the
@@ -953,12 +1083,103 @@ rec {
         '';
       };
 
+      # This reconciliation runs as the router account and never selects,
+      # decrypts, or rewrites the credential column. PartOf makes every overlay
+      # manager stop/restart re-run the exact binary gate: an older or merely
+      # different router artifact leaves this unit failed and the required
+      # overlay service stopped rather than serving a persisted local claim.
+      config.systemd.services.tiamat-router-private-locality = {
+        description = "Classify the reviewed llama provider as Fort-local";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "overlay-tiamat-router.service" ];
+        after = [ "tiamat-router-bootstrap-provision.service" ];
+        requires = [ "tiamat-router-bootstrap-provision.service" ];
+        partOf = [ "overlay-tiamat-router.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "tiamat-router";
+          Group = "tiamat-router";
+          UMask = "0077";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ReadWritePaths = [ "/var/lib/tiamat-router" ];
+        };
+        path = [
+          pkgs.coreutils
+          pkgs.gnused
+          pkgs.systemd
+        ];
+        script = ''
+          set -euo pipefail
+          expected=${privateRouterStore}/bin/tiamat-router
+          unit_exec="$(${pkgs.systemd}/bin/systemctl show --property=ExecStart --value overlay-tiamat-router.service)"
+          configured="$(printf '%s\n' "$unit_exec" | ${pkgs.gnused}/bin/sed -n 's/^{ path=\([^ ;]*\) .*/\1/p')"
+          test "$configured" = "$expected"
+          test "$($expected version)" = '${privateRouterRevision}'
+
+          pid="$(${pkgs.systemd}/bin/systemctl show --property=MainPID --value overlay-tiamat-router.service)"
+          if test "$pid" != 0; then
+            test "$(${pkgs.coreutils}/bin/readlink -f "/proc/$pid/exe")" = "$expected"
+          fi
+
+          db=/var/lib/tiamat-router/tiamat.db
+          test -O "$db"
+          before="$(${pkgs.coreutils}/bin/stat -c '%u:%g:%a' "$db")"
+          test "''${before##*:}" = 600
+          ${pkgs.sqlite}/bin/sqlite3 "$db" < ${privateLocalityActivationSql}
+          after="$(${pkgs.coreutils}/bin/stat -c '%u:%g:%a' "$db")"
+          test "$after" = "$before"
+        '';
+      };
+
+      # Emergency fail-closed rollback. Starting this conflicts with (and thus
+      # stops) the router and its active classification. It only removes the two
+      # reviewed JSON fields. Revert this Fort activation before starting the
+      # router again, otherwise the required activation unit will re-apply it.
+      config.systemd.services.tiamat-router-private-locality-rollback = {
+        description = "Remove the reviewed llama provider locality classification";
+        conflicts = [
+          "overlay-tiamat-router.service"
+          "tiamat-router-private-locality.service"
+        ];
+        before = [ "overlay-tiamat-router.service" ];
+        after = [ "tiamat-router-bootstrap-provision.service" ];
+        requires = [ "tiamat-router-bootstrap-provision.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "tiamat-router";
+          Group = "tiamat-router";
+          UMask = "0077";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ReadWritePaths = [ "/var/lib/tiamat-router" ];
+        };
+        script = ''
+          set -euo pipefail
+          db=/var/lib/tiamat-router/tiamat.db
+          test -O "$db"
+          before="$(${pkgs.coreutils}/bin/stat -c '%u:%g:%a' "$db")"
+          test "''${before##*:}" = 600
+          ${pkgs.sqlite}/bin/sqlite3 "$db" < ${privateLocalityRollbackSql}
+          after="$(${pkgs.coreutils}/bin/stat -c '%u:%g:%a' "$db")"
+          test "$after" = "$before"
+        '';
+      };
+
       config.systemd.units."overlay-tiamat-router.service" = {
         overrideStrategy = "asDropin";
         text = ''
           [Unit]
           Requires=tiamat-router-bootstrap-provision.service
           After=tiamat-router-bootstrap-provision.service
+          Requires=tiamat-router-private-locality.service
+          After=tiamat-router-private-locality.service
         '';
       };
 
