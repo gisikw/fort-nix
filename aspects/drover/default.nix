@@ -39,6 +39,9 @@ let
   pi = familiarFlake.packages.${system}.pi-coding-agent;
   familiarSource = familiarFlake.outPath;
   python = pkgs.python3;
+  droverPython = python.withPackages (pythonPackages: [ pythonPackages.aiohttp ]);
+  nodeTerminalMarker = "${nodeState}/terminal-auth";
+  nodeEnabledMarker = "${nodeState}/sshd-enabled";
 
   publicKeys = {
     coordinatorHost = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPqzDpmjN706jIJ6PwZOkMg61JEnyqlb0Kl1UKXuCWQ2 drover-coordinator-host";
@@ -139,8 +142,27 @@ let
 
   nodeWrapper = pkgs.writeShellScript "drover-${host}-node" ''
     set -eu
+    if test -e ${nodeTerminalMarker}; then
+      echo "terminal credential gate is set; re-enroll explicitly"
+      exit 0
+    fi
     export DROVER_ENROLLMENT_TOKEN="$(${pkgs.coreutils}/bin/cat ${config.sops.secrets.drover-enrollment-token.path})"
-    exec ${drover}/bin/drover --config ${nodeConfig} serve
+    export DROVER_HERDR=${herdr}/bin/herdr
+    exec ${droverPython}/bin/python ${./supervisor.py} \
+      --drover-source ${droverFlake.outPath}/drover.py \
+      --config ${nodeConfig} \
+      --terminal-marker ${nodeTerminalMarker} \
+      --enabled-marker ${nodeEnabledMarker}
+  '';
+  stopTerminalNodeSshd = pkgs.writeShellScript "drover-stop-terminal-node-sshd" ''
+    if test -e ${nodeTerminalMarker}; then
+      exec ${pkgs.systemd}/bin/systemctl stop drover-node-sshd.service
+    fi
+  '';
+  stopDarwinTerminalNodeSshd = pkgs.writeShellScript "drover-stop-darwin-terminal-node-sshd" ''
+    if test -e ${nodeTerminalMarker}; then
+      /bin/launchctl kill TERM system/network.gisi.drover.node-sshd 2>/dev/null || true
+    fi
   '';
 
   coordinatorConfig = pkgs.writeText "drover-coordinator.json" (
@@ -156,7 +178,7 @@ let
     export DROVER_CLIENT_TOKEN="$(${pkgs.coreutils}/bin/cat ${config.sops.secrets.drover-client-token.path})"
     exec ${drover}/bin/drover --config ${coordinatorConfig} coordinator
   '';
-  healthScript = pkgs.writeShellScript "drover-coordinator-health" ''
+  readinessScript = pkgs.writeShellScript "drover-coordinator-readiness" ''
     set -eu
     export DROVER_CLIENT_TOKEN="$(${pkgs.coreutils}/bin/cat ${config.sops.secrets.drover-client-token.path})"
     exec ${python}/bin/python - <<'PY'
@@ -175,6 +197,10 @@ let
                 raise
             time.sleep(1)
     PY
+  '';
+
+  startLocalNodeScript = pkgs.writeShellScript "drover-start-local-node-after-readiness" ''
+    exec ${pkgs.systemd}/bin/systemctl start --no-block drover-node.service
   '';
 
   tunnelKeys = pkgs.writeText "drover-tunnel-authorized-keys" ''
@@ -237,6 +263,7 @@ let
       description = "Drover ${host} loopback SSH endpoint";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
+      unitConfig.ConditionPathExists = "!${nodeTerminalMarker}";
       serviceConfig = {
         Type = "simple";
         ExecStartPre = "${pkgs.openssh}/bin/sshd -t -f ${nodeSshdConfig}";
@@ -255,17 +282,16 @@ let
         "drover-node-sshd.service"
       ]
       ++ lib.optionals coordinator [
-        "drover-coordinator-health.service"
+        "drover-coordinator.service"
         "drover-coordinator-sshd.service"
       ];
       wants = [ "network-online.target" ];
       requires = [
         "drover-node-sshd.service"
       ]
-      ++ lib.optionals coordinator [
-        "drover-coordinator-health.service"
-        "drover-coordinator-sshd.service"
-      ];
+      ++ lib.optionals coordinator [ "drover-coordinator-sshd.service" ];
+      bindsTo = lib.optionals coordinator [ "drover-coordinator.service" ];
+      partOf = lib.optionals coordinator [ "drover-coordinator.service" ];
       path = runtimePackages;
       environment = {
         HOME = nodeHome;
@@ -279,6 +305,7 @@ let
         Group = nodeGroup;
         WorkingDirectory = nodeHome;
         ExecStart = nodeWrapper;
+        ExecStopPost = "+${stopTerminalNodeSshd}";
         Restart = "on-failure";
         RestartSec = "5s";
         TimeoutStopSec = "25s";
@@ -311,6 +338,9 @@ let
 
     system.activationScripts.preActivation.text = lib.mkAfter ''
       install -d -o ${nodeUser} -g ${nodeGroup} -m 0700 ${nodeHome} ${nodeState} ${nodeHome}/.ssh ${piProfile}
+      if test ! -e ${nodeTerminalMarker}; then
+        install -o ${nodeUser} -g ${nodeGroup} -m 0600 /dev/null ${nodeEnabledMarker}
+      fi
       ln -sfn ${piSettings} ${piProfile}/settings.json
       ln -sfn ${tunnelConfig} ${nodeHome}/.ssh/coordinator.conf
       ln -sfn ${coordinatorKnownHosts} ${nodeHome}/.ssh/coordinator_known_hosts
@@ -329,12 +359,20 @@ let
         "-f"
         "${nodeSshdConfig}"
       ];
-      RunAtLoad = true;
-      KeepAlive = true;
+      KeepAlive.PathState.${nodeEnabledMarker} = true;
       ThrottleInterval = 5;
       ExitTimeOut = 15;
       StandardOutPath = "/var/log/drover-node-sshd.log";
       StandardErrorPath = "/var/log/drover-node-sshd.log";
+    };
+
+    launchd.daemons.drover-node-terminal-cleanup.serviceConfig = {
+      Label = "network.gisi.drover.node-terminal-cleanup";
+      ProgramArguments = [ "${stopDarwinTerminalNodeSshd}" ];
+      WatchPaths = [ nodeTerminalMarker ];
+      ProcessType = "Background";
+      StandardOutPath = "/var/log/drover-node.log";
+      StandardErrorPath = "/var/log/drover-node.log";
     };
 
     launchd.daemons.drover-node.serviceConfig = {
@@ -344,7 +382,9 @@ let
       GroupName = nodeGroup;
       WorkingDirectory = nodeHome;
       RunAtLoad = true;
-      KeepAlive = true;
+      # launchd's SuccessfulExit condition is the inverse of its name here:
+      # false keeps the job alive only after a non-zero or signalled exit.
+      KeepAlive.SuccessfulExit = false;
       ThrottleInterval = 5;
       ExitTimeOut = 25;
       ProcessType = "Background";
@@ -435,8 +475,13 @@ let
             Group = "drover-coordinator";
             WorkingDirectory = "/var/lib/drover-coordinator";
             ExecStart = coordinatorWrapper;
+            ExecStartPost = [
+              readinessScript
+              "+${startLocalNodeScript}"
+            ];
             Restart = "on-failure";
             RestartSec = "5s";
+            TimeoutStartSec = "95s";
             TimeoutStopSec = "20s";
             KillMode = "mixed";
             UMask = "0077";
@@ -445,22 +490,6 @@ let
             ProtectSystem = "strict";
             ProtectHome = true;
             ReadWritePaths = [ "/var/lib/drover-coordinator" ];
-          };
-        };
-
-        systemd.services.drover-coordinator-health = {
-          description = "Authenticate and verify the Drover coordinator control plane";
-          wantedBy = [ "multi-user.target" ];
-          after = [ "drover-coordinator.service" ];
-          requires = [ "drover-coordinator.service" ];
-          before = [ "drover-node.service" ];
-          serviceConfig = {
-            Type = "oneshot";
-            User = "drover-coordinator";
-            Group = "drover-coordinator";
-            ExecStart = healthScript;
-            RemainAfterExit = true;
-            TimeoutStartSec = "35s";
           };
         };
 
