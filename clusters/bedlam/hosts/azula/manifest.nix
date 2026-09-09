@@ -290,6 +290,11 @@ rec {
     {
       config.fort.host = { inherit roles apps aspects; };
 
+      # Drover MVP rendezvous validation: independent OpenSSH and TLS/control
+      # listeners. Node SSH and reverse routes stay loopback-only; no route
+      # range is opened. Service lifecycle remains manually managed for now.
+      config.networking.firewall.allowedTCPPorts = [ 9840 9841 ];
+
       # Hard-hang mitigation (2026-09-04). Three whole-host lock-ups in one
       # evening, each showing ~27 GB free, load < 1, temps < 60 °C on the
       # last Prometheus scrape before going dark — no resource ramp, just
