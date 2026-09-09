@@ -217,6 +217,11 @@ rec {
       ];
     }
     "gitops"
+    {
+      name = "drover";
+      expectedPort = 24001;
+      tiamatTokenFile = ../../../../aspects/dev-sandbox/tiamat-router-token.sops;
+    }
   ];
 
   module =

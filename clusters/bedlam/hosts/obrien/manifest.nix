@@ -14,6 +14,11 @@ rec {
   aspects = [
     "observable"
     "ci-runner"
+    {
+      name = "drover";
+      expectedPort = 24002;
+      tiamatTokenFile = ./golemd-tiamat-router-token.sops;
+    }
   ];
 
   module =

@@ -38,6 +38,12 @@ rec {
     "observable"
     "agent-debug"
     "couchdb"
+    {
+      name = "drover";
+      coordinator = true;
+      expectedPort = 24000;
+      tiamatTokenFile = ../../../../aspects/dev-sandbox/tiamat-router-token.sops;
+    }
   ];
 
   module =
