@@ -64,6 +64,9 @@ rec {
       # this boundary.
       privateRouterStore = "/nix/store/qz4cczf1hhsk6m4p0lgg3ck3q6a2mz8l-tiamat-router-2bfc122";
       privateRouterRevision = "2bfc122";
+      # The package's public executable is a makeWrapper launcher which execs
+      # this immutable sibling; /proc therefore reports the wrapped path.
+      privateRouterRuntimeExecutable = "${privateRouterStore}/bin/.tiamat-router-wrapped";
       privateProviderId = "llama-frankenstein";
       privateProviderBaseUrl = "https://llama.gisi.network/v1";
       privateProviderAddress = "100.101.0.18";
@@ -1122,7 +1125,7 @@ rec {
 
           pid="$(${pkgs.systemd}/bin/systemctl show --property=MainPID --value overlay-tiamat-router.service)"
           if test "$pid" != 0; then
-            test "$(${pkgs.coreutils}/bin/readlink -f "/proc/$pid/exe")" = "$expected"
+            test "$(${pkgs.coreutils}/bin/readlink -f "/proc/$pid/exe")" = '${privateRouterRuntimeExecutable}'
           fi
 
           db=/var/lib/tiamat-router/tiamat.db
