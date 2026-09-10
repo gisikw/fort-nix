@@ -620,7 +620,9 @@ lib.mkMerge [
       sopsFile = secretFor "${host}-host";
       format = "binary";
       owner = "root";
-      group = "root";
+      # Darwin's root account belongs to wheel; there is no root group for
+      # sops-install-secrets to resolve during activation.
+      group = if isDarwin then "wheel" else "root";
       mode = "0400";
     };
     sops.secrets.drover-node-tunnel-key = {
