@@ -67,6 +67,8 @@ lib.mkMerge ([
       mkdir -p /etc/resolver
       echo "nameserver 100.100.100.100" > /etc/resolver/fort.${domain}
       echo "nameserver 100.100.100.100" > /etc/resolver/${domain}
+      /usr/bin/dscacheutil -flushcache
+      /usr/bin/killall -HUP mDNSResponder 2>/dev/null || true
     '';
   }
 
