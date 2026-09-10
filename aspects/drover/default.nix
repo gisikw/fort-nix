@@ -114,7 +114,8 @@ let
       IdentitiesOnly yes
       StrictHostKeyChecking yes
   '';
-  nodeAuthorizedKeys = pkgs.writeText "drover-node-authorized-keys" ''
+  nodeKeysPath = "${authorizedKeysDir}/node-authorized-keys";
+  nodeAuthorizedKeysText = ''
     ${publicKeys.agentsClient}
   '';
   nodeSshdConfig = pkgs.writeText "drover-${host}-sshd.conf" ''
@@ -122,7 +123,7 @@ let
     Port ${toString localSshPort}
     PidFile /var/run/drover-node-sshd.pid
     HostKey ${config.sops.secrets.drover-node-host-key.path}
-    AuthorizedKeysFile ${nodeAuthorizedKeys}
+    AuthorizedKeysFile ${nodeKeysPath}
     AllowUsers ${nodeUser}
     AuthenticationMethods publickey
     PasswordAuthentication no
@@ -203,12 +204,20 @@ let
     exec ${pkgs.systemd}/bin/systemctl start --no-block drover-node.service
   '';
 
-  tunnelKeys = pkgs.writeText "drover-tunnel-authorized-keys" ''
+  # OpenSSH StrictModes resolves AuthorizedKeysFile with realpath and rejects
+  # any parent directory that is group-writable, which /nix/store (root:nixbld
+  # 1775) always is. These files hold only public keys, so they are materialized
+  # as real root-owned 0444 copies under /etc, which NixOS rewrites on every
+  # activation (not just first boot) and sshd re-reads on every authentication.
+  authorizedKeysDir = "/etc/drover";
+  tunnelKeysPath = "${authorizedKeysDir}/tunnel-authorized-keys";
+  jumpKeysPath = "${authorizedKeysDir}/jump-authorized-keys";
+  tunnelKeysText = ''
     restrict,port-forwarding,permitlisten="127.0.0.1:24000" ${publicKeys.azulaTunnel}
     restrict,port-forwarding,permitlisten="127.0.0.1:24001" ${publicKeys.ratchedTunnel}
     restrict,port-forwarding,permitlisten="127.0.0.1:24002" ${publicKeys.obrienTunnel}
   '';
-  jumpKeys = pkgs.writeText "drover-jump-authorized-keys" ''
+  jumpKeysText = ''
     restrict,port-forwarding,permitopen="127.0.0.1:24000",permitopen="127.0.0.1:24001",permitopen="127.0.0.1:24002" ${publicKeys.agentsClient}
   '';
   coordinatorSshdConfig = pkgs.writeText "drover-coordinator-sshd.conf" ''
@@ -230,15 +239,22 @@ let
     LogLevel VERBOSE
     MaxSessions 0
     Match User drover-tunnel
-      AuthorizedKeysFile ${tunnelKeys}
+      AuthorizedKeysFile ${tunnelKeysPath}
       AllowTcpForwarding remote
     Match User drover-jump
-      AuthorizedKeysFile ${jumpKeys}
+      AuthorizedKeysFile ${jumpKeysPath}
       AllowTcpForwarding local
   '';
 
   secretFor = name: ./secrets + "/${name}.sops";
   linuxNode = {
+    environment.etc."drover/node-authorized-keys" = {
+      text = nodeAuthorizedKeysText;
+      user = "root";
+      group = "root";
+      mode = "0444";
+    };
+
     users.groups.${nodeGroup} = { };
     users.users.${nodeUser} = {
       isSystemUser = true;
@@ -264,6 +280,7 @@ let
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       unitConfig.ConditionPathExists = "!${nodeTerminalMarker}";
+      restartTriggers = [ nodeAuthorizedKeysText ];
       serviceConfig = {
         Type = "simple";
         ExecStartPre = "${pkgs.openssh}/bin/sshd -t -f ${nodeSshdConfig}";
@@ -343,6 +360,8 @@ let
     # aborts activation on a fresh host with `install: invalid user
     # 'drover-node'` before the isolated account has been created.
     system.activationScripts.postActivation.text = lib.mkAfter ''
+      install -d -o root -g wheel -m 0755 ${authorizedKeysDir}
+      install -o root -g wheel -m 0444 ${pkgs.writeText "drover-node-authorized-keys" nodeAuthorizedKeysText} ${nodeKeysPath}
       install -d -o ${nodeUser} -g ${nodeGroup} -m 0700 ${nodeHome} ${nodeState} ${nodeHome}/.ssh ${piProfile}
       if test ! -e ${nodeTerminalMarker}; then
         install -o ${nodeUser} -g ${nodeGroup} -m 0600 /dev/null ${nodeEnabledMarker}
@@ -461,6 +480,21 @@ let
           mode = "0400";
         };
 
+        environment.etc = {
+          "drover/tunnel-authorized-keys" = {
+            text = tunnelKeysText;
+            user = "root";
+            group = "root";
+            mode = "0444";
+          };
+          "drover/jump-authorized-keys" = {
+            text = jumpKeysText;
+            user = "root";
+            group = "root";
+            mode = "0444";
+          };
+        };
+
         systemd.tmpfiles.rules = [
           "d /var/lib/drover-coordinator 0700 drover-coordinator drover-coordinator -"
           "d /var/lib/drover-coordinator/registry 0700 drover-coordinator drover-coordinator -"
@@ -503,6 +537,10 @@ let
           description = "Drover constrained reverse-tunnel and jump SSH endpoint";
           wantedBy = [ "multi-user.target" ];
           after = [ "network.target" ];
+          restartTriggers = [
+            tunnelKeysText
+            jumpKeysText
+          ];
           serviceConfig = {
             Type = "simple";
             ExecStartPre = "${pkgs.openssh}/bin/sshd -t -f ${coordinatorSshdConfig}";
@@ -559,6 +597,15 @@ lib.mkMerge [
           && familiarFlake.sourceInfo.rev == familiarRevision
           && droverFlake.sourceInfo.rev == droverRevision;
         message = "drover: Pi settings and Familiar/Drover assets must remain immutable and pinned";
+      }
+      {
+        assertion =
+          !lib.any (lib.hasPrefix "/nix/store") [
+            nodeKeysPath
+            tunnelKeysPath
+            jumpKeysPath
+          ];
+        message = "drover: authorized_keys files must live outside /nix/store so sshd StrictModes accepts them";
       }
     ];
 
