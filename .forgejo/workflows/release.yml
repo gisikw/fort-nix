@@ -136,6 +136,35 @@ jobs:
           sleep 2
           curl --fail --silent --show-error --resolve apple.gisi.network:443:127.0.0.1 \
             https://apple.gisi.network/ -o /dev/null
+
+          # A Darwin worker must use the scoped mesh resolver for VPN-only Fort
+          # services. HTTP 401 is Drover's expected unauthenticated response and
+          # proves DNS, routing, and TLS without exposing either bearer token.
+          drover_status=
+          for _ in $(seq 1 30); do
+            drover_status=$(curl --silent --show-error --output /dev/null \
+              --write-out '%{http_code}' https://drover.gisi.network/v1/machines || true)
+            [ "$drover_status" = 401 ] && break
+            sleep 1
+          done
+          if [ "$drover_status" != 401 ]; then
+            echo "O'Brien cannot reach the authenticated Drover endpoint (HTTP $drover_status)" >&2
+            dscacheutil -q host -a name drover.gisi.network >&2 || true
+            exit 1
+          fi
+
+          # Resolver changes do not alter the launchd plist, so explicitly
+          # restart the existing worker and require initial enrollment state.
+          sudo /bin/launchctl kickstart -k system/network.gisi.drover.node
+          for _ in $(seq 1 30); do
+            [ -s /var/lib/drover-node/state/identity.json ] && break
+            sleep 1
+          done
+          if [ ! -s /var/lib/drover-node/state/identity.json ]; then
+            sudo tail -80 /var/log/drover-node.log >&2 || true
+            exit 1
+          fi
+
           sudo mkdir -p /var/lib/fort-gitops
           git rev-parse --short HEAD | sudo tee /var/lib/fort-gitops/deployed-commit >/dev/null
 
