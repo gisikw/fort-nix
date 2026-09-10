@@ -58,13 +58,15 @@ lib.mkMerge ([
   {
     services.tailscale.enable = true;
 
-    # Route fort.gisi.network DNS queries through MagicDNS.
-    # macOS tailscale advertises the domain as a search domain but doesn't
-    # configure a resolver for it, so queries fall through to LAN DNS which
-    # returns the public beacon IP instead of tailscale IPs.
+    # Route both mesh host names (fort.gisi.network) and Fort service names
+    # (gisi.network) through MagicDNS. macOS tailscale advertises the mesh
+    # search domain but does not install scoped resolvers for either zone, so
+    # service names otherwise fall through to public DNS. Headscale forwards
+    # names without an internal extra record to its configured public resolver.
     system.activationScripts.preActivation.text = lib.mkAfter ''
       mkdir -p /etc/resolver
       echo "nameserver 100.100.100.100" > /etc/resolver/fort.${domain}
+      echo "nameserver 100.100.100.100" > /etc/resolver/${domain}
     '';
   }
 
