@@ -336,7 +336,13 @@ let
       isHidden = true;
     };
 
-    system.activationScripts.preActivation.text = lib.mkAfter ''
+    # nix-darwin creates groups and users *after* preActivation (see
+    # nix-darwin modules/system/activation-scripts.nix: preActivation, then
+    # checks, extraActivation, groups, users, ..., postActivation), so any
+    # ownership-dependent setup must run in postActivation. Running it earlier
+    # aborts activation on a fresh host with `install: invalid user
+    # 'drover-node'` before the isolated account has been created.
+    system.activationScripts.postActivation.text = lib.mkAfter ''
       install -d -o ${nodeUser} -g ${nodeGroup} -m 0700 ${nodeHome} ${nodeState} ${nodeHome}/.ssh ${piProfile}
       if test ! -e ${nodeTerminalMarker}; then
         install -o ${nodeUser} -g ${nodeGroup} -m 0600 /dev/null ${nodeEnabledMarker}
