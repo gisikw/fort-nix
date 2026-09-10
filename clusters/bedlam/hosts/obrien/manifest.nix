@@ -16,6 +16,7 @@ rec {
     "ci-runner"
     {
       name = "drover";
+      coordinatorMeshAddress = "100.101.0.19";
       expectedPort = 24002;
       tiamatTokenFile = ./golemd-tiamat-router-token.sops;
     }

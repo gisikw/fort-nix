@@ -2,6 +2,7 @@
   rootManifest,
   deviceProfileManifest,
   coordinator ? false,
+  coordinatorMeshAddress ? null,
   expectedPort,
   tiamatTokenFile,
   ...
@@ -360,6 +361,17 @@ let
     # aborts activation on a fresh host with `install: invalid user
     # 'drover-node'` before the isolated account has been created.
     system.activationScripts.postActivation.text = lib.mkAfter ''
+      # Nix-provided Python/aiohttp does not honor macOS scoped resolver files:
+      # dscacheutil and curl resolve the Fort extra record through MagicDNS while
+      # this daemon still reaches public DNS. Pin the reviewed coordinator mesh
+      # address in /etc/hosts so HTTPS retains the service name/SNI and the
+      # constrained reverse SSH tunnel remains on the Fort mesh.
+      /usr/bin/sed -i.fort-drover-backup '/[[:space:]]# fort-drover$/d' /etc/hosts
+      /bin/rm -f /etc/hosts.fort-drover-backup
+      printf '%s\t%s\t# fort-drover\n' ${lib.escapeShellArg coordinatorMeshAddress} ${lib.escapeShellArg "drover.${domain}"} >> /etc/hosts
+      /usr/bin/dscacheutil -flushcache
+      /usr/bin/killall -HUP mDNSResponder 2>/dev/null || true
+
       install -d -o root -g wheel -m 0755 ${authorizedKeysDir}
       install -o root -g wheel -m 0444 ${pkgs.writeText "drover-node-authorized-keys" nodeAuthorizedKeysText} ${nodeKeysPath}
       install -d -o ${nodeUser} -g ${nodeGroup} -m 0700 ${nodeHome} ${nodeState} ${nodeHome}/.ssh ${piProfile}
@@ -590,6 +602,10 @@ lib.mkMerge [
           }
           .${host};
         message = "drover: expected port must preserve immutable enrollment-generation ordering";
+      }
+      {
+        assertion = !isDarwin || coordinatorMeshAddress != null;
+        message = "drover: Darwin workers require the reviewed coordinator mesh address";
       }
       {
         assertion =
