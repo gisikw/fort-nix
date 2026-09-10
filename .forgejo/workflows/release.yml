@@ -153,15 +153,23 @@ jobs:
             exit 1
           fi
 
-          # Resolver changes do not alter the launchd plist, so explicitly
-          # restart the existing worker and require initial enrollment state.
+          # Confirm the isolated account sees the same resolver result. Resolver
+          # changes do not alter the launchd plist, so explicitly restart the
+          # existing worker and require initial enrollment state.
+          echo "Drover resolution as admin:"
+          dscacheutil -q host -a name drover.gisi.network
+          echo "Drover resolution as drover-node:"
+          sudo -u drover-node dscacheutil -q host -a name drover.gisi.network
+          printf '\n--- deployment restart %s ---\n' "$(date -u +%FT%TZ)" \
+            | sudo tee -a /var/log/drover-node.log >/dev/null
           sudo /bin/launchctl kickstart -k system/network.gisi.drover.node
           for _ in $(seq 1 30); do
-            [ -s /var/lib/drover-node/state/identity.json ] && break
+            sudo test -s /var/lib/drover-node/state/identity.json && break
             sleep 1
           done
-          if [ ! -s /var/lib/drover-node/state/identity.json ]; then
-            sudo tail -80 /var/log/drover-node.log >&2 || true
+          if ! sudo test -s /var/lib/drover-node/state/identity.json; then
+            sudo /bin/launchctl print system/network.gisi.drover.node >&2 || true
+            sudo tail -100 /var/log/drover-node.log >&2 || true
             exit 1
           fi
 
