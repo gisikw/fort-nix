@@ -68,8 +68,8 @@ rec {
       # artifact and one Fort-owned mesh address. A new router build or mesh
       # address requires another reviewed Fort change; DNS is not authority for
       # this boundary.
-      privateRouterStore = "/nix/store/qz4cczf1hhsk6m4p0lgg3ck3q6a2mz8l-tiamat-router-2bfc122";
-      privateRouterRevision = "2bfc122";
+      privateRouterStore = "/nix/store/mhwsm4cngl30ng37vspahs92xd5v0cd4-tiamat-router-eeee5f4";
+      privateRouterRevision = "eeee5f4";
       # The package's public executable is a makeWrapper launcher which execs
       # this immutable sibling; /proc therefore reports the wrapped path.
       privateRouterRuntimeExecutable = "${privateRouterStore}/bin/.tiamat-router-wrapped";

@@ -24,7 +24,7 @@ and ordered before, `overlay-tiamat-router.service`.
 
 Before touching the database, it requires the overlay unit's configured binary
 (and any currently running binary) to be the reviewed immutable store artifact
-whose `version` is `2bfc122`. Because the classification unit is `PartOf=` the
+whose `version` is `eeee5f4`. Because the classification unit is `PartOf=` the
 overlay service, every overlay stop/restart stops it and the next overlay start
 must pass the binary and database gates again. An old or different router
 therefore cannot start with the persisted local claim.
