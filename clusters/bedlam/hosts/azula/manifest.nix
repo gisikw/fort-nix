@@ -64,15 +64,11 @@ rec {
         kernel = config.boot.kernelPackages.kernel;
       };
       domain = config.fort.cluster.settings.domain;
-      # `/private` locality is deliberately pinned to the one reviewed router
-      # artifact and one Fort-owned mesh address. A new router build or mesh
-      # address requires another reviewed Fort change; DNS is not authority for
-      # this boundary.
-      privateRouterStore = "/nix/store/mhwsm4cngl30ng37vspahs92xd5v0cd4-tiamat-router-eeee5f4";
-      privateRouterRevision = "eeee5f4";
-      # The package's public executable is a makeWrapper launcher which execs
-      # this immutable sibling; /proc therefore reports the wrapped path.
-      privateRouterRuntimeExecutable = "${privateRouterStore}/bin/.tiamat-router-wrapped";
+      # `/private` locality is deliberately pinned to one Fort-owned mesh
+      # address. The independently deployed overlay remains the code-authority
+      # path; the reconciliation service validates its generated immutable
+      # artifact structurally instead of coupling Azula to one app revision.
+      # DNS is not authority for this boundary.
       privateProviderId = "llama-frankenstein";
       privateProviderBaseUrl = "https://llama.gisi.network/v1";
       privateProviderAddress = "100.101.0.18";
@@ -1094,9 +1090,10 @@ rec {
 
       # This reconciliation runs as the router account and never selects,
       # decrypts, or rewrites the credential column. PartOf makes every overlay
-      # manager stop/restart re-run the exact binary gate: an older or merely
-      # different router artifact leaves this unit failed and the required
-      # overlay service stopped rather than serving a persisted local claim.
+      # manager stop/restart re-run the immutable-artifact gate. The overlay
+      # registry and its CI pipeline choose the revision independently; this
+      # gate proves that the generated unit and any systemd-owned process agree
+      # on that revision before allowing a persisted local claim.
       config.systemd.services.tiamat-router-private-locality = {
         description = "Classify the reviewed llama provider as Fort-local";
         wantedBy = [ "multi-user.target" ];
@@ -1123,15 +1120,23 @@ rec {
         ];
         script = ''
           set -euo pipefail
-          expected=${privateRouterStore}/bin/tiamat-router
           unit_exec="$(${pkgs.systemd}/bin/systemctl show --property=ExecStart --value overlay-tiamat-router.service)"
           configured="$(printf '%s\n' "$unit_exec" | ${pkgs.gnused}/bin/sed -n 's/^{ path=\([^ ;]*\) .*/\1/p')"
-          test "$configured" = "$expected"
-          test "$($expected version)" = '${privateRouterRevision}'
+          if [[ ! "$configured" =~ ^/nix/store/[0-9a-z]{32}-tiamat-router-([0-9a-f]{7,40})/bin/tiamat-router$ ]]; then
+            echo "locality activation: invalid overlay executable" >&2
+            exit 1
+          fi
+          revision="''${BASH_REMATCH[1]}"
+          runtime="''${configured%/tiamat-router}/.tiamat-router-wrapped"
+          test -x "$configured"
+          test -x "$runtime"
+          test "$(${pkgs.coreutils}/bin/stat -c '%u:%g' "$configured")" = 0:0
+          test "$(${pkgs.coreutils}/bin/stat -c '%u:%g' "$runtime")" = 0:0
+          test "$("$configured" version)" = "$revision"
 
           pid="$(${pkgs.systemd}/bin/systemctl show --property=MainPID --value overlay-tiamat-router.service)"
           if test "$pid" != 0; then
-            test "$(${pkgs.coreutils}/bin/readlink -f "/proc/$pid/exe")" = '${privateRouterRuntimeExecutable}'
+            test "$(${pkgs.coreutils}/bin/readlink -f "/proc/$pid/exe")" = "$runtime"
           fi
 
           db=/var/lib/tiamat-router/tiamat.db

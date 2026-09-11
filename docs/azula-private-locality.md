@@ -23,11 +23,17 @@ address.
 and ordered before, `overlay-tiamat-router.service`.
 
 Before touching the database, it requires the overlay unit's configured binary
-(and any currently running binary) to be the reviewed immutable store artifact
-whose `version` is `eeee5f4`. Because the classification unit is `PartOf=` the
-overlay service, every overlay stop/restart stops it and the next overlay start
-must pass the binary and database gates again. An old or different router
-therefore cannot start with the persisted local claim.
+to be a root-owned executable in an immutable Nix store path of the form
+`<hash>-tiamat-router-<revision>`, requires the binary's reported version to
+match that path revision, and requires any systemd-owned running process to be
+the wrapped executable from that same artifact. The overlay registry and its
+CI pipeline remain revision authority; Azula does not couple independent app
+deployment to a hard-coded revision.
+
+Because the classification unit is `PartOf=` the overlay service, every overlay
+stop/restart stops it and the next overlay start must pass the immutable-artifact
+and database gates again. An invalid or mismatched artifact therefore cannot
+start with the persisted local claim.
 
 The SQL takes a SQLite `BEGIN IMMEDIATE` lock with a five-second busy timeout.
 It accepts only either:
