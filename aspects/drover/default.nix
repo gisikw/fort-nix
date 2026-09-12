@@ -78,6 +78,30 @@ let
   ]
   ++ lib.optionals (!isDarwin) [ pkgs.util-linux ];
   runtimePath = lib.makeBinPath runtimePackages;
+  # Herdr starts every terminal with its configured default shell. Interactive
+  # shell startup re-derives PATH on both fleet platforms, so the service's PATH
+  # alone is not an agent-pane runtime contract. Keep one immutable node-owned
+  # environment and source it last from the dedicated Herdr shell rcfile.
+  droverEnv = pkgs.writeText "drover-env" ''
+    export PATH=${
+      lib.escapeShellArg (runtimePath + lib.optionalString isDarwin ":/usr/bin:/bin:/usr/sbin:/sbin")
+    }
+  '';
+  nodeShellRc = pkgs.writeText "drover-agent-shellrc" ''
+    if test -r /etc/bashrc; then
+      . /etc/bashrc
+    elif test -r /etc/bash.bashrc; then
+      . /etc/bash.bashrc
+    fi
+    . ${droverEnv}
+  '';
+  nodeAgentShell = pkgs.writeShellScript "drover-agent-shell" ''
+    exec ${pkgs.bashInteractive}/bin/bash --rcfile ${nodeShellRc} "$@"
+  '';
+  nodeHerdrConfig = pkgs.writeText "drover-herdr-config.toml" ''
+    [terminal]
+    default_shell = "${nodeAgentShell}"
+  '';
 
   piSettings = pkgs.writeText "drover-pi-settings.json" (
     builtins.toJSON {
@@ -270,7 +294,10 @@ let
       "d ${nodeHome} 0700 ${nodeUser} ${nodeGroup} -"
       "d ${nodeState} 0700 ${nodeUser} ${nodeGroup} -"
       "d ${nodeHome}/.ssh 0700 ${nodeUser} ${nodeGroup} -"
+      "d ${nodeHome}/.config 0700 ${nodeUser} ${nodeGroup} -"
+      "d ${nodeHome}/.config/herdr 0700 ${nodeUser} ${nodeGroup} -"
       "d ${piProfile} 0700 ${nodeUser} ${nodeGroup} -"
+      "L+ ${nodeHome}/.config/herdr/config.toml - - - - ${nodeHerdrConfig}"
       "L+ ${piProfile}/settings.json - - - - ${piSettings}"
       "L+ ${nodeHome}/.ssh/coordinator.conf - - - - ${tunnelConfig}"
       "L+ ${nodeHome}/.ssh/coordinator_known_hosts - - - - ${coordinatorKnownHosts}"
@@ -311,6 +338,11 @@ let
       bindsTo = lib.optionals coordinator [ "drover-coordinator.service" ];
       partOf = lib.optionals coordinator [ "drover-coordinator.service" ];
       path = runtimePackages;
+      restartTriggers = [
+        nodeHerdrConfig
+        nodeAgentShell
+        droverEnv
+      ];
       environment = {
         HOME = nodeHome;
         PI_CODING_AGENT_DIR = piProfile;
@@ -374,14 +406,15 @@ let
 
       install -d -o root -g wheel -m 0755 ${authorizedKeysDir}
       install -o root -g wheel -m 0444 ${pkgs.writeText "drover-node-authorized-keys" nodeAuthorizedKeysText} ${nodeKeysPath}
-      install -d -o ${nodeUser} -g ${nodeGroup} -m 0700 ${nodeHome} ${nodeState} ${nodeHome}/.ssh ${piProfile}
+      install -d -o ${nodeUser} -g ${nodeGroup} -m 0700 ${nodeHome} ${nodeState} ${nodeHome}/.ssh ${nodeHome}/.config ${nodeHome}/.config/herdr ${piProfile}
       if test ! -e ${nodeTerminalMarker}; then
         install -o ${nodeUser} -g ${nodeGroup} -m 0600 /dev/null ${nodeEnabledMarker}
       fi
+      ln -sfn ${nodeHerdrConfig} ${nodeHome}/.config/herdr/config.toml
       ln -sfn ${piSettings} ${piProfile}/settings.json
       ln -sfn ${tunnelConfig} ${nodeHome}/.ssh/coordinator.conf
       ln -sfn ${coordinatorKnownHosts} ${nodeHome}/.ssh/coordinator_known_hosts
-      chown -h ${nodeUser}:${nodeGroup} ${piProfile}/settings.json ${nodeHome}/.ssh/coordinator.conf ${nodeHome}/.ssh/coordinator_known_hosts
+      chown -h ${nodeUser}:${nodeGroup} ${nodeHome}/.config/herdr/config.toml ${piProfile}/settings.json ${nodeHome}/.ssh/coordinator.conf ${nodeHome}/.ssh/coordinator_known_hosts
       touch /var/log/drover-node.log /var/log/drover-node-sshd.log
       chown ${nodeUser}:${nodeGroup} /var/log/drover-node.log /var/log/drover-node-sshd.log
       chmod 0640 /var/log/drover-node.log /var/log/drover-node-sshd.log

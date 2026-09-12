@@ -22,10 +22,15 @@ listens only on `127.0.0.1:22222`.
 Immutable inputs are Drover
 `0a430be873d1eb7e0929478ef11ba5518f482642`, its lock-pinned Herdr 0.9.0, and
 Familiar `0ba216f41e4f7c1b3f5dc6efcba59281034cd7f7`. The latter supplies its
-reviewed patched Pi and Tiamat extension source. Every node receives a
-Nix-realized PATH containing Drover, Herdr, Pi, Git, Python, rg, fd, OpenSSH,
-bash, core utilities, find/grep/sed/awk, tar/gzip, curl and jq before launch.
-There is no runtime Nix evaluation or mutable checkout dependency.
+reviewed patched Pi and Tiamat extension source. Every node receives one
+Nix-realized runtime containing Drover, Herdr, Pi, Git, Python, rg, fd, OpenSSH,
+bash, core utilities, find/grep/sed/awk, tar/gzip, curl
+and jq. Herdr's node-owned `terminal.default_shell` sources that immutable
+Drover environment after system interactive-shell startup, so every agent pane
+receives the same canonical runtime even when `/etc/profile` re-derives `PATH`.
+This is node provisioning, not a Familiar per-job environment or a project
+`nix develop`; there is no runtime Nix evaluation or mutable checkout
+dependency.
 
 ## Units and paths
 
@@ -43,7 +48,11 @@ file preserves the coordinator-issued token and never-reused port across
 restarts.
 
 Each worker owns only the named Herdr namespace `drover`, at
-`/var/lib/drover-node/.config/herdr/sessions/drover/herdr.sock`. Its dedicated Pi
+`/var/lib/drover-node/.config/herdr/sessions/drover/herdr.sock`. The declarative
+`/var/lib/drover-node/.config/herdr/config.toml` selects a dedicated immutable
+shell wrapper; its rcfile sources system shell defaults and then the node-owned
+Drover environment, making the reviewed Pi executable authoritative in every
+new pane. It does not source mutable project or user rcfiles. The dedicated Pi
 profile is `/var/lib/drover-node/pi`; `settings.json` is a declarative store
 symlink that enables only Familiar's reviewed Tiamat extension and sets
 `defaultProjectTrust` to `never`. Its environment names
