@@ -29,7 +29,7 @@ let
   piProfile = "${nodeHome}/pi";
 
   droverRevision = "0a430be873d1eb7e0929478ef11ba5518f482642";
-  familiarRevision = "0ba216f41e4f7c1b3f5dc6efcba59281034cd7f7";
+  familiarRevision = "17a68af9a8ef04baecb75ba414019f5e85e722fc";
   droverFlake = builtins.getFlake "github:gisikw/drover/${droverRevision}";
   familiarFlake = builtins.getFlake "github:gisikw/familiar/${familiarRevision}";
   system = pkgs.stdenv.hostPlatform.system;
