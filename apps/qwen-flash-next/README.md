@@ -106,7 +106,7 @@ Tiamat Router declares one local provider:
 - OpenAI completions, text/reasoning, 262,144 context, 32,768 max output
 
 Publication follows exact model identity and liveness. The provider starts
-`unavailable/model-not-ready` and becomes available only when `/health`
+`unavailable/upstream` and becomes available only when `/health`
 succeeds and `/v1/models` contains the exact alias; stopping the model
 unpublishes it.
 

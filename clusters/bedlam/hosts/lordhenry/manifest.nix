@@ -194,7 +194,7 @@ rec {
           # exact alias. Availability is discovery, not workload selection.
           availability = {
             state = "unavailable";
-            reason = "model-not-ready";
+            reason = "upstream";
           };
           models = [
             {
@@ -744,7 +744,7 @@ rec {
               (.[0].baseUrl == "http://127.0.0.1:8014/v1") and
               (.[0].wireFormats == ["openai-completions"]) and
               (.[0].availability.state == "unavailable") and
-              (.[0].availability.reason == "model-not-ready") and
+              (.[0].availability.reason == "upstream") and
               (.[0].models | length == 1) and
               (.[0].models[0].id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX") and
               (.[0].models[0].context_window == 262144) and
