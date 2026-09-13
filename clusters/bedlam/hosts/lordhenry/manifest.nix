@@ -12,11 +12,12 @@ rec {
   # /var/lib/{comfyui,open-webui,qmd,sillytavern} and the container volumes
   # stay on disk until someone deliberately reclaims them.
   #
-  # ollama stays: ratched's scoring path calls Ollama on lordhenry (see
-  # clusters/bedlam/hosts/ratched/manifest.nix), and the tiamat ratecard still
-  # prices the ollama/* arm.
+  # Ollama is removed from this dedicated experiment while Flash-Next is
+  # resident. Its infinite-keepalive runners retained about 42 GiB and drove
+  # Flash-Next below the 8 GiB watchdog floor. This intentionally makes the
+  # old ratched scoring endpoint unavailable rather than risking host OOM;
+  # restoring it requires first removing/stopping this ~100 GiB service.
   apps = [
-    "ollama"
     # Exact evidenced 177B IQ4_NL-PROJFIX candidate: pwilkin ROCr/HIP and
     # llama.cpp pins, one ROCm0 slot, 262144 hard context, 16K batch/ubatch,
     # lazy direct PLE, no MTP. This deliberately replaces the process behind

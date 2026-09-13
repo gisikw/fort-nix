@@ -49,7 +49,11 @@ model, while a complete box boots directly into service.
 
 This service replaces the prior Q3 process on port 8014. The previous Q3 shards
 remain a rollback boundary; the two ~100-GiB-class models must not run
-concurrently.
+concurrently. Lordhenry's Ollama app is also deliberately disabled while this
+candidate is resident: its infinite-keepalive runners retained about 42 GiB
+and made the 8 GiB safety posture impossible. This leaves the old ratched
+Ollama scoring route unavailable during the experiment rather than risking a
+host OOM.
 
 ## Safe local shard seeding
 
@@ -153,7 +157,8 @@ sudo /nix/var/nix/profiles/system-<PREVIOUS>-link/bin/switch-to-configuration sw
 sudo systemctl restart qwen-flash-next.service
 ```
 
-Verify the restored Q3 alias and health on port 8014. A reboot is not normally
+Verify the restored Q3 alias and health on port 8014 and the restored Ollama
+endpoint if rolling back the whole experiment. A reboot is not normally
 required; do not change firmware. Preserve the previous generation, old Q3
 shards, retained benchmark directory, and authorized recovery SSH key until
 rollback risk is explicitly closed.
