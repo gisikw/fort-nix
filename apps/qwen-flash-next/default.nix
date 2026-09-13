@@ -406,7 +406,10 @@ let
           (.runtimeSourceHash == "sha256-URmOwL8itq2lwzfkRD4QtRuoAcBRHva2sLJ+vl0wjbE=") and
           (.artifacts.manifestId == "2f152a082cdff9959d5a") and
           (.artifacts.completeMarker == "/var/lib/qwen-flash-next/models/.Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-2f152a082cdff9959d5a.complete") and
-          (.environment.GGML_CUDA_ENABLE_UNIFIED_MEMORY == "1") and
+          # GGML_CUDA_ENABLE_UNIFIED_MEMORY must stay ABSENT, not "0": the engine
+          # gates on getenv() presence, so any value re-enables the corrupting
+          # managed-allocation path. See requiredEnvironment below for evidence.
+          ((.environment | has("GGML_CUDA_ENABLE_UNIFIED_MEMORY")) | not) and
           (.environment.GGML_HIP_ENABLE_UNIFIED_MEMORY == "1") and
           (.serverArgs | index("ROCm0") != null) and
           (.serverArgs | index("--gpu-layers") != null) and
@@ -428,8 +431,38 @@ let
   requiredEnvironment = {
     HSA_OVERRIDE_GFX_VERSION = "11.5.1";
     GGML_HIP_ENABLE_UNIFIED_MEMORY = "1";
-    # Required spelling in this exact engine; HIP-only spelling is ineffective.
-    GGML_CUDA_ENABLE_UNIFIED_MEMORY = "1";
+    # GGML_CUDA_ENABLE_UNIFIED_MEMORY is deliberately NOT set.
+    #
+    # Setting it made this exact stack fast but semantically corrupt: the model
+    # emitted a couple of correct tokens and then collapsed into a flood of '/'
+    # (token 14) with NaN logits -- /completion returned `logprob: null` and a
+    # top-k of the lowest vocabulary ids (0-4), i.e. a degenerate logit vector.
+    # Raw /completion, /v1/chat/completions and tool calls all reproduced it, so
+    # it was never a chat-template or reasoning-parsing problem.
+    #
+    # Direct A/B on lordhenry (2026-09-13), same binary/shards/flags, only this
+    # variable changed, at both 16384 and the production 262144 context:
+    #   present : "The capital of France is Paris.//////////////"
+    #             chat -> finish_reason=length, content "////...", no tool_calls
+    #   ABSENT  : "The capital of France is Paris. The capital of Germany is
+    #             Berlin. The capital of Italy is Rome."
+    #             chat -> finish_reason=stop, content "OK"
+    #             tools -> finish_reason=tool_calls, get_weather{"city":"Paris"}
+    #
+    # Absence is load-bearing and distinct from "0": the engine tests only for
+    # the variable's presence, so GGML_CUDA_ENABLE_UNIFIED_MEMORY=0 still
+    # selects the broken path. Do not "disable" it by setting it to 0.
+    #
+    # The 2 GiB UMA firmware split is unaffected -- weights land in GTT via the
+    # amdgpu.gttsize/ttm kernel params below (gtt_used ~84.5 GB with the full
+    # 262144 KV cache resident), so the qualified memory posture is retained and
+    # no firmware change is required. Cost is a modest throughput reduction
+    # (~30.5 -> ~28.6 tok/s decode on short prompts); the retained deep-context
+    # llama-bench figures were measured under the corrupting variable and need
+    # re-qualification before they are quoted again.
+    #
+    # The HIP-spelled variable above is retained: it was present in both the
+    # broken and the proven-good runs and is not the trigger.
     ENABLE_RETAINED_PM4 = "1";
     DEBUG_HIP_GRAPH_PM4 = "1";
     LLAMA_MMB = "1";
@@ -492,6 +525,14 @@ in
     {
       assertion = port == 8014;
       message = "qwen-flash-next: this replacement candidate intentionally retains private port 8014";
+    }
+    {
+      # Presence alone selects the corrupting managed-allocation path in this
+      # engine, so "0" is NOT a disable. Proven by direct A/B on lordhenry:
+      # with it set the model emits '/' floods with NaN logits; absent it is
+      # coherent and emits tool calls. Keep it absent.
+      assertion = !(requiredEnvironment ? GGML_CUDA_ENABLE_UNIFIED_MEMORY);
+      message = "qwen-flash-next: GGML_CUDA_ENABLE_UNIFIED_MEMORY must remain unset (any value, including \"0\", reintroduces corrupt semantic output)";
     }
   ];
 

@@ -15,7 +15,7 @@ it does **not** claim semantic or tool-use qualification.
 - engine: `pwilkin/llama.cpp@f5daaa3cfa6358e5dd398911ec741813745a5440`
 - loopback `127.0.0.1:8014`, ROCm0, all layers offloaded, flash attention on
 - hard context 262,144; batch and ubatch 16,384; one slot; no context shift
-- F16 K/V, `--load-mode none`, lazy `on-direct`, unified memory
+- F16 K/V, `--load-mode none`, lazy `on-direct`, GTT-backed weights
 - no MTP sidecar and no speculative decoding
 
 The Nix packages are fixed-output, sandboxed builds independent of benchmark
@@ -83,9 +83,28 @@ benchmark directory.
 
 The service requires the current qualified 2 GiB UMA boot
 (`mem_info_vram_total == 2147483648`); Fort does not manage firmware. It sets
-2 GiB UMA/GTT posture through the declared kernel parameters and exports both
-unified-memory spellings, including the engine-required
-`GGML_CUDA_ENABLE_UNIFIED_MEMORY=1`.
+2 GiB UMA/GTT posture through the declared kernel parameters and exports
+`GGML_HIP_ENABLE_UNIFIED_MEMORY=1`.
+
+`GGML_CUDA_ENABLE_UNIFIED_MEMORY` is deliberately **absent**. It was previously
+exported as `=1` and was the sole cause of the malformed-output incident of
+2026-09-13: the server was healthy and fast, but generation collapsed after a
+couple of correct tokens into a flood of `/` (token 14) backed by NaN logits
+(`logprob: null`, top-k of vocabulary ids 0-4). Raw `/completion`,
+`/v1/chat/completions`, and tool calls all reproduced it, so it was never a
+chat-template or reasoning-parsing fault, and the retained container benchmark
+stack reproduced an equivalent collapse. A direct A/B changing only this
+variable, at both 16384 and the production 262144 context, restored coherent
+text and working tool calls.
+
+Absence is load-bearing and is **not** the same as `0`: the engine gates on the
+variable's presence, so `GGML_CUDA_ENABLE_UNIFIED_MEMORY=0` still selects the
+broken path. A Nix assertion and the declaration fixture both enforce absence.
+Weights still reach the GPU through GTT (`gtt_used` ~84.5 GB with the full
+262144 KV cache resident), so the 2 GiB UMA firmware split and memory posture
+are unchanged. The trade is a modest throughput reduction (~30.5 -> ~28.6 tok/s
+decode on short prompts); the retained deep-context llama-bench figures were
+measured under the corrupting variable and must be re-qualified before reuse.
 
 A parent watchdog samples `MemAvailable` every five seconds. If it remains
 below 8 GiB for 15 seconds, it terminates only llama-server and lets the bounded
