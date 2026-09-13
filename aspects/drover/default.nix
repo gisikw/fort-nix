@@ -84,6 +84,14 @@ let
   # wrapper itself, use it as BASH_ENV for noninteractive descendants, and block
   # mutable login profiles from replacing it. Interactive panes may still read
   # system shell defaults, but the immutable node environment is sourced last.
+  #
+  # BASH_ENV alone does not reach every descendant: nixpkgs Bash is built with
+  # SSH_SOURCE_BASHRC, so a noninteractive Bash started inside an SSH session
+  # (SSH_CLIENT/SSH2_CLIENT set) sources ~/.bashrc *instead of* BASH_ENV, and a
+  # nested interactive Bash always prefers ~/.bashrc over the wrapper's
+  # --rcfile. Pi runs its own tool commands as exactly such nested shells, so
+  # the node's ~/.bashrc and ~/.bash_profile are declared store symlinks to the
+  # same rcfile; whichever startup file Bash selects is node-owned.
   droverEnv = pkgs.writeText "drover-env" ''
     export PATH=${
       lib.escapeShellArg (runtimePath + lib.optionalString isDarwin ":/usr/bin:/bin:/usr/sbin:/sbin")
@@ -124,27 +132,58 @@ let
     export PATH=$hostile
     EOF
 
+    # The home the activation actually provisions: startup files are store
+    # symlinks to the node rcfile, while every other dotfile stays hostile.
+    node_home="$TMPDIR/node-home"
+    mkdir -p "$node_home"
+    ln -s ${nodeShellRc} "$node_home/.bashrc"
+    ln -s ${nodeShellRc} "$node_home/.bash_profile"
+    for stale in .profile .bash_login; do
+      cat > "$node_home/$stale" <<EOF
+    export PATH=$hostile
+    EOF
+    done
+
+    # The assertion is *sourced*, never exec'd: running it as its own script
+    # would start a fresh Bash that re-reads BASH_ENV and would therefore mask
+    # exactly the startup-file divergence under test.
     check="$TMPDIR/assert-pi"
     cat > "$check" <<'EOF'
-    #!${pkgs.bashInteractive}/bin/bash
-    test "$(command -v pi)" = ${lib.escapeShellArg "${pi}/bin/pi"}
+    if test "$(command -v pi)" != ${lib.escapeShellArg "${pi}/bin/pi"}; then exit 1; fi
     case "$PATH" in
       ${lib.escapeShellArg runtimePath}|${lib.escapeShellArg runtimePath}:*) ;;
       *) exit 1 ;;
     esac
     EOF
-    chmod +x "$check"
+    assert=". $check"
 
     # sshd's exact remote-command shape, explicit login preflight, Herdr's
     # interactive shell, and the configured rcfile must all select the same Pi.
-    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -c "$check"
-    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -lc "$check"
-    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -ic "$check"
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -c "$assert"
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -lc "$assert"
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -ic "$assert"
     env -i HOME="$test_home" PATH="$hostile" \
-      ${pkgs.bashInteractive}/bin/bash --noprofile --rcfile ${nodeShellRc} -ic "$check"
+      ${pkgs.bashInteractive}/bin/bash --noprofile --rcfile ${nodeShellRc} -ic "$assert"
     # BASH_ENV keeps a nested noninteractive/login Bash on the same contract.
     env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -c \
-      "${pkgs.bashInteractive}/bin/bash -lc '$check'"
+      "${pkgs.bashInteractive}/bin/bash -lc '$assert'"
+
+    # Inside a real session sshd exports SSH_CLIENT, which flips nixpkgs Bash
+    # to SSH_SOURCE_BASHRC and makes ~/.bashrc outrank BASH_ENV; nested
+    # interactive shells prefer ~/.bashrc unconditionally. Against the
+    # provisioned home every nesting depth and mode still selects the same Pi.
+    for nested in \
+      "${pkgs.bashInteractive}/bin/bash -c '$assert'" \
+      "${pkgs.bashInteractive}/bin/bash -lc '$assert'" \
+      "${pkgs.bashInteractive}/bin/bash -ic '$assert'" \
+      "${pkgs.bashInteractive}/bin/sh -c '$assert'" \
+      "${pkgs.bashInteractive}/bin/bash -c \"${pkgs.bashInteractive}/bin/bash -c '$assert'\""; do
+      env -i HOME="$node_home" PATH="$hostile" SSH_CLIENT="198.51.100.7 1 22" \
+        ${nodeAgentShell} -c "$nested"
+      env -i HOME="$node_home" PATH="$hostile" ${nodeAgentShell} -c "$nested"
+    done
+    env -i HOME="$node_home" PATH="$hostile" SSH_CLIENT="198.51.100.7 1 22" \
+      ${nodeAgentShell} -c "$assert"
     touch "$out"
   '';
   nodeHerdrConfig = pkgs.writeText "drover-herdr-config.toml" ''
@@ -350,6 +389,8 @@ let
       "d ${nodeHome}/.config 0700 ${nodeUser} ${nodeGroup} -"
       "d ${nodeHome}/.config/herdr 0700 ${nodeUser} ${nodeGroup} -"
       "d ${piProfile} 0700 ${nodeUser} ${nodeGroup} -"
+      "L+ ${nodeHome}/.bashrc - - - - ${nodeShellRc}"
+      "L+ ${nodeHome}/.bash_profile - - - - ${nodeShellRc}"
       "L+ ${nodeHome}/.config/herdr/config.toml - - - - ${nodeHerdrConfig}"
       "L+ ${piProfile}/settings.json - - - - ${piSettings}"
       "L+ ${nodeHome}/.ssh/coordinator.conf - - - - ${tunnelConfig}"
@@ -470,11 +511,13 @@ let
       if test ! -e ${nodeTerminalMarker}; then
         install -o ${nodeUser} -g ${nodeGroup} -m 0600 /dev/null ${nodeEnabledMarker}
       fi
+      ln -sfn ${nodeShellRc} ${nodeHome}/.bashrc
+      ln -sfn ${nodeShellRc} ${nodeHome}/.bash_profile
       ln -sfn ${nodeHerdrConfig} ${nodeHome}/.config/herdr/config.toml
       ln -sfn ${piSettings} ${piProfile}/settings.json
       ln -sfn ${tunnelConfig} ${nodeHome}/.ssh/coordinator.conf
       ln -sfn ${coordinatorKnownHosts} ${nodeHome}/.ssh/coordinator_known_hosts
-      chown -h ${nodeUser}:${nodeGroup} ${nodeHome}/.config/herdr/config.toml ${piProfile}/settings.json ${nodeHome}/.ssh/coordinator.conf ${nodeHome}/.ssh/coordinator_known_hosts
+      chown -h ${nodeUser}:${nodeGroup} ${nodeHome}/.bashrc ${nodeHome}/.bash_profile ${nodeHome}/.config/herdr/config.toml ${piProfile}/settings.json ${nodeHome}/.ssh/coordinator.conf ${nodeHome}/.ssh/coordinator_known_hosts
       touch /var/log/drover-node.log /var/log/drover-node-sshd.log
       chown ${nodeUser}:${nodeGroup} /var/log/drover-node.log /var/log/drover-node-sshd.log
       chmod 0640 /var/log/drover-node.log /var/log/drover-node-sshd.log

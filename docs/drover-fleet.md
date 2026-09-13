@@ -30,6 +30,13 @@ same immutable wrapper. The wrapper establishes the runtime before invoking
 Bash, sets the immutable environment as `BASH_ENV` for noninteractive
 subshells, rejects mutable login profiles with `--noprofile`, and sources system
 interactive defaults followed by that environment from its dedicated rcfile.
+`BASH_ENV` alone is not sufficient for descendants: nixpkgs Bash is built with
+`SSH_SOURCE_BASHRC`, so a noninteractive Bash started inside an SSH session
+reads `~/.bashrc` *instead of* `BASH_ENV`, and a nested interactive Bash always
+prefers `~/.bashrc` over the parent's `--rcfile`. Pi runs its own tool commands
+as exactly such nested shells, so `~/.bashrc` and `~/.bash_profile` in the node
+home are declared store symlinks to that same rcfile on both platforms;
+whichever startup file Bash selects is node-owned.
 Consequently SSH commands, explicit login-shell preflight, and agent panes all
 resolve the exact packaged Pi, regardless of inherited service PATH. This is
 node provisioning, not a Familiar per-job environment or a project `nix
@@ -110,7 +117,12 @@ that string to the account's passwd shell as `shell -c <string>`; no interactive
 rcfile is read by plain Bash in this path. Harness admission additionally checks
 a fresh login-shell command. The node wrapper is therefore tested at Nix build
 time with a hostile inherited PATH and hostile home dotfiles under `-c`, `-lc`,
-`-ic`, the Herdr rcfile-equivalent invocation, and a nested login shell. Each
+`-ic`, the Herdr rcfile-equivalent invocation, and a nested login shell. It is
+also tested against the provisioned home layout with `SSH_CLIENT` exported —
+the condition that activates `SSH_SOURCE_BASHRC` — for nested `-c`, `-lc`,
+`-ic`, `sh -c` and doubly nested Bash. The assertion is sourced rather than
+executed as its own script, because a fresh script-mode Bash re-reads
+`BASH_ENV` and would mask the very startup-file divergence under test. Each
 mode must report the same
 `/nix/store/<hash>-pi-coding-agent-<version>/bin/pi` executable. Linux keeps
 this derivation in `system.extraDependencies`; nix-darwin has no equivalent
