@@ -456,10 +456,12 @@ let
     # The 2 GiB UMA firmware split is unaffected -- weights land in GTT via the
     # amdgpu.gttsize/ttm kernel params below (gtt_used ~84.5 GB with the full
     # 262144 KV cache resident), so the qualified memory posture is retained and
-    # no firmware change is required. Cost is a modest throughput reduction
-    # (~30.5 -> ~28.6 tok/s decode on short prompts); the retained deep-context
-    # llama-bench figures were measured under the corrupting variable and need
-    # re-qualification before they are quoted again.
+    # no firmware change is required. A same-boot, same-binary requalification
+    # changing only this variable's presence found no throughput penalty:
+    # pp16384 was 1070.23 t/s at depth 0 and 1038.07 at depth 40000, while
+    # tg128 improved to 32.33 and 19.96 t/s respectively. Correct server output
+    # was separately demonstrated at 32.97 t/s. The retained depth-114688 and
+    # depth-245760 figures still need correctness-preserving requalification.
     #
     # The HIP-spelled variable above is retained: it was present in both the
     # broken and the proven-good runs and is not the trigger.

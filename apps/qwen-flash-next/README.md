@@ -102,9 +102,18 @@ variable's presence, so `GGML_CUDA_ENABLE_UNIFIED_MEMORY=0` still selects the
 broken path. A Nix assertion and the declaration fixture both enforce absence.
 Weights still reach the GPU through GTT (`gtt_used` ~84.5 GB with the full
 262144 KV cache resident), so the 2 GiB UMA firmware split and memory posture
-are unchanged. The trade is a modest throughput reduction (~30.5 -> ~28.6 tok/s
-decode on short prompts); the retained deep-context llama-bench figures were
-measured under the corrupting variable and must be re-qualified before reuse.
+are unchanged.
+
+A same-boot, same-image, same-binary requalification with only the corrupting
+environment entry removed showed no performance penalty. At three repetitions,
+`pp16384` was 1070.23 +/- 4.22 t/s at depth 0 (previously 1065.76 +/- 5.97) and
+1038.07 +/- 8.61 t/s at depth 40000 (previously 1019.24 +/- 5.59). `tg128`
+improved to 32.33 +/- 0.27 t/s at depth 0 and 19.96 +/- 0.38 at depth 40000.
+A separate server semantic probe with the exact tested environment produced
+coherent output at 32.97 t/s. The retained depth-114688 and depth-245760 figures
+were measured under the corrupting variable and remain unqualified until they
+are re-run with correctness separately demonstrated. Evidence is retained under
+`requal-nocuda-uma-20260913T183318Z` in the benchmark artifact directory.
 
 A parent watchdog samples `MemAvailable` every five seconds. If it remains
 below 8 GiB for 15 seconds, it terminates only llama-server and lets the bounded
