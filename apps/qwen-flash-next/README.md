@@ -102,7 +102,7 @@ Tiamat Router declares one local provider:
 
 - provider `llama-lordhenry-qwen38-flash-next-iq4nl`
 - model `Qwen3.8-Flash-Next-IQ4_NL-PROJFIX`
-- upstream `http://127.0.0.1:8014/v1`
+- upstream `http://127.0.0.1:8014/v1`, Router-verified locality `local`
 - OpenAI completions, text/reasoning, 262,144 context, 32,768 max output
 
 Publication follows exact model identity and liveness. The provider starts

@@ -189,6 +189,7 @@ rec {
           id = "llama-lordhenry-qwen38-flash-next-iq4nl";
           kind = "api-key";
           baseUrl = "http://127.0.0.1:8014/v1";
+          locality = "local";
           wireFormats = [ "openai-completions" ];
           # Bootstrap fails closed until the liveness reconciler observes the
           # exact alias. Availability is discovery, not workload selection.
@@ -742,6 +743,7 @@ rec {
               ([.[].id] | unique | length == length) and
               (.[0].id == "llama-lordhenry-qwen38-flash-next-iq4nl") and
               (.[0].baseUrl == "http://127.0.0.1:8014/v1") and
+              (.[0].locality == "local") and
               (.[0].wireFormats == ["openai-completions"]) and
               (.[0].availability.state == "unavailable") and
               (.[0].availability.reason == "upstream") and
