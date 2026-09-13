@@ -6,9 +6,15 @@ Date: 2026-09-13 UTC. Plate: `545cf48d-88be-4419-9f99-14a602ebfce8`.
 
 The recovered 1,086–1,204 prompt-token/s source is pwilkin's Strix Halo stack,
 not EngramHalo.cpp. The exact source/runtime/weights were pinned, built and
-verified, but **lordhenry cannot load the published model in its current memory
-partition**, so no throughput number is claimed. Production was restored
-without a reboot, deployment or persistent configuration change.
+verified. The first boot's adjustable 64 GiB UMA carveout prevented the managed
+weight allocation; after the owner changed UMA to 2 GiB and rebooted, the exact
+stack loaded and completed every requested three-repetition prefill case.
+Functional reproduction therefore succeeds, but the published absolute rates
+did not reproduce on lordhenry: the installed-default 16384 batch reached
+1065.76 ± 5.97 prompt t/s at depth zero rather than 1204.31 ± 2.31. The
+published MTP server configuration loaded, but its first bounded decode exposed
+a correctness failure and was not repeated. Production was restored without a
+deployment or persistent configuration change.
 
 Authoritative sources:
 
@@ -33,9 +39,79 @@ custom retained-PM4 ROCr/HIP runtime were enabled. Retained PM4 cannot carry
 these one-off prefill shapes, as the source itself documents; its presence is
 stack fidelity, not an explanation of prefill throughput.
 
-## Host gate
+## Resumed boot and measurements
 
-The independently supplied identity matched: `lordhenry`, boot ID
+The owner changed the BIOS UMA reservation from 64 GiB to 2 GiB and rebooted.
+The resumed boot was `60093145-c25f-4f3f-b3af-cc931f6717f2`, with
+`MemTotal=129,465,768 KiB`, 2,147,483,648 bytes VRAM and 120,259,084,288 bytes
+GTT. Kernel, NixOS, amdgpu/TTM limits, CWSR/MES settings and device permissions
+were otherwise unchanged. Before stopping anything, the normal
+`qwen-flash-next-models.service` reconciliation was explicitly started. The
+production b10840 executable and full argv matched the prior baseline, port
+8014 `/health` and Ollama `/api/version` returned HTTP 200, both model timers
+were active and there were no failed units.
+
+All nine model shards, the MTP sidecar, both executables and both custom runtime
+libraries were re-hashed after reboot and matched the values below. Both source
+trees were clean at their pinned commits. The retained runtime image was still
+based on AMD image digest `a90cf047…` and no download or rebuild occurred.
+
+The exact journey command, launcher gates, custom ROCr/HIP and corrected
+`GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` completed with return code zero. The first
+post-reboot execution reported 1079.39 ± 3.68 pp and 27.98 ± 0.11 tg at depth
+zero, then 1026.83 ± 8.40 pp and 18.14 ± 0.06 tg at depth 40000. Its benchmark
+was sound, but a card-number bug left its memory monitor empty. One intervening
+monitor-repair replay also returned zero but its output was overwritten; no
+rate is claimed from it. The corrected, fully monitored replay and subsequent
+16384 confirmation reported:
+
+| batch / ubatch | test | result (three repetitions) |
+|---:|---|---:|
+| 24576 | pp16384, depth 0 | **1068.74 ± 7.68 t/s** |
+| 24576 | tg128, depth 0 | **27.89 ± 0.02 t/s** |
+| 24576 | pp16384, depth 40000 | **1016.12 ± 5.51 t/s** |
+| 24576 | tg128, depth 40000 | **17.98 ± 0.03 t/s** |
+| 16384 | pp16384, depth 0 | **1065.76 ± 5.97 t/s** |
+| 16384 | tg128, depth 0 | **27.97 ± 0.13 t/s** |
+| 16384 | pp16384, depth 40000 | **1019.24 ± 5.59 t/s** |
+| 16384 | tg128, depth 40000 | **18.00 ± 0.08 t/s** |
+
+Thus the source's useful conclusion that 16384 loses nothing to 24576 did
+reproduce, as did stable lazy direct placement at both depths. Its published
+1204.31 ± 2.31 default-batch depth-zero and 1086.29 ± 0.96 depth-40000 means
+did not: lordhenry reached 88.5% and 93.8% respectively. These are full means
+and spreads reported by `llama-bench`, not best-of values. `llama-bench` does
+not expose generated token IDs, so completion of all repetitions establishes
+execution stability but is not an independent semantic-correctness test.
+
+The corrected one-second monitor recorded, for 24576, peak process RSS
+104,516,772 KiB and minimum `MemAvailable` 21,647,328 KiB; for 16384 the values
+were 93,381,240 KiB and 33,257,832 KiB. The observed RSS reduction was
+11,135,532 KiB (10.62 GiB). Sysfs VRAM/GTT peaks were only 170,569,728 and
+217,346,048 bytes because the dominant managed allocation was resident system
+memory rather than a TTM-accounted GTT buffer. The 8 GiB safety guard never
+fired. Bounded kernel slices for both runs were empty: no reset, ring/MES fault,
+XNACK event or kernel OOM occurred.
+
+### MTP server arm
+
+The pinned installer's exact Flash-Next defaults were then exercised on
+`127.0.0.1:18014` only: 65536 context, 16384 batch/ubatch, one slot,
+`draft-mtp`, the verified shared-Q8_0 sidecar on ROCm0, 99 draft layers and
+`MTP_N_MAX=2`, with the same lazy-direct placement, gates and custom runtime.
+Both target and draft loaded. One deterministic 128-token completion then
+produced repeated malformed fragments, warnings about non-consecutive token
+positions and an HTTP 500 when the content-only parser rejected the output.
+The server reported 16.79 t/s and draft acceptance 0.01215 (3 accepted / 247
+generated, mean length 1.02). The source publishes no Flash-Next MTP acceptance
+reference, so no comparison is invented. This is a correctness/stability
+failure, not a successful MTP reproduction, and the remaining two planned
+requests were correctly skipped. Peak RSS was 88,310,344 KiB, minimum
+`MemAvailable` 38,485,808 KiB, and its bounded kernel slice was also empty.
+
+## First-boot gate
+
+The independently supplied first-boot identity matched: `lordhenry`, boot ID
 `07d2b2b3-4479-4675-826a-1bb24f45fd7b`. Relevant facts were:
 
 * NixOS `25.11.20260318.fea3b36`, Linux `6.12.76`, firmware aggregate includes
@@ -101,9 +177,10 @@ b18c40e93081df6b1001ed344af7de796f07a754f23001376cc9ed2d400effba  00007
 5ff54097406a905cf3a724c709124ceb0e3e10235ee862298969e91c96fa96e6  MTP
 ```
 
-## Load result and installer correction
+## First-boot load result and installer correction
 
-No benchmark iteration ran. There were two immediate, bounded load attempts:
+No benchmark iteration ran on the first boot. There were two immediate,
+bounded load attempts:
 
 1. The published launcher exports `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`, but this
    exact engine checks `GGML_CUDA_ENABLE_UNIFIED_MEMORY`. With the documented
@@ -113,18 +190,19 @@ No benchmark iteration ran. There were two immediate, bounded load attempts:
    rejected the same allocation with
    `amdgpu: SVM mapping failed, exceeds resident system memory limit`.
 
-Thus the exact stack cannot load on this box's current 64 GiB VRAM / 64 GiB
-system partition: the single 67,591.54 MiB resident weight buffer exceeds each
+Thus the exact stack could not load under that boot's 64 GiB VRAM / 64 GiB
+system partition: the single 67,591.54 MiB resident weight buffer exceeded each
 pool independently, despite the 112 GiB GTT aperture. Changing 24576 to 16384
-batch cannot reduce this model-weight allocation, so the documented 16384
-confirmation and MTP server arm were not attempted. There was no GPU reset,
-ring timeout, MES fault, kernel OOM kill or reboot.
+batch could not reduce this model-weight allocation. This was a first-boot
+firmware partition gate, not a terminal result; the resumed measurements above
+supersede that disposition. There was no GPU reset, ring timeout, MES fault or
+kernel OOM kill.
 
 This also identifies a small upstream installer bug: set
 `GGML_CUDA_ENABLE_UNIFIED_MEMORY`, not (or in addition to)
 `GGML_HIP_ENABLE_UNIFIED_MEMORY`, for this engine revision.
 
-## Residue and next safe action
+## Residue and settlement
 
 All residue is confined to the private benchmark directory
 `/var/lib/qwen-flash-next/benchmarks/strix-halo-rocm10-545cf48d`, mode 0700:
@@ -134,11 +212,15 @@ All residue is confined to the private benchmark directory
 | verified model and MTP files | 102,830,211,072 |
 | source, build and custom runtime | 2,312,458,240 |
 | bounded Podman image/layer store | 20,916,899,840 |
-| total experiment directory | 126,062,903,296 |
+| total experiment directory before resume | 126,062,903,296 |
+| total experiment directory after resume | 126,063,230,976 |
 
-Final free space was 724,649,144,320 bytes. Preserve this directory if a later
-boot-time UMA partition experiment is approved; otherwise the whole directory
-is the safe cleanup boundary. Do not delete individual production model files.
-A credible next attempt requires changing the firmware/BIOS UMA carveout (or a
-separately justified placement change), which requires a reboot and was outside
-this authorization.
+The evidence/log delta was 327,680 allocated bytes and final free space was
+725,053,227,008 bytes. The directory remains the safe cleanup boundary, but it
+was deliberately retained. At settlement the exact production b10840
+executable/argv was again listening on 127.0.0.1:8014, qwen, Ollama and its
+dashboard plus both model timers were active, both health endpoints returned
+HTTP 200, `systemctl --failed` was empty, port 18014 was closed, and the boot ID
+was unchanged. No reboot, NixOS switch, deployment, permanent unit/config
+change or public listener was made. The temporary root authorization was not
+removed.

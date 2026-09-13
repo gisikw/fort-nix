@@ -1,9 +1,10 @@
 # EngramHalo / ROCm 10 qualification
 
-> **Superseded execution target.** The source of the quoted 1,086–1,204
-> prompt-token/s result was later recovered as pwilkin's different Strix Halo
-> stack. EngramHalo remains useful negative/provenance evidence but was not
-> built or run on lordhenry. See `PWILKIN-ROCM10-LIVE-2026-09-13.md`.
+> **Superseded execution target and qualification (`e2d5214`).** The source of
+> the quoted 1,086–1,204 prompt-token/s result was recovered as pwilkin's
+> different Strix Halo stack and that exact stack has now run on lordhenry.
+> EngramHalo remains useful negative/provenance evidence but was not built or
+> run there. See `PWILKIN-ROCM10-LIVE-2026-09-13.md`.
 
 Audit date: 2026-09-13 UTC. Plate: `545cf48d-88be-4419-9f99-14a602ebfce8`.
 This is source and toolchain qualification only. Nothing here is imported by
