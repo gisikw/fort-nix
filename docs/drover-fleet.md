@@ -21,16 +21,20 @@ listens only on `127.0.0.1:22222`.
 
 Immutable inputs are Drover
 `0a430be873d1eb7e0929478ef11ba5518f482642`, its lock-pinned Herdr 0.9.0, and
-Familiar `0ba216f41e4f7c1b3f5dc6efcba59281034cd7f7`. The latter supplies its
+Familiar `17a68af9a8ef04baecb75ba414019f5e85e722fc`. The latter supplies its
 reviewed patched Pi and Tiamat extension source. Every node receives one
 Nix-realized runtime containing Drover, Herdr, Pi, Git, Python, rg, fd, OpenSSH,
-bash, core utilities, find/grep/sed/awk, tar/gzip, curl
-and jq. Herdr's node-owned `terminal.default_shell` sources that immutable
-Drover environment after system interactive-shell startup, so every agent pane
-receives the same canonical runtime even when `/etc/profile` re-derives `PATH`.
-This is node provisioning, not a Familiar per-job environment or a project
-`nix develop`; there is no runtime Nix evaluation or mutable checkout
-dependency.
+bash, core utilities, find/grep/sed/awk, tar/gzip, curl and jq. Both the enrolled
+account's passwd shell and Herdr's node-owned `terminal.default_shell` are the
+same immutable wrapper. The wrapper establishes the runtime before invoking
+Bash, sets the immutable environment as `BASH_ENV` for noninteractive
+subshells, rejects mutable login profiles with `--noprofile`, and sources system
+interactive defaults followed by that environment from its dedicated rcfile.
+Consequently SSH commands, explicit login-shell preflight, and agent panes all
+resolve the exact packaged Pi, regardless of inherited service PATH. This is
+node provisioning, not a Familiar per-job environment or a project `nix
+develop`; there is no runtime Nix evaluation or mutable checkout dependency and
+no writable PATH element precedes the Nix-store runtime.
 
 ## Units and paths
 
@@ -50,10 +54,11 @@ restarts.
 Each worker owns only the named Herdr namespace `drover`, at
 `/var/lib/drover-node/.config/herdr/sessions/drover/herdr.sock`. The declarative
 `/var/lib/drover-node/.config/herdr/config.toml` selects a dedicated immutable
-shell wrapper; its rcfile sources system shell defaults and then the node-owned
-Drover environment, making the reviewed Pi executable authoritative in every
-new pane. It does not source mutable project or user rcfiles. The dedicated Pi
-profile is `/var/lib/drover-node/pi`; `settings.json` is a declarative store
+shell wrapper; the `drover-node` passwd entry selects that same wrapper on both
+Linux and Darwin. Its rcfile sources system shell defaults and then the
+node-owned Drover environment, making the reviewed Pi executable authoritative
+in every new pane. It does not source mutable project or user rcfiles. The
+dedicated Pi profile is `/var/lib/drover-node/pi`; `settings.json` is a declarative store
 symlink that enables only Familiar's reviewed Tiamat extension and sets
 `defaultProjectTrust` to `never`. Its environment names
 `https://router.gisi.network` and the host-local, mode-0400 router token file.
@@ -98,6 +103,42 @@ user/**actual port**, use `profile_mode: "familiar-tiamat-v1"`, the Nix store
 Herdr/Python paths from the deployed generation, an explicit worker PATH, and
 remote `FAMILIAR_TIAMAT_TOKEN_FILE` from that host generation. Do not guess
 ports or copy an ambient controller profile.
+
+Familiar's native operation is an OpenSSH command of the form `python3 -c
+<immutable-script>` (or the enrolled absolute `python_binary`). OpenSSH passes
+that string to the account's passwd shell as `shell -c <string>`; no interactive
+rcfile is read by plain Bash in this path. Harness admission additionally checks
+a fresh login-shell command. The node wrapper is therefore tested at Nix build
+time with a hostile inherited PATH and hostile home dotfiles under `-c`, `-lc`,
+`-ic`, the Herdr rcfile-equivalent invocation, and a nested login shell. Each
+mode must report the same
+`/nix/store/<hash>-pi-coding-agent-<version>/bin/pi` executable. Linux keeps
+this derivation in `system.extraDependencies`; nix-darwin has no equivalent
+option, so O'Brien's post-activation closure references and checks the native
+Darwin derivation. Cross-evaluation verifies the Darwin passwd-shell wiring,
+while the aarch64 test itself executes when O'Brien's system is built.
+
+## Activation for the node-shell contract
+
+Build and activate the candidate generation on **all three enrolled workers**:
+Azula, Ratched, and O'Brien. Apply them serially so each worker can return online
+before proceeding. No Familiar/coordinator configuration changes are involved.
+On Linux, switching the generation changes `drover-node.service`'s declared
+restart trigger and therefore restarts that node service. On O'Brien, after the
+Darwin switch, explicitly run `launchctl kickstart -k
+system/network.gisi.drover.node` so the resident Herdr process is certainly
+recreated from the new node contract.
+
+Do **not** restart `drover-coordinator.service`,
+`drover-coordinator-sshd.service`, or any `drover-node-sshd` unit/job: their
+configuration and credentials are unchanged, and each new SSH authentication
+reads the updated passwd shell. Restart only the per-host node supervisor named
+above. Restarting it terminates that host's resident Herdr namespace and all
+active agent panes on that host, so drain or settle active agents first; other
+hosts and the coordinator remain available. After each node returns online,
+verify through the constrained route that both `command -v pi` and an explicit
+login-shell check resolve the Pi path from that generation, then perform the
+normal authenticated Herdr 0.9 ping and Familiar candidate admission check.
 
 ## Supervisor, readiness, and diagnosis
 

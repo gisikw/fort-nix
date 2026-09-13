@@ -78,10 +78,12 @@ let
   ]
   ++ lib.optionals (!isDarwin) [ pkgs.util-linux ];
   runtimePath = lib.makeBinPath runtimePackages;
-  # Herdr starts every terminal with its configured default shell. Interactive
-  # shell startup re-derives PATH on both fleet platforms, so the service's PATH
-  # alone is not an agent-pane runtime contract. Keep one immutable node-owned
-  # environment and source it last from the dedicated Herdr shell rcfile.
+  # The account shell and Herdr panes share this one immutable runtime. Merely
+  # passing --rcfile is insufficient: sshd runs remote commands as `shell -c`,
+  # and Bash ignores --rcfile when noninteractive. Source the environment in the
+  # wrapper itself, use it as BASH_ENV for noninteractive descendants, and block
+  # mutable login profiles from replacing it. Interactive panes may still read
+  # system shell defaults, but the immutable node environment is sourced last.
   droverEnv = pkgs.writeText "drover-env" ''
     export PATH=${
       lib.escapeShellArg (runtimePath + lib.optionalString isDarwin ":/usr/bin:/bin:/usr/sbin:/sbin")
@@ -95,8 +97,55 @@ let
     fi
     . ${droverEnv}
   '';
-  nodeAgentShell = pkgs.writeShellScript "drover-agent-shell" ''
-    exec ${pkgs.bashInteractive}/bin/bash --rcfile ${nodeShellRc} "$@"
+  nodeAgentShellScript = pkgs.writeShellScript "drover-agent-shell" ''
+    . ${droverEnv}
+    export BASH_ENV=${droverEnv}
+    exec ${pkgs.bashInteractive}/bin/bash --noprofile --rcfile ${nodeShellRc} "$@"
+  '';
+  nodeAgentShellPackage =
+    pkgs.runCommand "drover-agent-shell"
+      {
+        passthru.shellPath = "/bin/drover-agent-shell";
+      }
+      ''
+        mkdir -p "$out/bin"
+        ln -s ${nodeAgentShellScript} "$out/bin/drover-agent-shell"
+      '';
+  nodeAgentShell = "${nodeAgentShellPackage}/bin/drover-agent-shell";
+  nodeShellContractTest = pkgs.runCommand "drover-node-shell-contract" { } ''
+    set -eu
+    test_home="$TMPDIR/home"
+    hostile="$TMPDIR/writable-bin"
+    mkdir -p "$test_home" "$hostile"
+    cat > "$test_home/.bash_profile" <<EOF
+    export PATH=$hostile
+    EOF
+    cat > "$test_home/.bashrc" <<EOF
+    export PATH=$hostile
+    EOF
+
+    check="$TMPDIR/assert-pi"
+    cat > "$check" <<'EOF'
+    #!${pkgs.bashInteractive}/bin/bash
+    test "$(command -v pi)" = ${lib.escapeShellArg "${pi}/bin/pi"}
+    case "$PATH" in
+      ${lib.escapeShellArg runtimePath}|${lib.escapeShellArg runtimePath}:*) ;;
+      *) exit 1 ;;
+    esac
+    EOF
+    chmod +x "$check"
+
+    # sshd's exact remote-command shape, explicit login preflight, Herdr's
+    # interactive shell, and the configured rcfile must all select the same Pi.
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -c "$check"
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -lc "$check"
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -ic "$check"
+    env -i HOME="$test_home" PATH="$hostile" \
+      ${pkgs.bashInteractive}/bin/bash --noprofile --rcfile ${nodeShellRc} -ic "$check"
+    # BASH_ENV keeps a nested noninteractive/login Bash on the same contract.
+    env -i HOME="$test_home" PATH="$hostile" ${nodeAgentShell} -c \
+      "${pkgs.bashInteractive}/bin/bash -lc '$check'"
+    touch "$out"
   '';
   nodeHerdrConfig = pkgs.writeText "drover-herdr-config.toml" ''
     [terminal]
@@ -286,9 +335,13 @@ let
       group = nodeGroup;
       home = nodeHome;
       createHome = true;
-      shell = pkgs.bashInteractive;
+      # sshd executes remote commands through this passwd shell with `-c`.
+      # It is also Herdr's default shell, so admission and panes cannot diverge.
+      shell = nodeAgentShellPackage;
       hashedPassword = "";
     };
+
+    system.extraDependencies = [ nodeShellContractTest ];
 
     systemd.tmpfiles.rules = [
       "d ${nodeHome} 0700 ${nodeUser} ${nodeGroup} -"
@@ -381,7 +434,9 @@ let
       gid = 534;
       home = nodeHome;
       createHome = true;
-      shell = "/bin/bash";
+      # macOS sshd also dispatches a supplied command as the passwd shell's
+      # `-c`; use the identical wrapper configured for Herdr.
+      shell = nodeAgentShell;
       description = "Drover isolated workbox";
       isHidden = true;
     };
@@ -403,6 +458,11 @@ let
       printf '%s\t%s\t# fort-drover\n' ${lib.escapeShellArg coordinatorMeshAddress} ${lib.escapeShellArg "drover.${domain}"} >> /etc/hosts
       /usr/bin/dscacheutil -flushcache
       /usr/bin/killall -HUP mDNSResponder 2>/dev/null || true
+
+      # Referencing the successful native Darwin contract check here keeps it
+      # in the system closure; unlike Linux, nix-darwin has no
+      # system.extraDependencies option.
+      test -e ${nodeShellContractTest}
 
       install -d -o root -g wheel -m 0755 ${authorizedKeysDir}
       install -o root -g wheel -m 0444 ${pkgs.writeText "drover-node-authorized-keys" nodeAuthorizedKeysText} ${nodeKeysPath}
@@ -643,9 +703,12 @@ lib.mkMerge [
       {
         assertion =
           lib.hasPrefix "/nix/store/" (toString piSettings)
+          && lib.hasPrefix "/nix/store/" (toString nodeAgentShell)
+          &&
+            config.users.users.${nodeUser}.shell == (if isDarwin then nodeAgentShell else nodeAgentShellPackage)
           && familiarFlake.sourceInfo.rev == familiarRevision
           && droverFlake.sourceInfo.rev == droverRevision;
-        message = "drover: Pi settings and Familiar/Drover assets must remain immutable and pinned";
+        message = "drover: the node account shell and Familiar/Drover assets must remain immutable and pinned";
       }
       {
         assertion =
