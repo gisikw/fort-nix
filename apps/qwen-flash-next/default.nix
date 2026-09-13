@@ -1,220 +1,248 @@
-# Qwen3.8-Flash-Next on AMD Strix Halo (lordhenry).
-#
-# 180B total / ~6B active: 125B MoE body + 51B PLE n-gram embedding + 4B MTP
-# head, hybrid Gated DeltaNet + Qwen Sparse Attention, 262144 native context.
-# Served by a pinned Vulkan llama.cpp build (pkgs/llama-cpp-halo).
-#
-# READ apps/qwen-flash-next/README.md BEFORE CHANGING ANYTHING HERE. It carries
-# the memory budget, state-persistence findings, and measured slot trade-offs.
-#
-# The hybrid Gated DeltaNet layers hold recurrent R/S state and PLE convolution
-# history in addition to sparse-attention KV/indexer data. As of the pinned
-# b10840 source, llama.cpp's sequence-state serializer includes all of those
-# components; KV-only persistence would be invalid, but full slot persistence
-# is architecturally implemented. This deployment does not expose disk slot
-# save/restore or the RAM prompt cache: continuity is intentionally in-process.
+# Exact production candidate qualified on lordhenry:
+# Qwen3.8-Flash-Next 177B IQ4_NL-PROJFIX, pwilkin llama.cpp/HIP, ROCm0.
+# READ README.md before activation or rollback.
 {
   subdomain ? null,
   serviceName ? "qwen-next",
   port ? 8014,
-  # Quant selection. Default UD-Q3_K_XL: 83.8 GiB of weights, the largest rung
-  # that leaves working room on a 128 GB unified-memory box that also hosts
-  # ollama. See README § Quant ladder for the fallbacks and their sizes.
-  quant ? "UD-Q3_K_XL",
-  # Server slots. Production uses one slot after benchmarking the two-slot
-  # shadow-prefill design; callers can still raise this for explicit testing.
-  slots ? 1,
-  # TOTAL context across all slots; llama.cpp divides it by `slots` when the KV
-  # cache is not unified. 131072 with one slot gives one 131072-token context.
-  # The model supports 262144 natively; raise only after measuring headroom.
-  contextSize ? 131072,
-  # Context checkpoints per slot. These are what let a trajectory rewind to an
-  # earlier point (e.g. when the coordinator swaps a skill block out of the
-  # transcript) without re-prefilling from token zero.
-  ctxCheckpoints ? 8,
-  checkpointMinStep ? 4096,
-  # Keep the PLE (n-gram embedding) tensors in host memory. They are a large,
-  # sparsely-touched lookup table; leaving them mmap-backed on the CPU side
-  # keeps the GPU allocation down and lets the page cache evict cold rows.
-  # Set to null to place everything on the GPU.
-  ngramOverrideTensor ? "ple_key|ple_value=CPU",
-  # MTP speculative decoding. OFF by default: mainline llama.cpp has no MTP
-  # graph for the `qwen4exp` architecture yet (ggml-org/llama.cpp#28243 is
-  # still open as of 2026-09-07), so the drafter would be a 2.6 GiB download
-  # that does nothing. Flip on together with a source pin that carries the PR.
-  enableMtp ? false,
-  # Raise the amdgpu/TTM limits so an 84 GiB model can live in GTT on a
-  # 128 GB unified-memory APU. Takes effect on the next REBOOT.
-  tuneGtt ? true,
-  # Managed provisioning. When false the model store is left alone entirely
-  # (no downloads, no timer) — useful to stage the unit before capacity exists.
   provisionModel ? true,
+  tuneGtt ? true,
   ...
 }:
 {
-  config,
   pkgs,
   lib,
   ...
 }:
 let
-  llamaHalo = import ../../pkgs/llama-cpp-halo { inherit pkgs; };
+  runtime = import ../../pkgs/pwilkin-rocm-strix { inherit pkgs; };
+  llama = import ../../pkgs/llama-cpp-pwilkin-strix { inherit pkgs runtime; };
+  rocm = pkgs.rocmPackages;
 
-  repo = "unsloth/Qwen3.8-Flash-Next-GGUF";
+  repo = "ilintar/qwen3.8-flash-next-gguf-strix-halo";
   modelStore = "/var/lib/qwen-flash-next/models";
-  modelAlias = "Qwen3.8-Flash-Next";
+  modelAlias = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX";
+  contextSize = 262144;
+  batchSize = 16384;
+  minimumAvailableKiB = 8 * 1024 * 1024;
 
-  # sha256 values are the Hugging Face LFS oids, read from the model tree API
-  # on 2026-09-07. Sizes are exact bytes and drive the capacity precheck.
-  quants = {
-    "UD-Q3_K_XL" = [
-      {
-        file = "Qwen3.8-Flash-Next-UD-Q3_K_XL-00001-of-00003.gguf";
-        size = 10946624;
-        sha256 = "f2ef4328929d8b8c8930e2856eef52128dd4ce3425302f04bc3c657431cc4c49";
-      }
-      {
-        file = "Qwen3.8-Flash-Next-UD-Q3_K_XL-00002-of-00003.gguf";
-        size = 49983253824;
-        sha256 = "7d230e7c9421d868b89eebaf23033af0ea1a4e046956df00fb156814fb62346e";
-      }
-      {
-        file = "Qwen3.8-Flash-Next-UD-Q3_K_XL-00003-of-00003.gguf";
-        size = 39992153376;
-        sha256 = "21d4f90f9cd7b7c3a1582667c20cb22f7b03de895b88a23bb20aaeaa44f2c199";
-      }
-    ];
-    "UD-IQ3_XXS" = [
-      {
-        file = "Qwen3.8-Flash-Next-UD-IQ3_XXS-00001-of-00003.gguf";
-        size = 10946624;
-        sha256 = "268f81fdedf3149a538f252308927a4d5d1f6e062c178568a51e3b519744f8a8";
-      }
-      {
-        file = "Qwen3.8-Flash-Next-UD-IQ3_XXS-00002-of-00003.gguf";
-        size = 49567921344;
-        sha256 = "cfe600b236b88c7fad1613a5ca5e83b9f2beb63cbd44c32b2be50a44747c695f";
-      }
-      {
-        file = "Qwen3.8-Flash-Next-UD-IQ3_XXS-00003-of-00003.gguf";
-        size = 32382955968;
-        sha256 = "f1912ba34c79427d2295a58dcb2b732b5931af5bef7a373c60557a57d9ee7250";
-      }
-    ];
-  };
-
-  mtpArtifact = {
-    file = "mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf";
-    subdir = "MTP";
-    size = 2786568256;
-    sha256 = "5ff54097406a905cf3a724c709124ceb0e3e10235ee862298969e91c96fa96e6";
-  };
-
-  shards = quants.${quant};
+  # Exact HF LFS lengths and oids. The nine files total 100,043,569,504 bytes.
+  shards = [
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00001-of-00009.gguf";
+      size = 2973690144;
+      sha256 = "5b6032b1f3428a148a3b63d661a992dbe0e5f8e278ab684b3d2b474bc5372d30";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00002-of-00009.gguf";
+      size = 28800138432;
+      sha256 = "81ea612c230e5c3ee1e1036873b316bd6f3d0ba00aa9e12da9238b3ec75ef643";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00003-of-00009.gguf";
+      size = 11241902944;
+      sha256 = "d4c2432777ad3f2073989d9b584aaa69ea53201c22bfa69b0efc58fb3d4ffb9c";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00004-of-00009.gguf";
+      size = 11246708576;
+      sha256 = "72e276e9ffd33891b0640136b7f8c3ac765d34b3fae57d91cdbd4d25ce61477c";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00005-of-00009.gguf";
+      size = 11213964768;
+      sha256 = "c61c34d8c6e27051fb903f7117c6577cbd87b945e7fcdd3b7642a794dec78bac";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00006-of-00009.gguf";
+      size = 11231189024;
+      sha256 = "c9b36bca38ad5994c24a9d840460c7c3763cd64dfe2816effe1eabef5d7fc77a";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00007-of-00009.gguf";
+      size = 11246708576;
+      sha256 = "b18c40e93081df6b1001ed344af7de796f07a754f23001376cc9ed2d400effba";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00008-of-00009.gguf";
+      size = 11084166688;
+      sha256 = "3389e8907ce093d3ad45f5b46f14098d34352241cbc676361edbed7186ab023e";
+    }
+    {
+      file = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-00009-of-00009.gguf";
+      size = 1005100352;
+      sha256 = "8229be447e559c6f1186d8c878621afcf3466de71aca1b1c97e895288723b36e";
+    }
+  ];
   firstShard = builtins.head shards;
-
-  artifacts = (map (a: a // { subdir = quant; }) shards) ++ lib.optional enableMtp mtpArtifact;
-
-  artifactsJson = builtins.toJSON (
-    map (a: {
-      inherit (a)
-        file
-        size
-        sha256
-        subdir
-        ;
-    }) artifacts
-  );
-
-  totalBytes = lib.foldl' (acc: a: acc + a.size) 0 artifacts;
-  # Headroom on top of the artifacts: partial-download slack plus room for the
-  # host's own churn. Refuse to start downloading below this.
+  totalBytes = lib.foldl' (sum: shard: sum + shard.size) 0 shards;
+  artifactsJson = builtins.toJSON shards;
+  manifestId = builtins.substring 0 20 (builtins.hashString "sha256" artifactsJson);
+  completeMarker = "${modelStore}/.${modelAlias}-${manifestId}.complete";
   marginBytes = 16 * 1024 * 1024 * 1024;
 
-  # Managed provisioning with a capacity precheck. This unit will NOT start a
-  # ~90 GB download onto a filesystem that cannot hold it; it logs the exact
-  # shortfall and exits non-zero so the timer retries after space is freed.
-  reconcileScript = pkgs.writeShellScript "qwen-flash-next-reconcile" ''
-    set -uo pipefail
-    PATH=${
+  runtimeLibraryPath = lib.makeLibraryPath [
+    "${runtime}/hip"
+    "${runtime}/rocr"
+    rocm.clr
+    rocm.hipblas
+    rocm.hipblaslt
+    rocm.rocblas
+    rocm.llvm.clang
+    llama
+  ];
+
+  reconcileScript = pkgs.writeShellScript "qwen-flash-next-iq4nl-reconcile" ''
+    set -euo pipefail
+    export PATH=${
       lib.makeBinPath [
         pkgs.coreutils
         pkgs.curl
         pkgs.jq
       ]
     }:$PATH
+    store=${lib.escapeShellArg modelStore}
+    complete=${lib.escapeShellArg completeMarker}
+    restart_required=/var/lib/qwen-flash-next/restart-required
+    mkdir -p "$store"
 
-    STORE="${modelStore}"
-    RESTART_REQUIRED="/var/lib/qwen-flash-next/restart-required"
-    mkdir -p "$STORE"
-    # Set this whenever an artifact is installed. It deliberately survives a
-    # failed partial reconciliation; ExecStartPost removes it only after a
-    # later successful run can safely request the server restart.
+    # A matching marker means this exact manifest was already hash-verified.
+    # Retest all lengths without streaming 93 GiB through the page cache on
+    # every timer tick. Any missing/truncated file invalidates the marker.
+    if [ -e "$complete" ]; then
+      valid=1
+      count=$(jq length <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      for i in $(seq 0 $((count - 1))); do
+        file=$(jq -r ".[$i].file" <<'JSON'
+    ${artifactsJson}
+    JSON
+        )
+        size=$(jq -r ".[$i].size" <<'JSON'
+    ${artifactsJson}
+    JSON
+        )
+        [ "$(stat -c %s "$store/$file" 2>/dev/null || echo 0)" = "$size" ] || valid=0
+      done
+      if [ "$valid" = 1 ]; then
+        echo "Artifact reconciliation complete (manifest ${manifestId}; lengths rechecked)."
+        exit 0
+      fi
+      rm -f "$complete"
+    fi
 
-    # ---- capacity gate -------------------------------------------------
-    needed=0
-    count=$(jq 'length' <<< '${artifactsJson}')
+    count=$(jq length <<'JSON'
+    ${artifactsJson}
+    JSON
+    )
+    # Remove a same-length but wrong-hash target before capacity arithmetic so
+    # its released blocks are counted and the 16 GiB final margin is real.
     for i in $(seq 0 $((count - 1))); do
-      file=$(jq -r ".[$i].file" <<< '${artifactsJson}')
-      size=$(jq -r ".[$i].size" <<< '${artifactsJson}')
-      have=$(stat -c %s "$STORE/$file" 2>/dev/null || echo 0)
+      file=$(jq -r ".[$i].file" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      size=$(jq -r ".[$i].size" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      want=$(jq -r ".[$i].sha256" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      target="$store/$file"
+      if [ "$(stat -c %s "$target" 2>/dev/null || echo 0)" = "$size" ]; then
+        actual=$(sha256sum "$target" | cut -d' ' -f1)
+        if [ "$actual" != "$want" ]; then
+          echo "WARN: removing wrong hash for $file" >&2
+          rm -f "$target"
+        fi
+      fi
+    done
+
+    needed=0
+    for i in $(seq 0 $((count - 1))); do
+      file=$(jq -r ".[$i].file" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      size=$(jq -r ".[$i].size" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      have=$(stat -c %s "$store/$file" 2>/dev/null || echo 0)
       if [ "$have" != "$size" ]; then
-        needed=$((needed + size - $(stat -c %s "$STORE/$file.downloading" 2>/dev/null || echo 0)))
+        partial=$(stat -c %s "$store/$file.downloading" 2>/dev/null || echo 0)
+        [ "$partial" -le "$size" ] || partial=0
+        needed=$((needed + size - partial))
       fi
     done
 
     if [ "$needed" -gt 0 ]; then
-      avail=$(($(stat -f -c '%a * %S' "$STORE")))
+      avail=$(($(stat -f -c '%a * %S' "$store")))
       required=$((needed + ${toString marginBytes}))
       if [ "$avail" -lt "$required" ]; then
-        echo "BLOCKED: need $((required / 1024 / 1024 / 1024)) GiB free under $STORE" \
-             "(artifacts $((needed / 1024 / 1024 / 1024)) GiB + 16 GiB margin)," \
-             "have $((avail / 1024 / 1024 / 1024)) GiB. Not downloading." >&2
+        echo "BLOCKED: need $((required / 1024 / 1024 / 1024)) GiB free under $store" \
+          "($((needed / 1024 / 1024 / 1024)) GiB remaining + 16 GiB margin)," \
+          "have $((avail / 1024 / 1024 / 1024)) GiB; not downloading." >&2
         exit 1
       fi
-      echo "Capacity OK: $((avail / 1024 / 1024 / 1024)) GiB free," \
-           "$((needed / 1024 / 1024 / 1024)) GiB to fetch."
     fi
 
-    # ---- fetch + verify ------------------------------------------------
     failed=0
     for i in $(seq 0 $((count - 1))); do
-      file=$(jq -r ".[$i].file" <<< '${artifactsJson}')
-      subdir=$(jq -r ".[$i].subdir" <<< '${artifactsJson}')
-      want=$(jq -r ".[$i].sha256" <<< '${artifactsJson}')
+      file=$(jq -r ".[$i].file" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      size=$(jq -r ".[$i].size" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      want=$(jq -r ".[$i].sha256" <<'JSON'
+    ${artifactsJson}
+    JSON
+      )
+      target="$store/$file"
+      partial="$target.downloading"
+      url="https://huggingface.co/${repo}/resolve/main/$file"
 
-      target="$STORE/$file"
-      partial="$STORE/$file.downloading"
-      url="https://huggingface.co/${repo}/resolve/main/$subdir/$file"
-
-      if [ -f "$target" ]; then
+      if [ "$(stat -c %s "$target" 2>/dev/null || echo 0)" = "$size" ]; then
         actual=$(sha256sum "$target" | cut -d' ' -f1)
         if [ "$actual" = "$want" ]; then
           echo "OK: $file"
           continue
         fi
-        echo "WARN: $file hash mismatch; removing." >&2
+        echo "WARN: removing wrong hash for $file" >&2
         rm -f "$target"
       fi
-
-      if [ -f "$partial" ]; then
+      if [ "$(stat -c %s "$partial" 2>/dev/null || echo 0)" = "$size" ]; then
         actual=$(sha256sum "$partial" | cut -d' ' -f1)
         if [ "$actual" = "$want" ]; then
-          mv "$partial" "$target"
-          touch "$RESTART_REQUIRED"
-          echo "DONE: $file (validated partial)"
+          mv -f "$partial" "$target"
+          touch "$restart_required"
+          echo "DONE: $file (validated staging file)"
           continue
         fi
+        rm -f "$partial"
       fi
 
       echo "Downloading $file"
-      if ! curl -C - -L --fail --retry 3 --retry-delay 15 --connect-timeout 30 \
-           -o "$partial" "$url"; then
-        echo "ERROR: download failed for $file; retrying next cycle." >&2
+      if ! curl -C - -L --fail --retry 4 --retry-all-errors --retry-delay 15 \
+        --retry-max-time 1800 --connect-timeout 30 --speed-limit 1048576 \
+        --speed-time 300 -o "$partial" "$url"; then
+        echo "ERROR: bounded download failed for $file; next timer will resume." >&2
         failed=$((failed + 1))
         continue
       fi
-
+      [ "$(stat -c %s "$partial")" = "$size" ] || {
+        echo "ERROR: wrong length for $file; deleting staging file." >&2
+        rm -f "$partial"
+        failed=$((failed + 1))
+        continue
+      }
       actual=$(sha256sum "$partial" | cut -d' ' -f1)
       if [ "$actual" != "$want" ]; then
         echo "ERROR: hash mismatch for $file (want $want, got $actual); deleting." >&2
@@ -222,76 +250,251 @@ let
         failed=$((failed + 1))
         continue
       fi
-      mv "$partial" "$target"
-      touch "$RESTART_REQUIRED"
+      mv -f "$partial" "$target"
+      touch "$restart_required"
       echo "DONE: $file"
     done
+    [ "$failed" = 0 ] || exit 1
 
-    if [ "$failed" -gt 0 ]; then
-      echo "$failed artifact(s) outstanding." >&2
+    # The marker is the atomic set-level commit: the server cannot observe a
+    # partial shard set even though each very large shard is staged separately.
+    marker_tmp="$complete.tmp"
+    printf '%s\n' '${manifestId}' > "$marker_tmp"
+    mv -f "$marker_tmp" "$complete"
+    echo "Artifact reconciliation complete (${toString totalBytes} bytes)."
+  '';
+
+  hostGate = pkgs.writeShellScript "qwen-flash-next-host-gate" ''
+    set -euo pipefail
+    mem_kib=$(${pkgs.gawk}/bin/awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
+    [ "$mem_kib" -ge 125000000 ] || {
+      echo "Qwen IQ4_NL requires the qualified ~128 GiB host; MemTotal=$mem_kib KiB" >&2
       exit 1
-    fi
-    echo "Artifact reconciliation complete ($((${toString totalBytes} / 1024 / 1024 / 1024)) GiB)."
+    }
+    uma=""
+    for f in /sys/class/drm/card*/device/mem_info_vram_total; do
+      [ -r "$f" ] || continue
+      value=$(cat "$f")
+      [ "$value" -gt 0 ] || continue
+      uma="$value"
+      break
+    done
+    [ "$uma" = 2147483648 ] || {
+      echo "BIOS prerequisite not met: expected 2 GiB UMA (2147483648), got ''${uma:-unknown}; Fort does not manage firmware" >&2
+      exit 1
+    }
+    available=$(${pkgs.gawk}/bin/awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+    [ "$available" -ge ${toString minimumAvailableKiB} ] || {
+      echo "memory guard: MemAvailable=$available KiB is below 8 GiB; refusing model start" >&2
+      exit 1
+    }
+    [ -e ${lib.escapeShellArg completeMarker} ] || {
+      echo "model manifest is not completely reconciled: ${completeMarker}" >&2
+      exit 1
+    }
+  '';
+
+  memoryGuard = pkgs.writeShellScript "qwen-flash-next-memory-guard" ''
+    set -uo pipefail
+    "$@" & child=$!
+    terminate() { kill -TERM "$child" 2>/dev/null || true; wait "$child" || true; }
+    trap terminate TERM INT HUP
+    low=0
+    while kill -0 "$child" 2>/dev/null; do
+      sleep 5
+      available=$(${pkgs.gawk}/bin/awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+      if [ "$available" -lt ${toString minimumAvailableKiB} ]; then
+        low=$((low + 1))
+      else
+        low=0
+      fi
+      if [ "$low" -ge 3 ]; then
+        echo "memory guard: MemAvailable stayed below 8 GiB for 15s; stopping only llama-server" >&2
+        kill -TERM "$child" 2>/dev/null || true
+        wait "$child" || true
+        exit 70
+      fi
+    done
+    wait "$child"
+  '';
+
+  readiness = pkgs.writeShellScript "qwen-flash-next-readiness" ''
+    set -euo pipefail
+    for _ in $(seq 1 1350); do
+      if ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:${toString port}/health >/dev/null \
+        && ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:${toString port}/v1/models \
+          | ${pkgs.jq}/bin/jq -e --arg id ${lib.escapeShellArg modelAlias} '.data | any(.id == $id)' >/dev/null; then
+        echo "Qwen API ready: ${modelAlias}"
+        exit 0
+      fi
+      sleep 2
+    done
+    echo "Qwen process did not become API-ready within 45 minutes" >&2
+    exit 1
   '';
 
   serverArgs = [
-    "${llamaHalo}/bin/llama-server"
-    # Loopback only: the sole ingress is this host's nginx (see
-    # fort.cluster.services below). Nothing else may reach the API.
-    "--host 127.0.0.1"
-    "--port ${toString port}"
-    "--model ${modelStore}/${firstShard.file}"
-    "--alias ${modelAlias}"
+    "${llama}/bin/llama-server"
+    "--host"
+    "127.0.0.1"
+    "--port"
+    (toString port)
+    "--model"
+    "${modelStore}/${firstShard.file}"
+    "--alias"
+    modelAlias
     "--jinja"
-    "--gpu-layers 999"
-    "--flash-attn auto"
-    "--parallel ${toString slots}"
-    # Keep allocation and affinity behavior explicit. With one slot this is
-    # equivalent in capacity to unified KV.
-    "--no-kv-unified"
-    "--ctx-size ${toString contextSize}"
-    # In-process rewind points. NOT a disk cache: see the header comment.
-    "--ctx-checkpoints ${toString ctxCheckpoints}"
-    "--checkpoint-min-step ${toString checkpointMinStep}"
-    # Prefix reuse within the resident conversation.
-    "--cache-prompt"
-    "--cache-reuse 256"
-    # Keep persistence disabled operationally: no RAM prompt cache, idle-slot
-    # spill, or --slot-save-path. The pinned serializer does include recurrent
-    # state, but it has not been enabled or end-to-end qualified here.
-    "--cache-ram 0"
-    "--no-cache-idle-slots"
-    # Preserve the existing fail-at-the-bound policy. The pinned memory module
-    # reports shift support, but production has not qualified long-run shifts.
+    "--device"
+    "ROCm0"
+    "--gpu-layers"
+    "999"
+    "--flash-attn"
+    "on"
+    "--cache-type-k"
+    "f16"
+    "--cache-type-v"
+    "f16"
+    "--load-mode"
+    "none"
+    "--lazy-mode"
+    "on-direct"
+    "--batch-size"
+    (toString batchSize)
+    "--ubatch-size"
+    (toString batchSize)
+    "--parallel"
+    "1"
+    "--ctx-size"
+    (toString contextSize)
     "--no-context-shift"
     "--metrics"
-  ]
-  ++ lib.optional (ngramOverrideTensor != null) "--override-tensor \"${ngramOverrideTensor}\""
-  ++ lib.optionals enableMtp [
-    "--spec-draft-model ${modelStore}/${mtpArtifact.file}"
-    "--spec-type draft-mtp"
-    "--spec-draft-n-max 2"
   ];
+
+  declarationFixture = pkgs.writeText "qwen-flash-next-declaration.json" (
+    builtins.toJSON {
+      inherit shards serverArgs;
+      environment = requiredEnvironment;
+      context = contextSize;
+      batch = batchSize;
+      total = totalBytes;
+      listener = "127.0.0.1:${toString port}";
+      engineRevision = llama.sourceRevision;
+      engineSourceHash = llama.sourceHash;
+      runtimeRevision = runtime.sourceRevision;
+      runtimeSourceHash = runtime.sourceHash;
+    }
+  );
+  declarationTest =
+    pkgs.runCommand "qwen-flash-next-declaration-test" { nativeBuildInputs = [ pkgs.jq ]; }
+      ''
+        jq -e '
+          (.shards | length == 9) and
+          ([.shards[].file] | unique | length == 9) and
+          ([.shards[].sha256] | unique | length == 9) and
+          ([.shards[].size] | add == 100043569504) and
+          (.context == 262144) and (.batch == 16384) and
+          (.listener == "127.0.0.1:8014") and
+          (.engineRevision == "f5daaa3cfa6358e5dd398911ec741813745a5440") and
+          (.engineSourceHash == "sha256-9YrpYJ1K2FdDhqstcfdwWMjTl7UhBL0ZHBOP6+KbyoY=") and
+          (.runtimeRevision == "7dda3ac6cfe6bbe0b7f08c23a67cfa118d8641a1") and
+          (.runtimeSourceHash == "sha256-URmOwL8itq2lwzfkRD4QtRuoAcBRHva2sLJ+vl0wjbE=") and
+          (.environment.GGML_CUDA_ENABLE_UNIFIED_MEMORY == "1") and
+          (.environment.GGML_HIP_ENABLE_UNIFIED_MEMORY == "1") and
+          (.serverArgs | index("ROCm0") != null) and
+          (.serverArgs | index("--gpu-layers") != null) and
+          (.serverArgs | index("--flash-attn") != null) and
+          (.serverArgs | index("--cache-type-k") != null) and
+          (.serverArgs | index("--cache-type-v") != null) and
+          (.serverArgs | index("--load-mode") != null) and
+          (.serverArgs | index("--lazy-mode") != null) and
+          (.serverArgs | index("--no-context-shift") != null) and
+          (.serverArgs | index("--spec-draft-model") == null) and
+          (.serverArgs | index("--spec-type") == null)
+        ' ${declarationFixture} >/dev/null
+        jq -r '.shards[].sha256' ${declarationFixture} | sha256sum \
+          | grep -q '^31e59ad6da093e045b724c3405580a3c4415f8f9f3ba10ece753b9304825f3b2 '
+        mkdir -p "$out"
+        cp ${declarationFixture} "$out/fixture.json"
+      '';
+
+  requiredEnvironment = {
+    HSA_OVERRIDE_GFX_VERSION = "11.5.1";
+    GGML_HIP_ENABLE_UNIFIED_MEMORY = "1";
+    # Required spelling in this exact engine; HIP-only spelling is ineffective.
+    GGML_CUDA_ENABLE_UNIFIED_MEMORY = "1";
+    ENABLE_RETAINED_PM4 = "1";
+    DEBUG_HIP_GRAPH_PM4 = "1";
+    LLAMA_MMB = "1";
+    LLAMA_MMB_MIN_T = "512";
+    LLAMA_MMB_BF16W = "1";
+    LLAMA_MMB_GLU = "1";
+    LLAMA_MMB_TALL = "2";
+    LLAMA_MMB_CACHE = "4";
+    LLAMA_MMB_F32SPLIT = "2";
+    LLAMA_MMB_HC16 = "2";
+    LLAMA_MMB_SHADOW = "2";
+    LLAMA_MMB_DOWN16 = "1";
+    LLAMA_HC_CN_SHAPE = "1";
+    LLAMA_HC_GATEMIX = "1";
+    LLAMA_HC_MIX_FUSE = "1";
+    LLAMA_HC_BLK16 = "1";
+    LLAMA_HC_RES16 = "1";
+    LLAMA_HC_PACK_DI = "1";
+    LLAMA_NORM_GATED = "1";
+    LLAMA_NORM_ROWS = "1";
+    LLAMA_IDX_RELU_SUM = "1";
+    LLAMA_PLE_CONV = "1";
+    LLAMA_GDN_CONV = "1";
+    LLAMA_QSA_SPARSE = "1";
+    LLAMA_QSA_WHOLE_ATTN = "1";
+    LLAMA_QSA_BLOCK_SELECTION = "1";
+    LLAMA_QSA_COMPACT_METADATA = "1";
+    LLAMA_QSA_DENSE_SHORTCUT = "1";
+    LLAMA_QSA_DIRECT_INDICES = "1";
+    LLAMA_QSA_PACK_KEYS = "1";
+    LLAMA_QSA_PACK_VALUES = "1";
+    LLAMA_QSA_QUERY_STRIP = "512";
+    LLAMA_QSA_SCORE_BOUNDS = "1";
+    LLAMA_QSA_NO_DENSE_MASK = "1";
+    LLAMA_QSA_FA_V3 = "1";
+    LLAMA_QSA_FUSE_EXPAND = "1";
+    LLAMA_MTP_QSA = "1";
+    LLAMA_MTP_QSA_MIN_T = "128";
+    LD_LIBRARY_PATH = runtimeLibraryPath;
+  };
 in
 {
   assertions = [
     {
-      assertion = builtins.hasAttr quant quants;
-      message = "qwen-flash-next: unknown quant '${quant}' (have: ${lib.concatStringsSep ", " (builtins.attrNames quants)})";
+      assertion = builtins.length shards == 9;
+      message = "qwen-flash-next: IQ4_NL must have exactly nine shards";
     }
     {
-      assertion = slots >= 1;
-      message = "qwen-flash-next: slots must be at least one";
+      assertion = totalBytes == 100043569504;
+      message = "qwen-flash-next: IQ4_NL byte total changed";
+    }
+    {
+      assertion = builtins.length (lib.unique (map (s: s.file) shards)) == 9;
+      message = "qwen-flash-next: duplicate shard filename";
+    }
+    {
+      assertion = contextSize == 262144 && batchSize == 16384;
+      message = "qwen-flash-next: qualified context/batch constants changed";
+    }
+    {
+      assertion = port == 8014;
+      message = "qwen-flash-next: this replacement candidate intentionally retains private port 8014";
     }
   ];
 
-  hardware.graphics.enable = true;
+  # Built by every lordhenry system build; this is evaluation/build-time only
+  # and cannot download model data.
+  system.extraDependencies = [ declarationTest ];
 
-  # Unified memory: without raising the TTM/GTT ceiling the GPU can only map
-  # about half of RAM and an 84 GiB model will not fit. Reboot to apply.
+  hardware.graphics.enable = true;
   boot.kernelParams = lib.optionals tuneGtt [
-    "amdgpu.gttsize=114688" # MiB (112 GiB)
-    "ttm.pages_limit=29360128" # 4 KiB pages (112 GiB)
+    "amdgpu.gttsize=114688"
+    "ttm.pages_limit=29360128"
     "ttm.page_pool_size=29360128"
   ];
 
@@ -301,22 +504,25 @@ in
     home = "/var/lib/qwen-flash-next";
   };
   users.groups.qwen-flash-next = { };
-
   systemd.tmpfiles.rules = [
     "d /var/lib/qwen-flash-next 0755 qwen-flash-next qwen-flash-next -"
     "d ${modelStore} 0755 qwen-flash-next qwen-flash-next -"
   ];
 
   systemd.services.qwen-flash-next = {
-    description = "Qwen3.8-Flash-Next (llama.cpp/Vulkan, Strix Halo)";
-    after = [ "network.target" ];
-    # Never started by activation: an 84 GiB model that is not on disk yet
-    # would crash-loop and fail the switch. The reconciler starts it once every
-    # artifact is present and verified.
+    description = "Qwen3.8-Flash-Next 177B IQ4_NL (pwilkin HIP, gfx1151)";
+    after = [
+      "network.target"
+      "qwen-flash-next-models.service"
+    ];
     wantedBy = [ ];
-
-    unitConfig.ConditionPathExists = "${modelStore}/${firstShard.file}";
-
+    restartIfChanged = false;
+    unitConfig = {
+      ConditionPathExists = completeMarker;
+      StartLimitIntervalSec = 3600;
+      StartLimitBurst = 3;
+    };
+    environment = requiredEnvironment;
     serviceConfig = {
       Type = "simple";
       User = "qwen-flash-next";
@@ -326,12 +532,17 @@ in
         "video"
         "render"
       ];
-      ExecStart = lib.concatStringsSep " " serverArgs;
+      ExecStartPre = hostGate;
+      ExecStart = "${memoryGuard} ${lib.escapeShellArgs serverArgs}";
+      ExecStartPost = readiness;
       Restart = "on-failure";
-      RestartSec = 30;
-      # Loading ~84 GiB off disk into GTT is slow on first (cold cache) start.
-      TimeoutStartSec = "45min";
+      RestartSec = 60;
+      TimeoutStartSec = "50min";
       TimeoutStopSec = "5min";
+      MemoryAccounting = true;
+      MemorySwapMax = 0;
+      OOMPolicy = "stop";
+      OOMScoreAdjust = 500;
     };
   };
 
@@ -339,43 +550,37 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "5min";
-      OnUnitActiveSec = "1h";
+      OnUnitActiveSec = "24h";
+      RandomizedDelaySec = "30min";
     };
   };
-
   systemd.services.qwen-flash-next-models = lib.mkIf provisionModel {
-    description = "Reconcile Qwen3.8-Flash-Next GGUF artifacts (${quant})";
+    description = "Reconcile exact Qwen3.8-Flash-Next IQ4_NL shards";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
-    # Multi-hour downloads must never be attached to a switch.
     restartIfChanged = false;
     serviceConfig = {
       Type = "oneshot";
       User = "qwen-flash-next";
       Group = "qwen-flash-next";
       ExecStart = reconcileScript;
-      # Start after initial provisioning, and restart only when this run
-      # installed a changed artifact. An unconditional restart here used to
-      # reload the healthy 90 GB server after every hourly no-op reconcile.
-      # This runs as root; --no-block avoids ordering against this oneshot.
       ExecStartPost = "+${pkgs.writeShellScript "qwen-flash-next-reconcile-post" ''
         set -eu
-        restart_required=/var/lib/qwen-flash-next/restart-required
-        if [ -e "$restart_required" ]; then
-          rm -f "$restart_required"
+        marker=/var/lib/qwen-flash-next/restart-required
+        if [ -e "$marker" ]; then
+          rm -f "$marker"
           exec ${pkgs.systemd}/bin/systemctl restart --no-block qwen-flash-next.service
         fi
         if ! ${pkgs.systemd}/bin/systemctl is-active --quiet qwen-flash-next.service; then
           exec ${pkgs.systemd}/bin/systemctl start --no-block qwen-flash-next.service
         fi
       ''}";
-      TimeoutStartSec = "infinity";
+      TimeoutStartSec = "12h";
     };
   };
 
-  # Private API: no `visibility` key means VPN-only, and the backend itself is
-  # bound to loopback. Token SSO on top so mesh-resident services still have to
-  # present a credential.
+  # The backend is loopback-only. Fort nginx is the existing VPN/token ingress;
+  # no new firewall opening or public listener is introduced.
   fort.cluster.services = [
     {
       name = serviceName;

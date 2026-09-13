@@ -17,27 +17,13 @@ rec {
   # prices the ollama/* arm.
   apps = [
     "ollama"
-    # Qwen3.8-Flash-Next (180B total / ~6B active) on the Strix Halo APU via a
-    # pinned Vulkan llama.cpp build. Read apps/qwen-flash-next/README.md before
-    # touching these knobs. Benchmarking showed that the two-slot shadow path
-    # adds contention, while source inspection confirmed b10840 serializes the
-    # hybrid recurrent state as well as attention KV/indexer state.
-    #
-    # Provisioning is managed and capacity-gated: the reconciler refuses to
-    # start the ~84 GiB fetch unless the store's filesystem has the bytes plus
-    # a 16 GiB margin, and the server unit stays down (ConditionPathExists +
-    # empty wantedBy) until every shard is on disk and sha256-verified. So a
-    # switch cannot be failed, and no blind download can be started, by this.
-    #
-    # tuneGtt raises amdgpu/TTM limits to 112 GiB so the weights can live in
-    # GTT on this unified-memory box — KERNEL PARAMS, needs a reboot.
-    {
-      name = "qwen-flash-next";
-      quant = "UD-Q3_K_XL"; # 83.8 GiB; UD-IQ3_XXS (76.3) is the fallback rung
-      slots = 1; # one 131k trajectory; formerly two 65k trajectories
-      contextSize = 131072; # total and per-slot with slots = 1
-      ctxCheckpoints = 8;
-    }
+    # Exact qualified 177B IQ4_NL-PROJFIX candidate: pwilkin ROCr/HIP and
+    # llama.cpp pins, one ROCm0 slot, 262144 hard context, 16K batch/ubatch,
+    # lazy direct PLE, no MTP. This deliberately replaces the process behind
+    # private port 8014 rather than trying to resident-run two ~100 GiB stacks.
+    # Existing Q3 shards remain on disk and `git revert` restores their unit.
+    # See apps/qwen-flash-next/README.md before activation.
+    "qwen-flash-next"
   ];
 
   # ---- Overlay retention inventory (2026-09-07 cleanup) ----
@@ -189,6 +175,46 @@ rec {
           ];
         }
       );
+      # Static local provider for tiamat-router. The provider/model pair is the
+      # agent-dispatch profile; client authorization is unchanged (only the
+      # existing dev-sandbox token is bootstrapped). The router and llama-server
+      # share this host, so the upstream stays loopback-only.
+      tiamatRouterLocalProviders = [
+        {
+          id = "llama-lordhenry-qwen38-flash-next-iq4nl";
+          kind = "api-key";
+          baseUrl = "http://127.0.0.1:8014/v1";
+          wireFormats = [ "openai-completions" ];
+          # Fail closed until the exact server's readiness probe succeeds.
+          availability = {
+            state = "unavailable";
+            reason = "upstream";
+          };
+          models = [
+            {
+              id = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX";
+              context_window = 262144;
+              # Conservative dispatch ceiling; total prompt+output still must
+              # fit the independently advertised 262144-token context.
+              max_output_tokens = 32768;
+              reasoning = true;
+              input = [ "text" ];
+              inputCostPerMillion = 0;
+              outputCostPerMillion = 0;
+            }
+          ];
+        }
+      ];
+      tiamatRouterLocalProvidersJson = builtins.toJSON tiamatRouterLocalProviders;
+      tiamatRouterQwenAvailableJson = builtins.toJSON (
+        (builtins.head tiamatRouterLocalProviders)
+        // {
+          availability = {
+            state = "available";
+          };
+        }
+      );
+      tiamatRouterQwenUnavailableJson = builtins.toJSON (builtins.head tiamatRouterLocalProviders);
       tiamatGatewayProvidersJson = pkgs.writeText "tiamat-gateway-providers.json" (
         builtins.toJSON {
           providers = {
@@ -699,9 +725,36 @@ rec {
           ];
         }
       );
+      tiamatQwenCatalogTest =
+        pkgs.runCommand "tiamat-qwen-lordhenry-catalog-test"
+          {
+            nativeBuildInputs = [ pkgs.jq ];
+          }
+          ''
+            jq -e '
+              (length == 1) and
+              ([.[].id] | unique | length == length) and
+              (.[0].id == "llama-lordhenry-qwen38-flash-next-iq4nl") and
+              (.[0].baseUrl == "http://127.0.0.1:8014/v1") and
+              (.[0].wireFormats == ["openai-completions"]) and
+              (.[0].availability.state == "unavailable") and
+              (.[0].availability.reason == "upstream") and
+              (.[0].models | length == 1) and
+              (.[0].models[0].id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX") and
+              (.[0].models[0].context_window == 262144) and
+              (.[0].models[0].max_output_tokens == 32768) and
+              (.[0].models[0].input == ["text"]) and
+              (.[0].models[0].inputCostPerMillion == 0) and
+              (.[0].models[0].outputCostPerMillion == 0)
+            ' <<'JSON'
+            ${tiamatRouterLocalProvidersJson}
+            JSON
+            mkdir -p "$out"
+          '';
     in
     {
       config.environment.etc."tiamat/wings-gateway.json".source = tiamatWingsGatewayJson;
+      config.system.extraDependencies = [ tiamatQwenCatalogTest ];
       config.environment.etc."tiamat/gateway-providers.json".source = tiamatGatewayProvidersJson;
 
       # Disable Compute Wave Store and Resume — MES firmware bug on gfx1151
@@ -962,13 +1015,103 @@ rec {
           test -n "$token"
           umask 077
           ${pkgs.jq}/bin/jq -n --arg token "$token" \
-            '{clients: [{id: "dev-sandbox", token: $token}], providers: []}' \
+            --argjson providers '${tiamatRouterLocalProvidersJson}' \
+            '{clients: [{id: "dev-sandbox", token: $token}], providers: $providers}' \
             > /var/lib/tiamat-router/bootstrap.json.tmp
           ${pkgs.coreutils}/bin/install -o tiamat-router -g tiamat-router -m 0400 \
             /var/lib/tiamat-router/bootstrap.json.tmp /var/lib/tiamat-router/bootstrap.json
           ${pkgs.coreutils}/bin/rm -f /var/lib/tiamat-router/bootstrap.json.tmp
         '';
       };
+
+      # Reconcile the provider through Router's authenticated CRUD API because
+      # bootstrap creation is intentionally create-only. It fails closed while
+      # the old Q3 process or no process owns 8014, preventing a request for the
+      # IQ4 alias from being silently answered by the rollback model.
+      config.systemd.services.tiamat-router-qwen-hold = {
+        description = "Reconcile unavailable-by-default lordhenry Qwen Router provider";
+        wantedBy = [ "multi-user.target" ];
+        after = [
+          "tiamat-router-bootstrap-provision.service"
+          "overlay-tiamat-router.service"
+        ];
+        requires = [ "tiamat-router-bootstrap-provision.service" ];
+        wants = [ "overlay-tiamat-router.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = ''
+          set -euo pipefail
+          token="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets.tiamat-router-token.path})"
+          test -n "$token"
+          auth=$(${pkgs.coreutils}/bin/mktemp)
+          trap '${pkgs.coreutils}/bin/rm -f "$auth"' EXIT
+          ${pkgs.coreutils}/bin/chmod 0600 "$auth"
+          ${pkgs.coreutils}/bin/printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth"
+          for _ in $(${pkgs.coreutils}/bin/seq 1 120); do
+            ${pkgs.curl}/bin/curl -fsS --max-time 2 http://127.0.0.1:8901/health >/dev/null && break
+            ${pkgs.coreutils}/bin/sleep 2
+          done
+          ${pkgs.curl}/bin/curl -fsS --max-time 2 http://127.0.0.1:8901/health >/dev/null
+          code=$(${pkgs.curl}/bin/curl -sS --config "$auth" -o /dev/null -w '%{http_code}' \
+            -H 'Content-Type: application/json' -X POST \
+            --data '${tiamatRouterQwenUnavailableJson}' http://127.0.0.1:8901/tiamat/v1/providers)
+          [ "$code" = 201 ] || [ "$code" = 409 ]
+          state='${tiamatRouterQwenUnavailableJson}'
+          if ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:8014/v1/models \
+            | ${pkgs.jq}/bin/jq -e '.data | any(.id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX")' >/dev/null; then
+            state='${tiamatRouterQwenAvailableJson}'
+          fi
+          ${pkgs.curl}/bin/curl -fsS --config "$auth" -H 'Content-Type: application/json' \
+            -X PUT --data "$state" \
+            http://127.0.0.1:8901/tiamat/v1/providers/llama-lordhenry-qwen38-flash-next-iq4nl >/dev/null
+        '';
+      };
+
+      config.systemd.services.tiamat-router-qwen-publish = {
+        description = "Publish ready lordhenry Qwen IQ4_NL to Tiamat Router";
+        after = [
+          "qwen-flash-next.service"
+          "tiamat-router-qwen-hold.service"
+          "overlay-tiamat-router.service"
+        ];
+        requires = [
+          "qwen-flash-next.service"
+          "tiamat-router-qwen-hold.service"
+        ];
+        partOf = [ "qwen-flash-next.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStop = pkgs.writeShellScript "tiamat-router-qwen-unpublish" ''
+            set -eu
+            token="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets.tiamat-router-token.path})"
+            auth=$(${pkgs.coreutils}/bin/mktemp)
+            trap '${pkgs.coreutils}/bin/rm -f "$auth"' EXIT
+            ${pkgs.coreutils}/bin/chmod 0600 "$auth"
+            ${pkgs.coreutils}/bin/printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth"
+            ${pkgs.curl}/bin/curl -fsS --config "$auth" -H 'Content-Type: application/json' \
+              -X PUT --data '${tiamatRouterQwenUnavailableJson}' \
+              http://127.0.0.1:8901/tiamat/v1/providers/llama-lordhenry-qwen38-flash-next-iq4nl >/dev/null || true
+          '';
+        };
+        script = ''
+          set -euo pipefail
+          ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:8014/health >/dev/null
+          ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:8014/v1/models \
+            | ${pkgs.jq}/bin/jq -e '.data | any(.id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX")' >/dev/null
+          token="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets.tiamat-router-token.path})"
+          auth=$(${pkgs.coreutils}/bin/mktemp)
+          trap '${pkgs.coreutils}/bin/rm -f "$auth"' EXIT
+          ${pkgs.coreutils}/bin/chmod 0600 "$auth"
+          ${pkgs.coreutils}/bin/printf 'header = "Authorization: Bearer %s"\n' "$token" > "$auth"
+          ${pkgs.curl}/bin/curl -fsS --config "$auth" -H 'Content-Type: application/json' \
+            -X PUT --data '${tiamatRouterQwenAvailableJson}' \
+            http://127.0.0.1:8901/tiamat/v1/providers/llama-lordhenry-qwen38-flash-next-iq4nl >/dev/null
+        '';
+      };
+      config.systemd.services.qwen-flash-next.wants = [ "tiamat-router-qwen-publish.service" ];
 
       config.systemd.units."overlay-tiamat-router.service" = {
         overrideStrategy = "asDropin";

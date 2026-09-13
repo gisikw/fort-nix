@@ -9,8 +9,11 @@ not EngramHalo.cpp. The exact source/runtime/weights were pinned, built and
 verified. The first boot's adjustable 64 GiB UMA carveout prevented the managed
 weight allocation; after the owner changed UMA to 2 GiB and rebooted, the exact
 stack loaded and completed every requested three-repetition prefill case.
-Functional reproduction therefore succeeds, but the published absolute rates
-did not reproduce on lordhenry: the installed-default 16384 batch reached
+Functional reproduction therefore succeeds. After the completed native-context
+arm below, the owner accepted this evidence and selected the exact no-MTP stack
+as Fort's declarative production candidate; rollback is by git revert. The
+published absolute rates did not reproduce on lordhenry: the installed-default
+16384 batch reached
 1065.76 ± 5.97 prompt t/s at depth zero rather than 1204.31 ± 2.31. The
 published MTP server configuration loaded, but its first bounded decode exposed
 a correctness failure and was not repeated. Production was restored without a
@@ -310,3 +313,13 @@ the benchmark listener was closed and boot ID remained
 `60093145-c25f-4f3f-b3af-cc931f6717f2`. No reboot, NixOS switch, deployment,
 permanent unit/config change or public listener was made. The temporary root
 authorization was not removed.
+
+## Declarative follow-through
+
+The later Fort candidate in `apps/qwen-flash-next` and
+`pkgs/{pwilkin-rocm-strix,llama-cpp-pwilkin-strix}` packages these exact source
+pins, nine hashes and qualified gates without depending on this retained
+benchmark directory. It uses the full native context, 16384 batch/ubatch, one
+slot, loopback-only service, an 8 GiB fail-safe and no MTP. Its activation note
+makes semantic IQ4 quality and one real Pi tool-use run final production gates;
+`llama-bench` execution evidence is not relabeled as semantic evidence.

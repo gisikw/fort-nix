@@ -1,169 +1,226 @@
-# qwen-flash-next — Qwen3.8-Flash-Next on Strix Halo
+# qwen-flash-next — qualified 177B IQ4_NL candidate on lordhenry
 
-Serves **Qwen3.8-Flash-Next** (180B total / ~6B active) from lordhenry's
-Ryzen AI Max+ APU (gfx1151, 128 GB unified memory) through a pinned Vulkan
-build of llama.cpp.
+This app is the declarative production candidate for the exact successfully
+qualified stack in
+[`benchmarks/qwen-flash-next/PWILKIN-ROCM10-LIVE-2026-09-13.md`](../../benchmarks/qwen-flash-next/PWILKIN-ROCM10-LIVE-2026-09-13.md):
 
-Model shape (from the Qwen model card): 125B MoE body with 6B activated
-(512 experts, 10 routed + 1 shared), **51B PLE n-gram embedding**, **4B MTP**
-head, 48 layers laid out as `12 × (3 × (Gated DeltaNet → MoE) → 1 × (Qwen
-Sparse Attention → MoE))`, 262144 native context.
+* model `ilintar/qwen3.8-flash-next-gguf-strix-halo`, exact nine-shard
+  `Qwen3.8-Flash-Next-IQ4_NL-PROJFIX` (100,043,569,504 bytes / 93.17 GiB);
+* custom ROCr/HIP `pwilkin/rocm-systems@7dda3ac6cfe6bbe0b7f08c23a67cfa118d8641a1`;
+* engine `pwilkin/llama.cpp@f5daaa3cfa6358e5dd398911ec741813745a5440`;
+* ROCm0, all layers offloaded, flash attention on, F16 K/V, `--load-mode none`,
+  lazy `on-direct`, batch and ubatch 16384, one slot, no context shift;
+* a hard 262,144-token native context; and
+* **no MTP sidecar and no speculative decoding**. The qualified MTP arm had
+  1.215% acceptance, malformed output, and HTTP 500.
 
-## Source pinning
+The packages under `pkgs/pwilkin-rocm-strix` and
+`pkgs/llama-cpp-pwilkin-strix` use fixed source hashes and ordinary sandboxed
+Nix builds. Production has no dependency on the retained benchmark directory,
+a container, mutable Ubuntu packages, or benchmark-built binaries. The engine
+build disables its web UI, avoiding the upstream mutable UI-bundle fallback.
+Only gfx1151 HIP code is requested for llama.cpp. The service puts custom HIP
+and ROCr ahead of the pinned Nix ROCm SDK libraries in `LD_LIBRARY_PATH`.
 
-`pkgs/llama-cpp-halo` pins **ggml-org/llama.cpp `b10840`** (release of
-2026-09-07) and builds it with `-DGGML_VULKAN=ON`.
+Fort's pinned SDK is ROCm 6.4.3/LLVM 19, while this future custom runtime source
+identifies itself as HIP 7.16 and was qualified when built in AMD's ROCm 10
+image. The Nix package therefore carries explicit, reviewed compatibility
+patches limited away from lordhenry's native execution path: it omits future
+gfx12/gfx12.5 embedded runtime shaders, disables HIPRTC PCH generation,
+provides COMGR 3.0 fallbacks for SPIR-V-only actions, and leaves the gfx11
+runtime entries and native gfx1151 llama bundles unchanged. llama.cpp does not
+use HIPRTC or SPIR-V in this deployment. This is a reproducible source/behavior
+pin, not a claim that different toolchains emit byte-identical ELF files.
 
-* Upstream mainline already carries what this box needs: the `qwen4exp`
-  architecture (`src/llama-arch.cpp`), the PLE tensor family
-  (`blk.N.ple_key` / `ple_value` / …), server slots, and
-  `--ctx-checkpoints` / `--checkpoint-min-step`.
-* **EngramHalo.cpp is real and is the current performance reference.**
-  [`Aristo94/EngramHalo.cpp`](https://github.com/Aristo94/EngramHalo.cpp), branch
-  `strix-halo-qwen4exp`, contains the ROCm/gfx1151 sparse-QSA, MTP, and
-  SSD-backed engram work measured by the abliter8 recipe. Its moving branch can
-  be pinned (the published recipe used `4ff3affc2`), and it is the likely
-  performance upgrade after a host-specific ROCm soak. The initial deployment
-  deliberately uses a pinned upstream release instead: fewer patches and a
-  backend already exercised on lordhenry are preferable while validating a new
-  84 GiB model and its two-slot state semantics.
-* **Vulkan first, not because ROCm is impossible.** lordhenry carries
-  `amdgpu.cwsr_enable=0` as a workaround for the gfx1151 MES hang (ROCm #5590),
-  and its existing accelerated services use Vulkan/RADV. EngramHalo's ROCm
-  recipe uses compatible host tuning and may be faster; switching remains an
-  explicit measured follow-up rather than an unsupported claim.
+The built candidate hashes are:
 
-## Quant ladder and memory budget
+| artifact | Nix candidate SHA-256 | qualification-window SHA-256 |
+|---|---|---|
+| `llama-server` | `f93439ab77b89de329a6a07d881c8c4071d20ce19cdb49357b310eb2351b53a4` | `ad2898b08356d3ee1b1fb18719e91f33f1fcf23185a5004c12ba08fed84de86d` |
+| `llama-bench` | `70f719b5d8303308d7c0bef0d8391419590083c796a6e5c1cbf6f6879f00fe0b` | `2ce2668b48cea10a7e8cdeb6ff942f1481887e20292a895d81d834787624fcd2` |
+| custom `libamdhip64.so.7` | `8b8d25a008efb0a4b5657edcc4de6a4c0a253fb62c258bc2ba0bd66cca575ba4` | `6ada53165e5afceb3efb7d822e3b901cb660172cb77f72be0ace02a7b5a8724c` |
+| custom `libhsa-runtime64.so.1` | `5527accb7fcf0e94ba6fa5bcc9c641922d10d5d603a302f4b80d194943807170` | `1a6341b8f0116a5cacb24a3b8bf28591ad1da430730478844dd014cb73b97944` |
 
-128 GB unified memory, shared with the OS, ollama, and the GPU's own
-allocations. Weights (exact bytes from the HF tree API, 2026-09-07):
+That expected ELF difference is why activation requires the Nix closure's own
+semantic/tool-use proof before dispatch; retained benchmark binaries are
+provenance, never a runtime fallback.
 
-| quant | shards | on disk | notes |
-|---|---|---|---|
-| `UD-Q4_K_XL` | 4 | 103.7 GiB | does not leave room for KV + ollama; not wired up |
-| **`UD-Q3_K_XL`** | 3 | **83.8 GiB** | **default** |
-| `UD-IQ3_XXS` | 3 | 76.3 GiB | fallback if GTT headroom proves tighter |
-| `UD-Q2_K_XL` | 3 | 73.5 GiB | last resort; not wired up |
+The runtime exports both unified-memory spellings. This exact engine checks
+`GGML_CUDA_ENABLE_UNIFIED_MEMORY=1`; the HIP-named variable by itself is
+ineffective. All other qualified launcher gates are explicit in the unit.
 
-Two further levers:
+## Architecture choice: replacement, with disk rollback
 
-* **GTT ceiling.** An APU can only map a fraction of system RAM into GTT by
-  default (~50%), which is below the 83.8 GiB working set. The module sets
-  `amdgpu.gttsize` / `ttm.pages_limit` / `ttm.page_pool_size` to 112 GiB
-  (`tuneGtt = true`). **These are kernel parameters: they need a reboot.**
-* **PLE on CPU.** `--override-tensor "ple_key|ple_value=CPU"` keeps the 51B
-  n-gram lookup table mmap-backed in host memory instead of resident in GTT.
-  It is a large, sparsely-touched table; the page cache handles it far better
-  than the GPU allocator does. This is also the reason the initial Vulkan path
-  does not bind the published single ~47.7 GiB PLE tensor as one Vulkan buffer
-  (which exceeds the commonly reported 4 GiB binding limit). Actual model-load
-  validation on lordhenry remains mandatory; if upstream still constructs a
-  giant backend buffer before honoring the override, use EngramHalo's
-  SSD-streamed path or split-PLE utility rather than weakening the memory gate.
-  Set `ngramOverrideTensor = null` only after proving the resulting allocation.
+This candidate **replaces the process behind existing private port 8014** and
+keeps Fort service name `qwen-next`. It does not declare a second endpoint:
+lordhenry has disk for both artifact sets, but cannot safely keep both
+~100-GiB-class processes resident. A second auto-startable unit would turn an
+apparently additive change into an OOM hazard. Loopback remains the only server
+listener; existing Fort VPN/token nginx ingress is unchanged, with no firewall
+opening or new public listener.
 
-## MTP speculative decoding: off, on purpose
+Rollback is intentionally disk-cheap rather than resident-additive. The old
+three-shard `UD-Q3_K_XL` files are preserved. Reverting the candidate commit
+restores the b10840/Vulkan Q3 service declaration on the same endpoint. Do not
+remove either model set until the new stack passes activation.
 
-unsloth publishes MTP draft heads (`shared-Q8_0`, 2.6 GiB, ~1.3–1.7× at
-concurrency 1) — but their own README is explicit that **a stock
-ggml-org/llama.cpp build cannot use them**: mainline has no MTP graph for
-`qwen4exp` and no cross-model tensor borrowing.
-[ggml-org/llama.cpp#28243](https://github.com/ggml-org/llama.cpp/pull/28243)
-("models: Qwen3.8-Flash-Next MTP") was still **open** on 2026-09-07.
+`restartIfChanged = false` means a NixOS activation does not interrupt the
+currently running Q3 process merely because its unit changed. The model timer
+stages and verifies the candidate, then deliberately restarts the one service
+after the complete nine-file set is committed. That is the production cutover.
 
-So `enableMtp = false` by default: enabling it on this pin would download
-2.6 GiB that does nothing. To turn it on later, bump the `pkgs/llama-cpp-halo`
-pin to a tag that contains #28243, then set `enableMtp = true` — the drafter
-artifact, hash and flags (`--spec-draft-model … --spec-type draft-mtp
---spec-draft-n-max 2`) are already wired.
+## Model reconciliation
 
-Note also unsloth's finding that MTP is a **net loss above ~concurrency 8**.
-With two resident trajectories we are firmly in the regime where it helps.
+`qwen-flash-next-models` is the established reconciler, now locked to all nine
+IQ4_NL shards. It:
 
-## Provisioning
+1. computes remaining bytes and refuses to fetch without those bytes plus a
+   16 GiB disk margin;
+2. resumes one `.downloading` staging file at a time with bounded curl retries,
+   exact length and SHA-256 checks, and same-filesystem atomic rename;
+3. creates a manifest-specific completion marker only after every shard is
+   verified; the server requires this marker and therefore never loads a
+   partial set; and
+4. restarts only after an artifact changed, or starts an inactive service once
+   reconciliation is complete.
 
-`qwen-flash-next-models.timer` (hourly, 5 min after boot) reconciles the model
-store at `/var/lib/qwen-flash-next/models`:
+A matching completion marker takes the daily timer's fast path: all lengths are
+rechecked, but 93 GiB is not redundantly streamed into page cache every day.
+Deleting the marker requests a full cryptographic revalidation without a model
+download. Builds/evaluation/tests never fetch GGUF data.
 
-1. **Capacity precheck.** Sums the bytes still missing, adds a 16 GiB margin,
-   compares against `statfs` on the store. If it does not fit it logs
-   `BLOCKED: need N GiB free … have M GiB. Not downloading.` and exits
-   non-zero. **No ~90 GB download is ever started blind.**
-2. Resumable `curl -C -` per shard, sha256-verified against the HF LFS oid,
-   atomic rename into place.
-3. On a complete store, start the server if it is inactive, or restart it only
-   when this reconciliation installed a changed artifact. The former
-   unconditional `ExecStartPost=systemctl restart` reloaded the healthy 90 GB
-   server after every hourly no-op reconciliation; the reconciler now uses a
-   per-run `restart-required` marker to avoid that disruption.
+Expected one-time disk delta is exactly 100,043,569,504 bytes of file content
+(93.17 GiB), plus filesystem metadata and any resumable staging file. During a
+single shard's atomic handoff, there is no second completed copy. The existing
+Q3 model and the retained ~126 GB benchmark directory remain separate cleanup
+boundaries.
 
-`qwen-flash-next.service` has `wantedBy = [ ]` and a `ConditionPathExists` on
-the first shard, so a host switch never starts a server whose weights are
-absent — activation cannot be failed by this app.
+## Memory and firmware gates
 
-## Context shape and hybrid-state persistence
+The qualification succeeded on Linux 6.12; no kernel upgrade prerequisite is
+claimed or encoded. BIOS UMA **must be exactly 2 GiB**. Firmware remains an
+external host prerequisite, not something Fort attempts to manage. `ExecStartPre`
+checks the visible 2 GiB VRAM carveout, approximately 128 GiB system memory,
+the complete model marker, and at least 8 GiB `MemAvailable`.
 
-Production uses `--parallel 1 --ctx-size 131072`: one 131072-token context.
-The former setting was two separate 65536-token slots. Measurements and the
-source audit that motivated the change are retained in
-`benchmarks/qwen-flash-next/` and the operator report.
+A parent watchdog samples Linux `MemAvailable`. If it remains below 8 GiB for
+15 seconds, it terminates only its llama-server child and exits failed so the
+bounded restart policy applies. This is a fail-safe, not a claim that Linux
+reserves 8 GiB. `MemorySwapMax=0` prevents the inference service from relying
+on swap; no swap configuration is added. The unit is deliberately preferred
+over unrelated services under an actual OOM (`OOMScoreAdjust=500`) and never
+kills unrelated processes.
 
-Qwen3.8-Flash-Next is not a KV-only transformer. Its hybrid memory consists of:
+At the full 262,144-token qualification boundary, minimum `MemAvailable` was
+19.54 GiB: 11.54 GiB above the guard. There was no OOM, reset, or swap
+pathology. Allocation is llama.cpp's incremental/lazy-direct path rather than a
+vLLM-style maximum-context weight pre-reservation; the hard context is still
+262,144.
 
-* sparse-attention K/V plus the QSA indexer cache;
-* Gated DeltaNet recurrent **R** convolution and **S** matrix state for each
-  recurrent layer; and
-* a separate PLE convolution-history row.
+## Readiness and measured behavior
 
-A serializer that writes only attention KV cannot restore the trajectory. That
-is an algorithmic constraint, not something more RAM can fix. However, the
-pinned llama.cpp **b10840 does implement full sequence-state persistence**:
-`llama_memory_hybrid_idx::state_write/read` chains the attention cache, the
-recurrent cache, and the indexer cache; `llama_memory_recurrent::state_write`
-explicitly writes R, S, and PLE rows. `llama_state_seq_save_file` and the
-server's slot save action use that sequence-state path.
+Process existence is not readiness. The service remains `activating` while an
+`ExecStartPost` probe waits up to 45 minutes for both HTTP 200 from `/health`
+and the exact alias in `/v1/models`. Overall startup timeout is 50 minutes.
+Failure is bounded to three starts/hour with a 60-second delay. The reconciler
+cannot start it without the set-level marker.
 
-The distinction is therefore:
+Qualified independent `llama-bench` pp/tg results (tg does **not** continue the
+pp test):
 
-* KV-only restore: invalid for this architecture.
-* Full hybrid-state serialization: architecturally possible and implemented by
-  the pinned C API/server internals.
-* Disk slot API in this deployment: **not exposed**, because no
-  `--slot-save-path` is configured. The endpoint returns HTTP 501.
-* RAM prompt cache: **disabled** with `--cache-ram 0` and
-  `--no-cache-idle-slots`; if enabled, this build uses
-  `llama_state_seq_get_data_ext(..., FLAGS_NONE)` and therefore includes full
-  hybrid state.
-* In-process context checkpoints: enabled (`8`, minimum spacing `4096`). They
-  use `LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`; for hybrid memory that deliberately
-  skips attention KV and captures recurrent state, while the resident KV prefix
-  remains in place. They are rollback aids, not restart persistence.
+| test | result |
+|---|---:|
+| depth 0, pp16384 | 1065.76 ± 5.97 t/s |
+| depth 0, tg128 | 27.97 ± 0.13 t/s |
+| depth 40,000, pp16384 | 1019.24 ± 5.59 t/s |
+| depth 40,000, tg128 | 18.00 ± 0.08 t/s |
+| pp16384 at d114688, ending 131,072 | 867.15 ± 4.15 t/s |
+| tg128 at d130944, ending 131,072 | 9.664 ± 0.022 t/s |
+| pp16384 at d245760, ending 262,144 | 80.330 ± 0.048 t/s |
+| tg128 at d262016, ending 262,144 | 5.315 ± 0.013 t/s |
 
-The service still uses `--no-context-shift` and deliberately loses continuity
-on restart. Those are conservative operational choices, not claims that this
-version cannot serialize or shift recurrent state. Disk save/restore has not
-been end-to-end qualified with this exact 90 GB GGUF, so enabling it should be
-a separate correctness test despite the clear implementation path.
+For agent work, compact around **64–96K** in normal operation and treat 262K as
+emergency runway. This is operational advice, not a false hard-context value in
+the Tiamat catalog.
 
-`llama-server` still has no concept of rooms or conversations. With more than
-one slot, a coordinator must use `id_slot` on native `POST /completion`; the
-OpenAI-compatible route does not provide the same explicit affinity contract.
-Prefix stability remains necessary for resident prompt reuse.
+## Tiamat model/profile
 
-## Endpoints
+Lordhenry's existing tiamat-router bootstrap gains one static local provider:
 
-Bound to `127.0.0.1:8014`; the only ingress is this host's nginx entry,
-declared through `fort.cluster.services` as VPN-only (no `visibility` key)
-with token SSO and VPN bypass. Useful paths: `/health`, `/slots` (per-slot
-occupancy — the coordinator's view of trajectory state), `/metrics`,
-`/completion` (native, accepts `id_slot`), `/v1/chat/completions` (OAI-compat,
-does not).
+* provider: `llama-lordhenry-qwen38-flash-next-iq4nl`
+* model: `Qwen3.8-Flash-Next-IQ4_NL-PROJFIX`
+* agent-dispatch profile ID:
+  `tiamat-openai-llama-lordhenry-qwen38-flash-next-iq4nl/Qwen3.8-Flash-Next-IQ4_NL-PROJFIX`
 
-## Operating notes
+Tiamat Router's generic local-provider catalog does not have a separate policy
+profile object: the concrete provider/model pair above is the dispatch profile.
+A duplicate legacy-Tiamat profile is intentionally not added because it would
+bypass Router readiness/availability and broaden a different authorization
+surface.
 
-* First start is slow: ~84 GiB has to come off disk into GTT.
-  `TimeoutStartSec = 45min`.
-* Check `journalctl -u qwen-flash-next-models` for `BLOCKED:` lines before
-  assuming provisioning is stuck.
-* Watch `n_ctx` in the startup log: `--ctx-size` is the **total**, divided
-  across the slots.
+It advertises OpenAI completions, text input, reasoning, 262,144 context, a
+conservative 32,768-token output ceiling, and zero monetary token cost. Total
+prompt plus output must remain within context. It does not advertise vision or
+MTP.
+OpenAI-compatible tool calls are passed through, but semantic/tool behavior is
+an activation gate below. The provider uses `127.0.0.1:8014`; no public model
+listener is needed.
+
+The bootstrap client list is unchanged. A declarative Router CRUD reconciler
+creates/updates the provider as `unavailable/upstream` unless `/v1/models`
+contains the exact IQ4 alias. A dependent oneshot publishes `available` only
+after the llama service's full readiness probe; stopping that service marks it
+unavailable again. This prevents the still-running rollback Q3 model during
+staging from answering a request labeled as IQ4. Credentials are passed to curl
+through a mode-0600 temporary config, not argv or the Nix store.
+
+This does not enroll the model into broader Native Agents or add it to azula
+Golem's harness allowlist. Operators can authorize that separately after
+quality gates pass.
+
+## Activation gate and rollback runbook
+
+Do not delete the retained benchmark directory during this procedure.
+
+1. Build and activate the reviewed Fort generation. Activation itself leaves
+   the running Q3 process alone (`restartIfChanged = false`). Confirm BIOS UMA
+   is still 2 GiB and preserve at least roughly 110 GiB free (93.17 GiB model +
+   16 GiB reconciliation margin + metadata).
+2. Start `qwen-flash-next-models.service` intentionally, or wait for its timer.
+   Follow `journalctl -fu qwen-flash-next-models`. The qualified live download
+   took about 896 seconds, but network and disk conditions may make it longer.
+3. Expect one service interruption when the set completes. Loading is large and
+   may take tens of minutes. Follow `journalctl -fu qwen-flash-next` and require:
+
+   ```sh
+   systemctl is-active qwen-flash-next.service
+   curl -fsS http://127.0.0.1:8014/health
+   curl -fsS http://127.0.0.1:8014/v1/models \
+     | jq -e '.data[] | select(.id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX")'
+   ss -ltnp | grep '127.0.0.1:8014'
+   systemctl --failed
+   ```
+
+4. Inspect argv/environment and prove ROCm0, full offload, flash attention,
+   F16 K/V, load-mode none, lazy on-direct, 16K batch/ubatch, one slot, 262K,
+   no context shift, custom library precedence, and both unified-memory names.
+   Re-hash all nine independently provisioned shards once.
+5. **Before production dispatch**, run a deterministic semantic-quality smoke
+   check of this IQ4 quant, then one real Pi agent task that must make and
+   consume a tool call. Reject activation for malformed/repeated output or
+   tool-call failure. Do not enable MTP as a remedy.
+6. Exercise dispatch through the provider/model ID above and confirm
+   tiamat-router's catalog reports the exact metadata.
+
+To roll back, revert the candidate commit and activate that generation. The old
+Q3 files were not removed, so `qwen-flash-next-models.service` can validate and
+restart the prior b10840/Vulkan endpoint. Verify its old alias and health.
+Only after the Nix-built runtime, independent model store, semantic smoke, Pi
+tool run, and router dispatch all pass may an owner separately authorize:
+
+```text
+rm -rf /var/lib/qwen-flash-next/benchmarks/strix-halo-rocm10-545cf48d
+```
+
+That retained directory is approximately 126 GB and is the sole benchmark
+cleanup boundary. It is not removed by this candidate.
