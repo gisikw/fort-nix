@@ -17,12 +17,12 @@ rec {
   # prices the ollama/* arm.
   apps = [
     "ollama"
-    # Exact qualified 177B IQ4_NL-PROJFIX candidate: pwilkin ROCr/HIP and
+    # Exact evidenced 177B IQ4_NL-PROJFIX candidate: pwilkin ROCr/HIP and
     # llama.cpp pins, one ROCm0 slot, 262144 hard context, 16K batch/ubatch,
     # lazy direct PLE, no MTP. This deliberately replaces the process behind
     # private port 8014 rather than trying to resident-run two ~100 GiB stacks.
     # Existing Q3 shards remain on disk and `git revert` restores their unit.
-    # See apps/qwen-flash-next/README.md before activation.
+    # See apps/qwen-flash-next/README.md before deployment.
     "qwen-flash-next"
   ];
 
@@ -160,7 +160,12 @@ rec {
   ];
 
   module =
-    { config, pkgs, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     let
       tiamatWingsGatewayJson = pkgs.writeText "tiamat-wings-gateway.json" (
         builtins.toJSON {
@@ -175,20 +180,20 @@ rec {
           ];
         }
       );
-      # Static local provider for tiamat-router. The provider/model pair is the
-      # agent-dispatch profile; client authorization is unchanged (only the
-      # existing dev-sandbox token is bootstrapped). The router and llama-server
-      # share this host, so the upstream stays loopback-only.
+      # Static local provider for tiamat-router. It is discoverable when the
+      # exact model is live, but no Golem/Familiar profile selects it by default.
+      # The router and llama-server share this host, so the upstream is loopback.
       tiamatRouterLocalProviders = [
         {
           id = "llama-lordhenry-qwen38-flash-next-iq4nl";
           kind = "api-key";
           baseUrl = "http://127.0.0.1:8014/v1";
           wireFormats = [ "openai-completions" ];
-          # Fail closed until the exact server's readiness probe succeeds.
+          # Bootstrap fails closed until the liveness reconciler observes the
+          # exact alias. Availability is discovery, not workload selection.
           availability = {
             state = "unavailable";
-            reason = "upstream";
+            reason = "model-not-ready";
           };
           models = [
             {
@@ -738,7 +743,7 @@ rec {
               (.[0].baseUrl == "http://127.0.0.1:8014/v1") and
               (.[0].wireFormats == ["openai-completions"]) and
               (.[0].availability.state == "unavailable") and
-              (.[0].availability.reason == "upstream") and
+              (.[0].availability.reason == "model-not-ready") and
               (.[0].models | length == 1) and
               (.[0].models[0].id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX") and
               (.[0].models[0].context_window == 262144) and
@@ -1024,12 +1029,11 @@ rec {
         '';
       };
 
-      # Reconcile the provider through Router's authenticated CRUD API because
-      # bootstrap creation is intentionally create-only. It fails closed while
-      # the old Q3 process or no process owns 8014, preventing a request for the
-      # IQ4 alias from being silently answered by the rollback model.
+      # Reconcile through Router's authenticated CRUD API because bootstrap
+      # creation is create-only. Exact alias plus health controls publication;
+      # the old Q3 model or no listener leaves this provider unavailable.
       config.systemd.services.tiamat-router-qwen-hold = {
-        description = "Reconcile unavailable-by-default lordhenry Qwen Router provider";
+        description = "Reconcile lordhenry Qwen Router provider liveness";
         wantedBy = [ "multi-user.target" ];
         after = [
           "tiamat-router-bootstrap-provision.service"
@@ -1059,8 +1063,9 @@ rec {
             --data '${tiamatRouterQwenUnavailableJson}' http://127.0.0.1:8901/tiamat/v1/providers)
           [ "$code" = 201 ] || [ "$code" = 409 ]
           state='${tiamatRouterQwenUnavailableJson}'
-          if ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:8014/v1/models \
-            | ${pkgs.jq}/bin/jq -e '.data | any(.id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX")' >/dev/null; then
+          if ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:8014/health >/dev/null \
+            && ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:8014/v1/models \
+              | ${pkgs.jq}/bin/jq -e '.data | any(.id == "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX")' >/dev/null; then
             state='${tiamatRouterQwenAvailableJson}'
           fi
           ${pkgs.curl}/bin/curl -fsS --config "$auth" -H 'Content-Type: application/json' \

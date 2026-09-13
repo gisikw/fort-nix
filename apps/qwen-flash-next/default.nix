@@ -1,6 +1,6 @@
-# Exact production candidate qualified on lordhenry:
+# Exact experimental stack evidenced on lordhenry:
 # Qwen3.8-Flash-Next 177B IQ4_NL-PROJFIX, pwilkin llama.cpp/HIP, ROCm0.
-# READ README.md before activation or rollback.
+# READ README.md before deployment or rollback.
 {
   subdomain ? null,
   serviceName ? "qwen-next",
@@ -103,13 +103,12 @@ let
     }:$PATH
     store=${lib.escapeShellArg modelStore}
     complete=${lib.escapeShellArg completeMarker}
-    restart_required=/var/lib/qwen-flash-next/restart-required
     mkdir -p "$store"
 
     # A matching marker means this exact manifest was already hash-verified.
     # Retest all lengths without streaming 93 GiB through the page cache on
     # every timer tick. Any missing/truncated file invalidates the marker.
-    if [ -e "$complete" ]; then
+    if [ "$(cat "$complete" 2>/dev/null || true)" = '${manifestId}' ]; then
       valid=1
       count=$(jq length <<'JSON'
     ${artifactsJson}
@@ -130,6 +129,9 @@ let
         echo "Artifact reconciliation complete (manifest ${manifestId}; lengths rechecked)."
         exit 0
       fi
+      rm -f "$complete"
+    else
+      # An old manifest marker must never authorize this shard set.
       rm -f "$complete"
     fi
 
@@ -222,7 +224,6 @@ let
         actual=$(sha256sum "$partial" | cut -d' ' -f1)
         if [ "$actual" = "$want" ]; then
           mv -f "$partial" "$target"
-          touch "$restart_required"
           echo "DONE: $file (validated staging file)"
           continue
         fi
@@ -251,7 +252,6 @@ let
         continue
       fi
       mv -f "$partial" "$target"
-      touch "$restart_required"
       echo "DONE: $file"
     done
     [ "$failed" = 0 ] || exit 1
@@ -264,7 +264,7 @@ let
     echo "Artifact reconciliation complete (${toString totalBytes} bytes)."
   '';
 
-  hostGate = pkgs.writeShellScript "qwen-flash-next-host-gate" ''
+  hostPreflight = pkgs.writeShellScript "qwen-flash-next-host-preflight" ''
     set -euo pipefail
     mem_kib=$(${pkgs.gawk}/bin/awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
     [ "$mem_kib" -ge 125000000 ] || {
@@ -288,8 +288,8 @@ let
       echo "memory guard: MemAvailable=$available KiB is below 8 GiB; refusing model start" >&2
       exit 1
     }
-    [ -e ${lib.escapeShellArg completeMarker} ] || {
-      echo "model manifest is not completely reconciled: ${completeMarker}" >&2
+    [ "$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg completeMarker} 2>/dev/null || true)" = '${manifestId}' ] || {
+      echo "model manifest is absent or stale: ${completeMarker}" >&2
       exit 1
     }
   '';
@@ -320,14 +320,17 @@ let
 
   readiness = pkgs.writeShellScript "qwen-flash-next-readiness" ''
     set -euo pipefail
-    for _ in $(seq 1 1350); do
-      if ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:${toString port}/health >/dev/null \
-        && ${pkgs.curl}/bin/curl -fsS --max-time 3 http://127.0.0.1:${toString port}/v1/models \
+    deadline=$((SECONDS + 2700))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+      if ${pkgs.curl}/bin/curl -fsS --max-time 2 http://127.0.0.1:${toString port}/health >/dev/null \
+        && ${pkgs.curl}/bin/curl -fsS --max-time 2 http://127.0.0.1:${toString port}/v1/models \
           | ${pkgs.jq}/bin/jq -e --arg id ${lib.escapeShellArg modelAlias} '.data | any(.id == $id)' >/dev/null; then
         echo "Qwen API ready: ${modelAlias}"
         exit 0
       fi
-      sleep 2
+      remaining=$((deadline - SECONDS))
+      [ "$remaining" -gt 0 ] || break
+      [ "$remaining" -lt 2 ] && sleep "$remaining" || sleep 2
     done
     echo "Qwen process did not become API-ready within 45 minutes" >&2
     exit 1
@@ -382,6 +385,9 @@ let
       engineSourceHash = llama.sourceHash;
       runtimeRevision = runtime.sourceRevision;
       runtimeSourceHash = runtime.sourceHash;
+      artifacts = {
+        inherit completeMarker manifestId;
+      };
     }
   );
   declarationTest =
@@ -398,6 +404,8 @@ let
           (.engineSourceHash == "sha256-9YrpYJ1K2FdDhqstcfdwWMjTl7UhBL0ZHBOP6+KbyoY=") and
           (.runtimeRevision == "7dda3ac6cfe6bbe0b7f08c23a67cfa118d8641a1") and
           (.runtimeSourceHash == "sha256-URmOwL8itq2lwzfkRD4QtRuoAcBRHva2sLJ+vl0wjbE=") and
+          (.artifacts.manifestId == "2f152a082cdff9959d5a") and
+          (.artifacts.completeMarker == "/var/lib/qwen-flash-next/models/.Qwen3.8-Flash-Next-IQ4_NL-PROJFIX-2f152a082cdff9959d5a.complete") and
           (.environment.GGML_CUDA_ENABLE_UNIFIED_MEMORY == "1") and
           (.environment.GGML_HIP_ENABLE_UNIFIED_MEMORY == "1") and
           (.serverArgs | index("ROCm0") != null) and
@@ -515,10 +523,10 @@ in
       "network.target"
       "qwen-flash-next-models.service"
     ];
-    wantedBy = [ ];
-    restartIfChanged = false;
+    # Boot starts the service normally. The preflight keeps it stopped until
+    # the exact nine-shard manifest is complete; reconciliation starts it.
+    wantedBy = [ "multi-user.target" ];
     unitConfig = {
-      ConditionPathExists = completeMarker;
       StartLimitIntervalSec = 3600;
       StartLimitBurst = 3;
     };
@@ -532,7 +540,7 @@ in
         "video"
         "render"
       ];
-      ExecStartPre = hostGate;
+      ExecStartPre = hostPreflight;
       ExecStart = "${memoryGuard} ${lib.escapeShellArgs serverArgs}";
       ExecStartPost = readiness;
       Restart = "on-failure";
@@ -556,25 +564,16 @@ in
   };
   systemd.services.qwen-flash-next-models = lib.mkIf provisionModel {
     description = "Reconcile exact Qwen3.8-Flash-Next IQ4_NL shards";
+    wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     restartIfChanged = false;
+    unitConfig.OnSuccess = [ "qwen-flash-next.service" ];
     serviceConfig = {
       Type = "oneshot";
       User = "qwen-flash-next";
       Group = "qwen-flash-next";
       ExecStart = reconcileScript;
-      ExecStartPost = "+${pkgs.writeShellScript "qwen-flash-next-reconcile-post" ''
-        set -eu
-        marker=/var/lib/qwen-flash-next/restart-required
-        if [ -e "$marker" ]; then
-          rm -f "$marker"
-          exec ${pkgs.systemd}/bin/systemctl restart --no-block qwen-flash-next.service
-        fi
-        if ! ${pkgs.systemd}/bin/systemctl is-active --quiet qwen-flash-next.service; then
-          exec ${pkgs.systemd}/bin/systemctl start --no-block qwen-flash-next.service
-        fi
-      ''}";
       TimeoutStartSec = "12h";
     };
   };
