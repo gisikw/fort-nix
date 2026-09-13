@@ -55,6 +55,7 @@ class Client:
             first = None
             final = None
             content_parts = []
+            output_tokens = []
             # llama-server emits SSE as one JSON object per `data:` line.
             for raw in r:
                 line = raw.decode("utf-8", "replace").strip()
@@ -66,11 +67,16 @@ class Client:
                 event = json.loads(payload)
                 if event.get("content"):
                     content_parts.append(event["content"])
+                if event.get("tokens"):
+                    output_tokens.extend(event["tokens"])
                 if first is None and (event.get("content") or event.get("tokens")):
                     first = time.perf_counter() - start
                 final = event
             final = final or {}
             final["content"] = "".join(content_parts)
+            # Native streaming exposes the sampled token IDs. Preserve them so
+            # cross-backend greedy parity is stricter than a UTF-8 text check.
+            final["output_tokens"] = output_tokens
             return final, time.perf_counter() - start, first
 
     def tokenize(self, text: str) -> list[int]:
@@ -133,6 +139,7 @@ def completion(client: Client, prompt: str, slot: int, predict: int,
         "decode_tps": timings.get("predicted_per_second"),
         "stop_type": body.get("stop_type"),
         "truncated": body.get("truncated"),
+        "output_tokens": body.get("output_tokens", []),
         "content": body.get("content", ""),
     }
 
