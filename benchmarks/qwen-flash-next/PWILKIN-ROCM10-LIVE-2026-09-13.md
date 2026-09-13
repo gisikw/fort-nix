@@ -93,6 +93,83 @@ memory rather than a TTM-accounted GTT buffer. The 8 GiB safety guard never
 fired. Bounded kernel slices for both runs were empty: no reset, ring/MES fault,
 XNACK event or kernel OOM occurred.
 
+## Native-context qualification
+
+A later bounded qualification on the same boot directly reached both the
+approximately 131K point and the model's full native 262,144-token boundary.
+No artifact was downloaded or rebuilt. Immediately before the window, all ten
+published model hashes, `llama-bench`, `llama-server`, custom HIP and custom
+ROCr were re-hashed successfully; both source trees were clean at their pins.
+The production b10840 process/argv, both health endpoints, topology, kernel and
+boot ID also matched the resumed baseline.
+
+Pinned-source semantics matter here. `README.md` lines 85--95 define `-p` and
+`-n` as separate pp and tg tests and `-d` as the KV prefill before *each* test.
+`llama-bench.cpp` constructs separate instances (`n_gen=0` for pp and
+`n_prompt=0` for tg, lines 1339--1410), sizes each context as
+`n_depth+n_prompt+n_gen` (line 1293), performs the depth run before starting the
+test timer (lines 2404--2464), and clears/restores state between repetitions.
+Consequently, the earlier `pp16384 @ d40000` ends at 56,384, while the separate
+`tg128 @ d40000` runs from 40,000 through 40,128; tg does **not** follow that
+pp. The native tests therefore used distinct exact depths:
+
+* pp: `114688 + 16384 = 131072` and `245760 + 16384 = 262144`;
+* tg: `130944 + 128 = 131072` and `262016 + 128 = 262144`.
+
+Each was a distinct `llama-bench` invocation with `-b 16384 -ub 16384`, FP16
+K/V, three repetitions, no MTP, and otherwise the same engine, custom runtime,
+lazy `on-direct` placement, launcher gates and
+`GGML_CUDA_ENABLE_UNIFIED_MEMORY=1`. Thus the timed pp value is the final
+16,384-token prefill chunk at the stated starting depth, not the time to build
+the preceding depth. Likewise, each tg result includes its own unmeasured depth
+prefill and is not a continuation of the pp test.
+
+| boundary | independently timed test | mean ± spread | samples | mean timed duration |
+|---:|---|---:|---|---:|
+| 131,072 | pp16384 @ d114688 | **867.15 ± 4.15 t/s** | 862.384, 869.888, 869.189 | **18.894 s** |
+| 131,072 | tg128 @ d130944 | **9.664 ± 0.022 t/s** | 9.68866, 9.65858, 9.64528 | **13.245 s** |
+| 262,144 | pp16384 @ d245760 | **80.330 ± 0.048 t/s** | 80.2976, 80.3081, 80.3847 | **203.958 s** |
+| 262,144 | tg128 @ d262016 | **5.315 ± 0.013 t/s** | 5.32299, 5.32312, 5.29972 | **24.082 s** |
+
+The 131K arm occupied 426.45 seconds wall time (220.14 seconds for its complete
+pp invocation and 205.05 seconds for tg, including model load, warmup and depth
+construction). Its peak RSS was 97,738,620 KiB and minimum `MemAvailable` was
+28,929,492 KiB (27.59 GiB), leaving 19.59 GiB above the live 8 GiB guard.
+VRAM/GTT sysfs peaks were 170,369,024/218,562,560 bytes. Swap-free declined by
+only 22,784 KiB and `pswpout` advanced 5,183 pages, not swap pathology. All
+three samples were tight and both commands returned zero.
+
+This supplied a positive progressive gate for the native maximum: even against
+the observed rather than nominal arithmetic, 131K retained over twice the
+required additional safety margin. One non-fatal kernel warning did occur
+during Btrfs model readahead in the 131K tg invocation:
+`prepare_slab_obj_exts_hook, biovec-max: Failed to create slab extension
+vector!` from `alloc_tagging_slab_alloc_hook`. It tainted the kernel with `W`
+but did not indicate an amdgpu/KFD fault, OOM, failed I/O or benchmark error;
+the arm completed, memory stayed far above the guard, and the warning did not
+recur in the longer 262K arm. It is retained in the complete bounded kernel
+slice rather than hidden by an amdgpu-only filter.
+
+The 262K arm then occupied 1,550.64 seconds wall time (951.29 seconds for pp and
+597.64 seconds for tg). Peak RSS was 106,112,696 KiB and minimum
+`MemAvailable` was 20,492,472 KiB (19.54 GiB), leaving **11.54 GiB above the
+8 GiB guard**. VRAM/GTT sysfs peaks were 172,036,096/219,877,376 bytes. Only
+10,496 KiB of swap-free was consumed and `pswpout` advanced 3,852 pages. The
+bounded kernel slice had no GPU fault/reset, kernel OOM or new warning; stderr
+had no error/failure/assertion, every sample completed, and the guard never
+fired. Peak memory-pressure PSI `some/full avg10` was 31.60/31.53% (131K:
+26.90/26.90%), so the run created real pressure despite retaining the required
+operational reserve.
+
+The direct answer is therefore **yes** for this benchmark mode: this exact 177B
+IQ4_NL stack carries both 131,072 and the full native 262,144 context on
+lordhenry while keeping more than 8 GiB available. Performance remaining at
+those boundaries is the table above. In particular, full-boundary prefill is
+stable but collapses to about 80.33 t/s for the final 16K chunk; decode remains
+about 5.32 t/s. `llama-bench` still does not expose generated IDs, so this is
+direct execution/stability and performance evidence, not an independent
+semantic-output-quality test.
+
 ### MTP server arm
 
 The pinned installer's exact Flash-Next defaults were then exercised on
@@ -214,13 +291,22 @@ All residue is confined to the private benchmark directory
 | bounded Podman image/layer store | 20,916,899,840 |
 | total experiment directory before resume | 126,062,903,296 |
 | total experiment directory after resume | 126,063,230,976 |
+| total experiment directory after native-context qualification | 126,063,497,216 |
 
-The evidence/log delta was 327,680 allocated bytes and final free space was
-725,053,227,008 bytes. The directory remains the safe cleanup boundary, but it
-was deliberately retained. At settlement the exact production b10840
+The resume evidence/log delta was 327,680 allocated bytes. The native-context
+harness and remote evidence added another 266,240 allocated bytes. Final free
+space was 725,052,973,056 bytes. The directory remains the safe cleanup
+boundary, but it was deliberately retained and the exact artifacts remain
+useful for a later, separately authorized 500K/1M YaRN experiment. This native
+result does not authorize or establish the memory safety of such an arm.
+
+At settlement the exact production b10840
 executable/argv was again listening on 127.0.0.1:8014, qwen, Ollama and its
 dashboard plus both model timers were active, both health endpoints returned
 HTTP 200, `systemctl --failed` was empty, port 18014 was closed, and the boot ID
-was unchanged. No reboot, NixOS switch, deployment, permanent unit/config
-change or public listener was made. The temporary root authorization was not
-removed.
+was unchanged. The native arms likewise restored the exact executable/argv,
+both correctly named model timers and all services after each bounded window;
+the benchmark listener was closed and boot ID remained
+`60093145-c25f-4f3f-b3af-cc931f6717f2`. No reboot, NixOS switch, deployment,
+permanent unit/config change or public listener was made. The temporary root
+authorization was not removed.
