@@ -1,8 +1,13 @@
 # EngramHalo / ROCm 10 qualification
 
+> **Superseded execution target.** The source of the quoted 1,086–1,204
+> prompt-token/s result was later recovered as pwilkin's different Strix Halo
+> stack. EngramHalo remains useful negative/provenance evidence but was not
+> built or run on lordhenry. See `PWILKIN-ROCM10-LIVE-2026-09-13.md`.
+
 Audit date: 2026-09-13 UTC. Plate: `545cf48d-88be-4419-9f99-14a602ebfce8`.
 This is source and toolchain qualification only. Nothing here is imported by
-`apps/qwen-flash-next`, and no host was contacted or changed.
+`apps/qwen-flash-next`, and no host was contacted or changed during this audit.
 
 ## Pins and provenance
 
