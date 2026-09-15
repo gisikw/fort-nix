@@ -1083,6 +1083,10 @@ rec {
         wantedBy = [ "multi-user.target" ];
         before = [ "overlay-tiamat-router.service" ];
         after = [ "sops-nix.service" ];
+        # NixOS activation stops dependents while restarting this oneshot, but
+        # does not otherwise start them again. Upholds closes that lifecycle
+        # gap so a credential/bootstrap change cannot leave the router down.
+        unitConfig.Upholds = [ "overlay-tiamat-router.service" ];
         restartTriggers = [
           config.sops.secrets.tiamat-router-bootstrap-token.sopsFile
           config.sops.secrets.tiamat-router-work-laptop-token.sopsFile
