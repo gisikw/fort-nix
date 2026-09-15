@@ -75,6 +75,7 @@ rec {
       qwenNextProviderId = "qwen-next-flash";
       qwenNextProviderBaseUrl = "https://qwen-next.gisi.network/v1";
       qwenNextProviderAddress = "100.101.0.9";
+      qwenNextModelId = "Qwen3.8-Flash-Next-IQ4_NL-PROJFIX";
       privateLocalityActivationSql = pkgs.writeText "tiamat-router-private-locality-activate.sql" ''
         .bail on
         PRAGMA busy_timeout=5000;
@@ -1103,6 +1104,7 @@ rec {
             --arg qwenProviderId "${qwenNextProviderId}" \
             --arg qwenBaseUrl "${qwenNextProviderBaseUrl}" \
             --arg qwenAddress "${qwenNextProviderAddress}" \
+            --arg qwenModelId "${qwenNextModelId}" \
             '{
               clients: [
                 {id: "dev-sandbox", token: $token},
@@ -1114,7 +1116,8 @@ rec {
                 baseUrl: $qwenBaseUrl,
                 locality: "local",
                 localAddresses: [$qwenAddress],
-                wireFormats: ["openai-completions"]
+                wireFormats: ["anthropic-messages", "openai-completions"],
+                models: [{id: $qwenModelId}]
               }]
             }' \
             > /var/lib/tiamat-router/bootstrap.json.tmp
