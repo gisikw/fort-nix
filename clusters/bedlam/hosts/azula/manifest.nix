@@ -72,6 +72,9 @@ rec {
       privateProviderId = "llama-frankenstein";
       privateProviderBaseUrl = "https://llama.gisi.network/v1";
       privateProviderAddress = "100.101.0.18";
+      qwenNextProviderId = "qwen-next-flash";
+      qwenNextProviderBaseUrl = "https://qwen-next.gisi.network/v1";
+      qwenNextProviderAddress = "100.101.0.9";
       privateLocalityActivationSql = pkgs.writeText "tiamat-router-private-locality-activate.sql" ''
         .bail on
         PRAGMA busy_timeout=5000;
@@ -1061,6 +1064,16 @@ rec {
         mode = "0400";
       };
 
+      # Dedicated tiamat-router client credential for Kevin's work-laptop evals.
+      # The cleartext copy is transferred out of band and never committed.
+      config.sops.secrets.tiamat-router-work-laptop-token = {
+        sopsFile = ./work-laptop-tiamat-router-token.sops;
+        format = "binary";
+        owner = "tiamat-router";
+        group = "tiamat-router";
+        mode = "0400";
+      };
+
       # Runtime assembly keeps the bearer token out of the Nix store. The
       # overlay unit requires this oneshot even when overlay-manager creates or
       # restarts the service after boot.
@@ -1069,7 +1082,10 @@ rec {
         wantedBy = [ "multi-user.target" ];
         before = [ "overlay-tiamat-router.service" ];
         after = [ "sops-nix.service" ];
-        restartTriggers = [ config.sops.secrets.tiamat-router-bootstrap-token.sopsFile ];
+        restartTriggers = [
+          config.sops.secrets.tiamat-router-bootstrap-token.sopsFile
+          config.sops.secrets.tiamat-router-work-laptop-token.sopsFile
+        ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -1077,10 +1093,30 @@ rec {
         script = ''
           set -euo pipefail
           token="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets.tiamat-router-bootstrap-token.path})"
+          work_laptop_token="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets.tiamat-router-work-laptop-token.path})"
           test -n "$token"
+          test -n "$work_laptop_token"
           umask 077
-          ${pkgs.jq}/bin/jq -n --arg token "$token" \
-            '{clients: [{id: "dev-sandbox", token: $token}], providers: []}' \
+          ${pkgs.jq}/bin/jq -n \
+            --arg token "$token" \
+            --arg workLaptopToken "$work_laptop_token" \
+            --arg qwenProviderId "${qwenNextProviderId}" \
+            --arg qwenBaseUrl "${qwenNextProviderBaseUrl}" \
+            --arg qwenAddress "${qwenNextProviderAddress}" \
+            '{
+              clients: [
+                {id: "dev-sandbox", token: $token},
+                {id: "work-laptop-eval", token: $workLaptopToken}
+              ],
+              providers: [{
+                id: $qwenProviderId,
+                kind: "api-key",
+                baseUrl: $qwenBaseUrl,
+                locality: "local",
+                localAddresses: [$qwenAddress],
+                wireFormats: ["openai-completions"]
+              }]
+            }' \
             > /var/lib/tiamat-router/bootstrap.json.tmp
           ${pkgs.coreutils}/bin/install -o tiamat-router -g tiamat-router -m 0400 \
             /var/lib/tiamat-router/bootstrap.json.tmp /var/lib/tiamat-router/bootstrap.json
