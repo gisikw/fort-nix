@@ -61,7 +61,9 @@ disables health for the same class of reason.)
      `sso.groups` (preferred: still authenticated, still auditable); or
   2. add a second `fort.cluster.services` entry with a different subdomain and
      a narrower `staticRoot` (e.g. a per-deck published directory) at a weaker
-     `sso.mode`; or
+     `sso.mode`; **this is what `decks.gisi.network` now is** — same tree,
+     per-deck allow-list, HTTP Basic Auth, see [azula-decks.md](azula-decks.md).
+     This entry is unchanged by it; or
   3. relax this entry to `sso.mode = "none"`, which makes every deck in
      `public/` world-readable on the internet and should not be done for a
      shared root.

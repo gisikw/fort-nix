@@ -318,6 +318,85 @@ rec {
         autoindex off;
         try_files $uri $uri/ /asg/$deck/index.html =404;
       '';
+      # Decks: a second, password-protected origin over the *same* generated
+      # tree, for sharing individual decks with people who have no Fort
+      # identity. slides.<domain> stays identity-gated and untouched; this
+      # vhost exposes only the allow-listed deck prefixes below and answers
+      # 404 for everything else. The wall is plain nginx HTTP Basic Auth with
+      # one fixed username; the htpasswd line is a SOPS binary secret that
+      # only ever exists decrypted under /run/secrets, owned by nginx.
+      #
+      # Secret creation (never commit or paste the cleartext anywhere; see
+      # docs/azula-decks.md):
+      #   nix shell nixpkgs#apacheHttpd nixpkgs#sops -c sh -c '
+      #     htpasswd -nB viewer \
+      #       | SOPS_AGE_KEY_FILE=~/.config/age/keys.txt \
+      #         sops --input-type binary --output-type json \
+      #           --filename-override clusters/bedlam/hosts/azula/decks-htpasswd.sops \
+      #           -e /dev/stdin > clusters/bedlam/hosts/azula/decks-htpasswd.sops'
+      #   git add clusters/bedlam/hosts/azula/decks-htpasswd.sops
+      # The creation rule for that path is already in .sops.yaml. Until the file
+      # is tracked by git, this whole surface is absent (flake sources exclude
+      # untracked files, and sops-nix hashes sopsFile at eval time): the vhost,
+      # its DNS/ingress needs and the secret are gated on decksHtpasswdPresent
+      # so the rest of the host keeps evaluating. That is the fail-closed state.
+      decksName = "decks";
+      decksUser = "viewer";
+      decksHtpasswdSopsFile = ./decks-htpasswd.sops;
+      decksHtpasswdRepoPath = "clusters/bedlam/hosts/azula/decks-htpasswd.sops";
+      decksHtpasswdPresent = builtins.pathExists decksHtpasswdSopsFile;
+      decksHtpasswdSecret = "decks-htpasswd";
+      decksHtpasswdPath = "/run/secrets/${decksHtpasswdSecret}";
+      # Root-relative deck prefixes (no leading or trailing slash) that this
+      # origin publishes. Each becomes one regex location below; every other
+      # URI on the vhost is 404. Adding a deck means editing this list *and*
+      # the pinning assertion, on purpose.
+      decksPublished = [ "asg/opco-ai-efficiency" ];
+      decksSlugPattern = "[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*";
+      # `(/|$)`: the bare prefix matches too, so try_files sees $uri/ as a
+      # directory and nginx emits the canonical trailing-slash 301 -- after the
+      # access phase, i.e. only to an authenticated client.
+      decksDeckLocation = deck: "~ ^/${pkgs.lib.escapeRegex deck}(/|$)";
+      decksAuthConfig = ''
+        auth_basic "Restricted";
+        auth_basic_user_file ${decksHtpasswdPath};
+      '';
+      decksDeckConfig = deck: ''
+        ${decksAuthConfig}
+        # Same source refusal as the slides vhost.
+        if ($uri ~* "\.(md|markdown)$") {
+          return 404;
+        }
+        index index.html;
+        autoindex off;
+        try_files $uri $uri/ /${deck}/index.html =404;
+      '';
+      # Same credential-safe access log shape as familiar-ui: method plus
+      # nginx's normalized, argument-free $uri. No $remote_user, no query, no
+      # headers -- a Basic credential can never be serialized into it.
+      decksAccessLogFormat = ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+      # Runs as the nginx user after sops-nix so a wrong owner/mode or a
+      # malformed line shows up in the journal instead of as a silent 401
+      # storm. Deliberately not a hard dependency of nginx.service: the wall
+      # already fails closed (nginx answers 401 to anything it cannot match),
+      # and this host's other vhosts must not go down over one htpasswd line.
+      # The script never prints file contents.
+      decksHtpasswdVerifyScript = ''
+        set -euo pipefail
+        f=${decksHtpasswdPath}
+        if [ ! -r "$f" ]; then
+          echo "decks: $f is not readable by the nginx user" >&2
+          exit 1
+        fi
+        if [ "$(${pkgs.gnugrep}/bin/grep -c "" "$f")" != 1 ]; then
+          echo "decks: htpasswd must contain exactly one line" >&2
+          exit 1
+        fi
+        if ! ${pkgs.gnugrep}/bin/grep -qE '^${decksUser}:\$(2[aby]|apr1|5|6)\$[^:[:space:]]+$' "$f"; then
+          echo "decks: htpasswd line must be '${decksUser}:<bcrypt|apr1|sha-crypt hash>'" >&2
+          exit 1
+        fi
+      '';
       projectsStateDir = "/var/lib/projects";
       familiarGitTokenPath = "/var/lib/fort-git/familiar-token";
       familiarGitTokenHandler = pkgs.writeShellScript "familiar-git-token-handler" ''
@@ -701,7 +780,162 @@ rec {
               ));
             message = "slides: static publishing must be unrelated to the Familiar Presence lifecycle";
           }
-        ];
+          # --- decks.gisi.network --------------------------------------------
+          # Always-on: the shape of the surface, independent of whether the
+          # secret exists yet.
+          {
+            assertion =
+              decksName == "decks"
+              && decksUser == "viewer"
+              && decksPublished == [ "asg/opco-ai-efficiency" ]
+              && builtins.all (deck: builtins.match decksSlugPattern deck != null) decksPublished
+              && pkgs.lib.unique decksPublished == decksPublished;
+            message = "decks: the published allow-list must be exactly the reviewed deck set, with safe slugs";
+          }
+          {
+            assertion =
+              decksHtpasswdSopsFile == ./decks-htpasswd.sops
+              && baseNameOf decksHtpasswdRepoPath == baseNameOf (toString decksHtpasswdSopsFile)
+              && decksHtpasswdPath == "/run/secrets/decks-htpasswd"
+              && !(pkgs.lib.hasPrefix "/nix/store" decksHtpasswdPath)
+              && !(pkgs.lib.hasInfix "${decksUser}:" decksAuthConfig)
+              && !(pkgs.lib.hasInfix "${decksUser}:" (pkgs.lib.concatMapStrings decksDeckConfig decksPublished));
+            message = "decks: the htpasswd must be the runtime SOPS path and no credential line may exist in Nix";
+          }
+          {
+            assertion =
+              decksAccessLogFormat
+              == ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent''
+              && !(pkgs.lib.hasInfix "$remote_user" decksAccessLogFormat)
+              && !(pkgs.lib.hasInfix "$http_" decksAccessLogFormat)
+              && !(pkgs.lib.hasInfix "$request\"" decksAccessLogFormat);
+            message = "decks: access log format must never carry credentials, headers or query strings";
+          }
+          {
+            assertion =
+              pkgs.lib.hasInfix "'^${decksUser}:" decksHtpasswdVerifyScript
+              && !(pkgs.lib.hasInfix "cat " decksHtpasswdVerifyScript)
+              && !(pkgs.lib.hasInfix "echo \"$(" decksHtpasswdVerifyScript);
+            message = "decks: the verifier must pin the fixed username and never print the htpasswd contents";
+          }
+          # Slides is unchanged: identity wall only, no Basic Auth anywhere on it.
+          {
+            assertion =
+              let
+                slides = config.services.nginx.virtualHosts."slides.${domain}";
+                slidesRendered = pkgs.lib.concatStringsSep "\n" (
+                  [ slides.extraConfig ]
+                  ++ map (name: slides.locations.${name}.extraConfig) (builtins.attrNames slides.locations)
+                );
+                slidesSvc = builtins.head (
+                  builtins.filter (svc: svc.name == "slides") config.fort.cluster.services
+                );
+              in
+              !(pkgs.lib.hasInfix "auth_basic" slidesRendered)
+              && slidesSvc.sso.mode == "identity"
+              && slidesSvc.sso.groups == [ "admin" ];
+            message = "slides: the identity-gated origin must not acquire Basic Auth or change its wall";
+          }
+        ]
+        ++ pkgs.lib.optionals decksHtpasswdPresent (
+          let
+            vhost = config.services.nginx.virtualHosts."${decksName}.${domain}";
+            locationNames = builtins.attrNames vhost.locations;
+            deckLocationNames = map decksDeckLocation decksPublished;
+            rendered = pkgs.lib.concatStringsSep "\n" (
+              [ vhost.extraConfig ] ++ map (name: vhost.locations.${name}.extraConfig) locationNames
+            );
+            secret = config.sops.secrets.${decksHtpasswdSecret};
+            svc = builtins.head (builtins.filter (s: s.name == decksName) config.fort.cluster.services);
+            verify = config.systemd.services.decks-htpasswd-verify;
+            nginxUnit = config.systemd.services.nginx;
+          in
+          [
+            {
+              assertion =
+                vhost.root == slidesPublicRoot
+                && vhost.forceSSL
+                && svc.staticRoot == slidesPublicRoot
+                && svc.visibility == "public"
+                && svc.sso.mode == "none"
+                && !svc.sso.vpnBypass
+                && !svc.sso.localBypass
+                && !svc.health.enabled;
+              message = "decks: vhost must serve the slides output tree over TLS with no generic wall, bypass or probe";
+            }
+            {
+              assertion =
+                builtins.elem "-${slidesPublicRoot}" nginxUnit.serviceConfig.BindReadOnlyPaths
+                && nginxUnit.serviceConfig.ProtectHome == "tmpfs";
+              message = "decks: nginx must see only the bind-mounted public tree";
+            }
+            {
+              assertion =
+                pkgs.lib.hasInfix "return 404;" vhost.locations."/".extraConfig
+                && !(pkgs.lib.hasInfix "auth_basic" vhost.locations."/".extraConfig)
+                &&
+                  pkgs.lib.sort builtins.lessThan locationNames
+                  == pkgs.lib.sort builtins.lessThan ([ "/" ] ++ deckLocationNames);
+              message = "decks: the only locations are an unconditional 404 catch-all and one wall per published deck";
+            }
+            {
+              assertion = builtins.all (
+                deck:
+                let
+                  cfg = vhost.locations.${decksDeckLocation deck}.extraConfig;
+                in
+                pkgs.lib.hasInfix ''auth_basic "Restricted";'' cfg
+                && pkgs.lib.hasInfix "auth_basic_user_file ${secret.path};" cfg
+                && pkgs.lib.hasInfix "try_files $uri $uri/ /${deck}/index.html =404;" cfg
+                && pkgs.lib.hasInfix ''if ($uri ~* "\.(md|markdown)$")'' cfg
+                && pkgs.lib.hasInfix "index index.html;" cfg
+                && pkgs.lib.hasInfix "autoindex off;" cfg
+                && !(pkgs.lib.hasInfix "auth_basic off" cfg)
+              ) decksPublished;
+              message = "decks: every published deck location must carry the Basic Auth wall, stay inside its own prefix and refuse Markdown";
+            }
+            {
+              assertion =
+                !(pkgs.lib.hasInfix "autoindex on" rendered)
+                && !(pkgs.lib.hasInfix "auth_request" rendered)
+                && !(pkgs.lib.hasInfix "_identity" rendered)
+                && !(pkgs.lib.hasInfix "proxy_pass" rendered)
+                && !(pkgs.lib.hasInfix "alias " rendered)
+                && !(pkgs.lib.hasInfix "root " rendered);
+              message = "decks: no listing, no identity plumbing, no proxying and no root/alias override on this origin";
+            }
+            {
+              assertion =
+                pkgs.lib.hasInfix "access_log /var/log/nginx/decks-access.log decks_safe;" vhost.extraConfig
+                && pkgs.lib.hasInfix "error_log /var/log/nginx/decks-error.log warn;" vhost.extraConfig
+                && !(pkgs.lib.hasInfix " debug;" vhost.extraConfig)
+                && pkgs.lib.hasInfix "log_format decks_safe '${decksAccessLogFormat}';" config.services.nginx.commonHttpConfig;
+              message = "decks: vhost logging must use the credential-safe access format and never debug";
+            }
+            {
+              assertion =
+                secret.sopsFile == decksHtpasswdSopsFile
+                && secret.format == "binary"
+                && secret.path == decksHtpasswdPath
+                && secret.owner == config.services.nginx.user
+                && secret.group == config.services.nginx.group
+                && secret.mode == "0400"
+                && pkgs.lib.hasPrefix (toString ./.) (toString secret.sopsFile);
+              message = "decks: htpasswd secret must be this host's binary SOPS file, 0400 and owned by the nginx user";
+            }
+            {
+              assertion =
+                verify.serviceConfig.User == config.services.nginx.user
+                && verify.serviceConfig.Group == config.services.nginx.group
+                && builtins.elem "sops-nix.service" verify.after
+                && builtins.elem "nginx.service" verify.before
+                && !(builtins.elem "decks-htpasswd-verify.service" nginxUnit.requires)
+                && !(builtins.elem "decks-htpasswd-verify.service" nginxUnit.bindsTo)
+                && !(builtins.elem "decks-htpasswd-verify.service" nginxUnit.wants);
+              message = "decks: the verifier runs as nginx after sops-nix and can never take nginx down with it";
+            }
+          ]
+        );
 
       config.users.groups.tiamat-router = { };
       config.users.users.tiamat-router = {
@@ -789,7 +1023,19 @@ rec {
           };
           health.enabled = false;
         }
-      ];
+      ]
+      # Decks: same output tree, different wall (see the let block). sso.mode
+      # is "none" because the Basic Auth wall is written into the locations
+      # below, not because the origin is open: "/" answers 404 unconditionally
+      # and every published prefix carries auth_basic. Health is off for the
+      # same reason as slides: a probe would only ever see 401/404.
+      ++ pkgs.lib.optional decksHtpasswdPresent {
+        name = decksName;
+        staticRoot = slidesPublicRoot;
+        visibility = "public";
+        sso.mode = "none";
+        health.enabled = false;
+      };
 
       # nginx's unit runs with ProtectHome=true, so the static root has to be
       # bind-mounted into its namespace anyway (same idiom as apps/vault). That
@@ -820,6 +1066,76 @@ rec {
         locations.${slidesDeckLocation}.extraConfig = slidesDeckConfig;
       };
 
+      # Decks vhost. The generic static location emits `try_files $uri $uri/
+      # =404`; `return 404` runs in the rewrite phase, i.e. before try_files
+      # and before any auth, so everything outside a published prefix is a
+      # flat 404 with no credential prompt. Each published deck is a regex
+      # location (outranks "/") that carries its own Basic Auth wall; auth is
+      # the access phase, so it precedes try_files, the directory 301 and the
+      # SPA fallback alike.
+      config.services.nginx.virtualHosts."${decksName}.${domain}" = pkgs.lib.mkIf decksHtpasswdPresent {
+        extraConfig = pkgs.lib.mkAfter ''
+          access_log /var/log/nginx/decks-access.log decks_safe;
+          # Debug-level nginx errors can include request headers (and so the
+          # Basic credential). Pin this vhost at warn regardless of global
+          # verbosity. Password mismatches log the username only.
+          error_log /var/log/nginx/decks-error.log warn;
+          more_set_headers "Referrer-Policy: no-referrer";
+          more_set_headers "X-Robots-Tag: noindex, nofollow, noarchive";
+        '';
+        locations = {
+          "/".extraConfig = ''
+            return 404;
+          '';
+        }
+        // pkgs.lib.listToAttrs (
+          map (deck: {
+            name = decksDeckLocation deck;
+            value.extraConfig = decksDeckConfig deck;
+          }) decksPublished
+        );
+      };
+
+      # The htpasswd line, decrypted at activation straight into nginx's
+      # hands. nginx opens auth_basic_user_file per request, so a rotated
+      # secret takes effect without a reload. Never materialised anywhere
+      # else; never referenced from the store except by this path string.
+      config.sops.secrets.${decksHtpasswdSecret} = pkgs.lib.mkIf decksHtpasswdPresent {
+        sopsFile = decksHtpasswdSopsFile;
+        format = "binary";
+        path = decksHtpasswdPath;
+        owner = config.services.nginx.user;
+        group = config.services.nginx.group;
+        mode = "0400";
+      };
+
+      config.systemd.services.decks-htpasswd-verify = pkgs.lib.mkIf decksHtpasswdPresent {
+        description = "Verify the decks htpasswd secret is readable by nginx and well-formed";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "sops-nix.service" ];
+        before = [ "nginx.service" ];
+        restartTriggers = [ decksHtpasswdSopsFile ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = config.services.nginx.user;
+          Group = config.services.nginx.group;
+          UMask = "0077";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          CapabilityBoundingSet = "";
+        };
+        script = decksHtpasswdVerifyScript;
+      };
+
+      config.warnings = pkgs.lib.optional (!decksHtpasswdPresent) (
+        "decks: ${decksHtpasswdRepoPath} is not present (or not tracked by git), "
+        + "so ${decksName}.${domain} is not being generated. Create the SOPS binary secret "
+        + "containing exactly one htpasswd line for user '${decksUser}' (see the manifest comment)."
+      );
+
       # Serve index.html for directories, with an autoindex fallback for the
       # bare drafts. The generic static location (common/fort/nginx.nix) only
       # emits try_files; extraConfig is types.lines, so this appends.
@@ -836,9 +1152,14 @@ rec {
       # This vhost gets a private log format: its request field contains only
       # method plus nginx's normalized, argument-free $uri. In particular it
       # can never serialize the bridge bearer or an accidental query token.
-      config.services.nginx.commonHttpConfig = pkgs.lib.mkAfter ''
-        log_format familiar_ui_safe '${familiarUiAccessLogFormat}';
-      '';
+      config.services.nginx.commonHttpConfig = pkgs.lib.mkAfter (
+        ''
+          log_format familiar_ui_safe '${familiarUiAccessLogFormat}';
+        ''
+        + pkgs.lib.optionalString decksHtpasswdPresent ''
+          log_format decks_safe '${decksAccessLogFormat}';
+        ''
+      );
       config.services.nginx.virtualHosts."familiar-ui.${domain}" = {
         # Use one server block for both listeners so the dedicated safe access
         # and warn-level error logs also cover cleartext redirect requests.
