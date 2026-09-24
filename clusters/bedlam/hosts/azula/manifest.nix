@@ -1661,10 +1661,10 @@ rec {
         restartUnits = [ "familiar-services.service" ];
       };
 
-      # M2 singleton: Attention, worklist/DND, and wakes. Pi clients talk to
+      # M2 singleton: Attention and the scheduler (events, wakes, DND). Pi clients talk to
       # /run/familiar-services/familiar.sock; no service parents a Pi.
       config.systemd.services.familiar-services = {
-        description = "Familiar services (Attention, worklist, wakes)";
+        description = "Familiar services (Attention, scheduler)";
         wantedBy = [ "multi-user.target" ];
         unitConfig.ConditionPathExists = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services";
         serviceConfig = {
@@ -1672,14 +1672,15 @@ rec {
           Group = "users";
           RuntimeDirectory = "familiar-services";
           RuntimeDirectoryMode = "0750";
-          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services serve --socket /run/familiar-services/familiar.sock --attention-db /home/familiar/.local/state/familiar-ui/attention.sqlite --state-dir ${kestrelDir}/state";
+          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services serve --socket /run/familiar-services/familiar.sock --attention-db /home/familiar/.local/state/familiar-ui/attention.sqlite --state-dir /var/lib/familiar-services";
+          StateDirectory = "familiar-services";
           Restart = "always";
           RestartSec = 2;
           UMask = "0077";
           NoNewPrivileges = true;
           PrivateTmp = true;
           ProtectSystem = "strict";
-          ReadWritePaths = [ "/home/familiar/.local/state/familiar-ui" "${kestrelDir}/state/worklist" "${kestrelDir}/state/wakes" ];
+          ReadWritePaths = [ "/home/familiar/.local/state/familiar-ui" ];
           RestrictAddressFamilies = [ "AF_UNIX" ];
         };
       };
