@@ -236,8 +236,6 @@ rec {
       familiarUiExtensionDir = "${familiarPiAgentDir}/extensions/familiar-ui";
       familiarUiExtensionPath = "${familiarUiExtensionDir}/index.js";
       familiarUiProfileExtension = "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
-      familiarPlateDir = "${kestrelDir}/state/plate";
-      familiarPlateFile = "${familiarPlateDir}/plate.json";
       # Exact familiar-ui authenticated JSON limit: 16 MiB + 64 KiB. Keep
       # this location boundary in bytes so nginx and the backend cannot drift
       # through unit rounding.
@@ -436,7 +434,6 @@ rec {
           process.env.FAMILIAR_UI_ORIGIN = ${builtins.toJSON familiarUiOrigin};
           process.env.FAMILIAR_UI_PORT = ${builtins.toJSON (toString familiarUiPort)};
           process.env.FAMILIAR_UI_DESCRIPTOR = ${builtins.toJSON familiarUiDescriptor};
-          process.env.FAMILIAR_PLATE_FILE = ${builtins.toJSON familiarPlateFile};
 
           const target = await realpath(${builtins.toJSON familiarUiProfileExtension});
           if (!target.startsWith("/nix/store/")) {
@@ -454,7 +451,6 @@ rec {
         set -euo pipefail
         install -d -m 0700 ${familiarPiAgentDir}/extensions
         install -d -m 0700 ${familiarUiExtensionDir}
-        install -d -m 0700 ${familiarPlateDir}
         ln -sfn ${familiarUiExtension} ${familiarUiExtensionPath}
       '';
       golemdConfig = pkgs.writeText "golemd-azula.toml" ''
@@ -651,17 +647,9 @@ rec {
           }
           {
             assertion =
-              familiarPlateFile == "/var/lib/kestrel/state/plate/plate.json"
-              && pkgs.lib.hasInfix "process.env.FAMILIAR_PLATE_FILE = ${builtins.toJSON familiarPlateFile};" familiarUiExtensionSource;
-            message = "familiar-ui: wrapper must export the canonical private durable Plate path";
-          }
-          {
-            assertion =
               config.systemd.services.familiar-ui-stage.serviceConfig.User == "familiar"
-              && config.systemd.services.familiar-ui-stage.serviceConfig.Group == "users"
-              && pkgs.lib.hasInfix "install -d -m 0700 ${familiarPlateDir}" familiarUiStageScript
-              && !(pkgs.lib.hasInfix familiarPlateFile familiarUiStageScript);
-            message = "familiar-ui: staging must create only Plate's private parent directory as familiar:users";
+              && config.systemd.services.familiar-ui-stage.serviceConfig.Group == "users";
+            message = "familiar-ui: staging runs as familiar:users";
           }
           {
             assertion =
