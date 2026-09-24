@@ -13,11 +13,11 @@
 # tmux/Pi cgroup. The tracked fetch unit therefore restarts only the outer
 # service after a successful update (declare it in restartUnits).
 #
-# One-time migration: declarative activation starts the Presence monitor but
-# cannot adopt a tmux server already born in the old outer cgroup. Stop the
-# outer unit once; the monitor detects the lost tmux and restarts into its own
-# cgroup. Start the outer unit again and verify ownership before enabling code
-# updates that assume restart-independent Presence.
+# One-time M3 cutover: activation does not restart Presence
+# (restartIfChanged/stopIfChanged are false in the host manifest), so the new
+# Presence definition takes effect at the next deliberate
+# `systemctl restart <serviceName>-presence`. Both definitions share state/pi;
+# rollback is reverting this file and restarting Presence again.
 #
 # Instance provisioning: if instanceDir does not exist and instanceRepo is
 # set, it is cloned at first start. An existing directory is left untouched.
@@ -95,29 +95,6 @@ let
       }
     fi
   '';
-  # Presence readiness alone is insufficient during the one-time migration:
-  # the new monitor may initially be observing a tmux born in the legacy outer
-  # cgroup. Refuse to launch the outer supervisor until the resident pane is
-  # physically owned by the dedicated Presence unit. This also prevents a
-  # future startup race from recreating tmux under the wrong service.
-  waitForPresenceOwnership = ''
-    presence_unit=${lib.escapeShellArg "${presenceServiceName}.service"}
-    socket=${lib.escapeShellArg presenceSocket}
-    target=${lib.escapeShellArg "${presenceSession}:0.0"}
-    tries=0
-    while [ "$tries" -lt 150 ]; do
-      control_group="$(systemctl show "$presence_unit" --property=ControlGroup --value 2>/dev/null || true)"
-      pane_pid="$(tmux -S "$socket" display-message -p -t "$target" '#{pane_pid}' 2>/dev/null || true)"
-      if [ -n "$control_group" ] && [ -n "$pane_pid" ] \
-        && grep -Fxq "$pane_pid" "/sys/fs/cgroup$control_group/cgroup.procs" 2>/dev/null; then
-        exit 0
-      fi
-      tries=$((tries + 1))
-      sleep 0.2
-    done
-    echo "familiar instance: Presence pane is not owned by $presence_unit" >&2
-    exit 1
-  '';
   presenceEnvironment = {
     HOME = home;
     FAMILIAR_CONFIG_PATH = "${instanceDir}/familiar.toml";
@@ -128,40 +105,15 @@ let
     FAMILIAR_PRESENCE_SESSION = presenceSession;
     FAMILIAR_PRESENCE_BASH = "${pkgs.bash}/bin/bash";
     FAMILIAR_INTERACTIVE_SHELL = "${pkgs.bashInteractive}/bin/bash";
+    FAMILIAR_PRESENCE_PID_FILE = "${presenceStateDir}/pi.pid";
   };
-  # ExecStart itself creates tmux: systemd may reap daemons forked by
-  # ExecStartPre before starting the main process. The foreground monitor keeps
-  # ownership of the cgroup, announces readiness only after Presence exists,
-  # and uses pinned tmux rather than re-reading a moving tracked checkout.
-  presenceMonitor = pkgs.writeShellScript "${presenceServiceName}-monitor" ''
-    set -euo pipefail
-    ctl=${lib.escapeShellArg presenceCtl}
-    socket=${lib.escapeShellArg presenceSocket}
-    session=${lib.escapeShellArg presenceSession}
-    target="$session:0.0"
-
-    "$ctl" ensure
-    ${pkgs.systemd}/bin/systemd-notify --ready --status="Presence is live at $socket"
-
-    while :; do
-      if ! ${pkgs.tmux}/bin/tmux -S "$socket" has-session -t "$session" >/dev/null 2>&1; then
-        echo "familiar presence monitor: tmux session disappeared" >&2
-        exit 1
-      fi
-      pane_dead="$(${pkgs.tmux}/bin/tmux -S "$socket" display-message -p -t "$target" '#{pane_dead}' 2>/dev/null || true)"
-      if [ "$pane_dead" != 0 ]; then
-        echo "familiar presence monitor: resident pane is absent or dead" >&2
-        exit 1
-      fi
-      sleep 2
-    done
-  '';
 in
 {
-  # This unit owns the resident tmux server, worker, and Pi process. It is not
-  # PartOf the outer stack: restarting familiar-instance must leave Presence
-  # untouched. An explicit Presence stop/restart still tears down the complete
-  # dedicated cgroup.
+  # M3: this unit is the only thing that starts or restarts the resident Pi.
+  # `presence.sh start` creates a detached private tmux whose single pane execs
+  # Pi once (--continue); the tmux server is MainPID and exits with that pane,
+  # so Restart=always replaces the old respawn loop, ensure, and monitor. It is
+  # not PartOf the outer stack: restarting familiar-instance leaves Pi alone.
   systemd.services.${presenceServiceName} = {
     description = "Familiar Presence runtime (${instanceDir})";
     after = [
@@ -177,12 +129,12 @@ in
     serviceConfig = {
       User = user;
       Group = group;
-      Type = "notify";
-      NotifyAccess = "all";
+      Type = "forking";
+      PIDFile = "${presenceStateDir}/pi.pid";
       WorkingDirectory = instanceDir;
-      ExecStart = presenceMonitor;
+      ExecStart = "${presenceCtl} start";
       ExecStop = "${presenceCtl} stop";
-      Restart = "on-failure";
+      Restart = "always";
       RestartSec = 2;
       KillMode = "control-group";
       TimeoutStartSec = 60;
@@ -195,15 +147,11 @@ in
     after = [
       "network-online.target"
       "fort-tracked-${trackedName}-fetch.service"
-      "${presenceServiceName}.service"
     ];
-    requires = [ "${presenceServiceName}.service" ];
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
-    # The first activation cannot move an already-running tmux between cgroups.
-    # Keep the old outer unit alive until the operator deliberately stops it;
-    # the Presence monitor then restarts and recreates tmux under its own unit.
-    # Explicit tracked-service restarts continue to work normally.
+    # Activation never bounces the outer stack mid-conversation; tracked
+    # updates restart it explicitly via restartUnits.
     restartIfChanged = false;
     # Until the first successful tracked fetch there is nothing to run; the
     # fetch unit's post-update restart cold-starts us once the tree exists.
@@ -213,7 +161,7 @@ in
     # must not receive this second condition or preStart could never clone.
     unitConfig.ConditionPathExists = instanceConditions;
     path = runtimePath;
-    preStart = provisionInstance + waitForPresenceOwnership;
+    preStart = provisionInstance;
     environment = {
       HOME = home;
       FAMILIAR_CONFIG_PATH = "${instanceDir}/familiar.toml";
