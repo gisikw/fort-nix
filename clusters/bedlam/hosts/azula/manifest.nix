@@ -1658,6 +1658,30 @@ rec {
         exec = null;
         user = "familiar";
         group = "users";
+        restartUnits = [ "familiar-services.service" ];
+      };
+
+      # M2 singleton: Attention, worklist/DND, and wakes. Pi clients talk to
+      # /run/familiar-services/familiar.sock; no service parents a Pi.
+      config.systemd.services.familiar-services = {
+        description = "Familiar services (Attention, worklist, wakes)";
+        wantedBy = [ "multi-user.target" ];
+        unitConfig.ConditionPathExists = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services";
+        serviceConfig = {
+          User = "familiar";
+          Group = "users";
+          RuntimeDirectory = "familiar-services";
+          RuntimeDirectoryMode = "0750";
+          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services serve --socket /run/familiar-services/familiar.sock --attention-db /home/familiar/.local/state/familiar-ui/attention.sqlite --state-dir ${kestrelDir}/state";
+          Restart = "always";
+          RestartSec = 2;
+          UMask = "0077";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ReadWritePaths = [ "/home/familiar/.local/state/familiar-ui" "${kestrelDir}/state/worklist" "${kestrelDir}/state/wakes" ];
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+        };
       };
 
       config.systemd.services.familiar-continuity-import = {
