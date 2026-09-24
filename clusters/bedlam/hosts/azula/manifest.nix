@@ -1645,6 +1645,54 @@ rec {
         restartUnits = [ "familiar-instance.service" ];
       };
 
+      # Continuity mirror: a derived SQLite index of Pi session history. Pi's
+      # session JSONL stays the source of truth; this one-shot importer catches
+      # up incrementally (~0.1s when idle) and never blocks or restarts Pi.
+      # A timer, not a path unit: Pi appends to files, which a directory
+      # PathChanged watch does not see.
+      config.fort.tracked.familiar-services = {
+        repo = "gisikw/familiar-services";
+        branch = "main";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = null;
+        user = "familiar";
+        group = "users";
+      };
+
+      config.systemd.services.familiar-continuity-import = {
+        description = "Catch up the Familiar continuity mirror";
+        unitConfig.ConditionPathExists = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "familiar";
+          Group = "users";
+          StateDirectory = "familiar-continuity";
+          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services continuity import --sessions ${kestrelDir}/state/pi/sessions --handoffs ${kestrelDir}/state/handoffs --db /var/lib/familiar-continuity/continuity.db";
+          UMask = "0077";
+          Nice = 10;
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          PrivateDevices = true;
+          ProtectSystem = "strict";
+          ProtectHome = "read-only";
+          ProtectKernelTunables = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          ReadOnlyPaths = [ "${kestrelDir}/state/pi/sessions" "${kestrelDir}/state/handoffs" ];
+        };
+      };
+
+      config.systemd.timers.familiar-continuity-import = {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "2min";
+          OnUnitInactiveSec = "1min";
+          Persistent = true;
+        };
+      };
+
       # golemd is runtime-deployed: fort.tracked builds gisikw/golem's flake
       # on-host and flips a profile; nix evaluation cadence stays decoupled
       # from app deployment cadence. See common/fort/tracked.nix.
