@@ -245,8 +245,11 @@ in
       port = 11434;
       visibility = "public";
       sso = {
-        mode = "token";
-        vpnBypass = true;
+        mode = "identity";
+        groups = [
+          "admin"
+          "infra"
+        ];
       };
     }
     {
