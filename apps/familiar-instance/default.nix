@@ -141,6 +141,51 @@ in
       TimeoutStopSec = 30;
     };
   };
+  # M4: peer forks. `imp fork` (inside a resident Pi) writes
+  # state/forks/<session-uuid>/fork.json and starts familiar-pi@<uuid>. Same
+  # environment as the primary so the fork's prompt/tool prefix is identical
+  # (prompt-cache reuse); fork-unit.sh points Pi, Presence, logs and settlement
+  # at the fork's private roots. A fork runs once: Restart=on-failure, so a
+  # clean `imp merge`/`imp close` exit stays stopped. Deploys never bounce it.
+  systemd.services."familiar-pi@" = {
+    description = "Familiar peer fork %i (${instanceDir})";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    unitConfig.ConditionPathExists = instanceConditions ++ [
+      "${instanceDir}/state/forks/%i/fork.json"
+      "${repoDir}/scripts/fork-unit.sh"
+    ];
+    path = runtimePath;
+    # Never inherit the primary's Presence paths: fork-unit.sh sets private
+    # ones, and a fork's ExecStop must be unable to reach the primary's tmux.
+    environment =
+      builtins.removeAttrs presenceEnvironment [
+        "FAMILIAR_PRESENCE_CWD"
+        "FAMILIAR_PRESENCE_STATE_DIR"
+        "FAMILIAR_PRESENCE_SOCKET"
+        "FAMILIAR_PRESENCE_PID_FILE"
+      ]
+      // {
+        FAMILIAR_STATE_DIR = "${instanceDir}/state";
+        FAMILIAR_FORK_ID = "%i";
+      };
+    restartIfChanged = false;
+    stopIfChanged = false;
+    serviceConfig = {
+      User = user;
+      Group = group;
+      Type = "forking";
+      PIDFile = "${instanceDir}/state/forks/%i/presence/pi.pid";
+      WorkingDirectory = instanceDir;
+      ExecStart = "${repoDir}/scripts/fork-unit.sh start";
+      ExecStop = "${repoDir}/scripts/fork-unit.sh stop";
+      Restart = "on-failure";
+      RestartSec = 2;
+      KillMode = "control-group";
+      TimeoutStartSec = 120;
+      TimeoutStopSec = 30;
+    };
+  };
 
   systemd.services.${serviceName} = {
     description = "Familiar instance (${instanceDir}) on tracked ${trackedName} tree";

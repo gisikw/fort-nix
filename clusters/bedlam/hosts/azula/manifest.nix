@@ -205,6 +205,7 @@ rec {
       privilegedWrapperRoot = "/run/wrappers";
       familiarPiServices = [
         "familiar-instance-presence"
+        "familiar-pi@"
         "golemd"
       ];
       # Unfamiliar's shepherd peers into golem capsules through Bun.Terminal,
@@ -567,6 +568,7 @@ rec {
         privilegedWrapperRoot
       ];
       config.systemd.services.golemd.path = pkgs.lib.mkBefore [ privilegedWrapperRoot ];
+      config.systemd.services."familiar-pi@".path = pkgs.lib.mkBefore [ privilegedWrapperRoot ];
 
       # Guard the effective generated PATH, not merely the input `path` list.
       config.assertions =
