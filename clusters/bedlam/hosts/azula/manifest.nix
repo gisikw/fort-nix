@@ -1707,6 +1707,13 @@ rec {
         description = "Familiar services (Attention, scheduler)";
         wantedBy = [ "multi-user.target" ];
         unitConfig.ConditionPathExists = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services";
+        # APNs sender config (push.send). The key is the sops secret below.
+        environment = {
+          FAMILIAR_APNS_KEY_FILE = config.sops.secrets.apns-auth-key.path;
+          FAMILIAR_APNS_KEY_ID = "2L55URN78V";
+          FAMILIAR_APNS_TEAM_ID = "X2SQWVN3SV";
+          FAMILIAR_APNS_TOPIC = "network.gisi.familiar";
+        };
         serviceConfig = {
           User = "familiar";
           Group = "users";
@@ -1721,7 +1728,9 @@ rec {
           PrivateTmp = true;
           ProtectSystem = "strict";
           ReadWritePaths = [ "/home/familiar/.local/state/familiar-ui" ];
-          RestrictAddressFamilies = [ "AF_UNIX" ];
+          # AF_INET/6 for APNs (api.push.apple.com, HTTPS + DNS); the socket
+          # API stays Unix-only.
+          RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
         };
       };
 
