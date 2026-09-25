@@ -1855,6 +1855,16 @@ rec {
         group = "stuff";
       };
 
+      # APNs auth key (Key ID 2L55URN78V, team X2SQWVN3SV) for Familiar iOS push.
+      # familiar-services is the sender; it signs short-lived JWTs with this key.
+      config.sops.secrets.apns-auth-key = {
+        sopsFile = ./apns-auth-key.sops;
+        format = "binary";
+        owner = "familiar";
+        group = "users";
+        mode = "0400";
+      };
+
       config.sops.secrets.stuff-api-token = {
         sopsFile = ./stuff-api-token.sops;
         format = "binary";
