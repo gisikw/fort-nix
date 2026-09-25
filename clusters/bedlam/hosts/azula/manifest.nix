@@ -1294,6 +1294,8 @@ rec {
         "d ${familiarHome}/.config 0700 familiar users -"
         "d ${familiarHome}/.config/gh 0700 familiar users -"
         "d ${kestrelDir} 0700 familiar users -"
+        # M4 forks write sessions here; the continuity importer reads them.
+        "d ${kestrelDir}/state/forks 0700 familiar users -"
         # Presence already carries this directory at the front of PATH. A
         # stable link makes the dynamic tracked profile available immediately
         # without restarting the resident conversation.
@@ -1710,9 +1712,6 @@ rec {
           ReadOnlyPaths = [ "${kestrelDir}/state/pi/sessions" "${kestrelDir}/state/forks" "${kestrelDir}/state/handoffs" ];
         };
       };
-
-      # M4 forks write sessions here; it must exist for the importer and sandbox.
-      config.systemd.tmpfiles.rules = [ "d ${kestrelDir}/state/forks 0700 familiar users -" ];
 
       config.systemd.timers.familiar-continuity-import = {
         wantedBy = [ "timers.target" ];
