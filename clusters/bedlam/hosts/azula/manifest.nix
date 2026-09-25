@@ -249,6 +249,25 @@ rec {
         proxy_set_header Cookie "";
         proxy_set_header Authorization "";
       '';
+      # Fork sessions: the broker resolves /s/<session>/v1/* to that fork's
+      # ephemeral loopback bridge (its own descriptor, own bearer). The broker
+      # checks the public Host, so pass it; keep the /v1 streaming settings.
+      familiarUiSessionProxyConfig = ''
+        auth_request /_identity/validate;
+        error_page 401 = @identity_login;
+        client_max_body_size ${familiarUiMaxBodySize};
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Cookie "";
+        proxy_read_timeout 600s;
+      '';
       familiarUiProxyConfig = ''
         auth_request /_identity/validate;
         error_page 401 = @identity_login;
@@ -1175,6 +1194,16 @@ rec {
           recommendedProxySettings = false;
           extraConfig = familiarUiDescriptorProxyConfig;
         };
+        locations."= /__familiar/sessions.json" = {
+          proxyPass = "http://unix:${familiarUiSocket}";
+          recommendedProxySettings = false;
+          extraConfig = familiarUiDescriptorProxyConfig;
+        };
+        locations."^~ /s/" = {
+          proxyPass = "http://unix:${familiarUiSocket}";
+          recommendedProxySettings = false;
+          extraConfig = familiarUiSessionProxyConfig;
+        };
         locations."^~ /v1/" = {
           proxyPass = "http://127.0.0.1:${toString familiarUiPort}";
           # The bridge's DNS-rebinding check requires its loopback authority;
@@ -1600,6 +1629,7 @@ rec {
           FAMILIAR_UI_ORIGIN = familiarUiOrigin;
           FAMILIAR_UI_PORT = toString familiarUiPort;
           FAMILIAR_UI_BROKER_SOCKET = familiarUiSocket;
+          FAMILIAR_STATE_DIR = "/var/lib/kestrel/state";
         };
         serviceConfig = {
           User = "familiar";
