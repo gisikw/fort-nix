@@ -107,6 +107,17 @@ let
           ''
       }
 
+      # Refuse commits in the release checkout: it is reset to the desired sha
+      # on every deploy, so work here is silently lost. (Refreshed every run.)
+      if [ -d "${state}/repo/.git" ]; then
+        mkdir -p "${state}/repo/.git/hooks"
+        printf '%s\n' '#!/bin/sh' \
+          'echo "refusing to commit: this is the deployed release of ${name}, reset on every deploy." >&2' \
+          'echo "edit in a working clone (e.g. ~/Projects/${name}) and push instead." >&2' \
+          'exit 1' > "${state}/repo/.git/hooks/pre-commit"
+        chmod 0755 "${state}/repo/.git/hooks/pre-commit"
+      fi
+
       current=$(cat "${state}/current.sha" 2>/dev/null || true)
       if [ "$desired" = "$current" ] && [ -e "${profile}" ]; then
         exit 0
