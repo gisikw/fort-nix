@@ -1695,7 +1695,7 @@ rec {
           User = "familiar";
           Group = "users";
           StateDirectory = "familiar-continuity";
-          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services continuity import --sessions ${kestrelDir}/state/pi/sessions --handoffs ${kestrelDir}/state/handoffs --db /var/lib/familiar-continuity/continuity.db";
+          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services continuity import --sessions ${kestrelDir}/state/pi/sessions --sessions ${kestrelDir}/state/forks --handoffs ${kestrelDir}/state/handoffs --db /var/lib/familiar-continuity/continuity.db";
           UMask = "0077";
           Nice = 10;
           NoNewPrivileges = true;
@@ -1707,9 +1707,12 @@ rec {
           ProtectKernelModules = true;
           ProtectControlGroups = true;
           RestrictAddressFamilies = [ "AF_UNIX" ];
-          ReadOnlyPaths = [ "${kestrelDir}/state/pi/sessions" "${kestrelDir}/state/handoffs" ];
+          ReadOnlyPaths = [ "${kestrelDir}/state/pi/sessions" "${kestrelDir}/state/forks" "${kestrelDir}/state/handoffs" ];
         };
       };
+
+      # M4 forks write sessions here; it must exist for the importer and sandbox.
+      config.systemd.tmpfiles.rules = [ "d ${kestrelDir}/state/forks 0700 familiar users -" ];
 
       config.systemd.timers.familiar-continuity-import = {
         wantedBy = [ "timers.target" ];
