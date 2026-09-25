@@ -1637,7 +1637,9 @@ rec {
           ExecStart = "${familiarUiProfile}/bin/familiar-ui-broker";
           RuntimeDirectory = "familiar-ui";
           RuntimeDirectoryMode = "0750";
-          RuntimeDirectoryPreserve = "restart";
+          # Pi processes publish their bridge descriptors here; a broker stop must
+          # not delete them out from under live sessions.
+          RuntimeDirectoryPreserve = "yes";
           Restart = "on-failure";
           RestartSec = "5s";
           UMask = "0007";
@@ -1648,7 +1650,11 @@ rec {
           ProtectProc = "invisible";
           ProcSubset = "pid";
           CapabilityBoundingSet = "";
-          RestrictAddressFamilies = [ "AF_UNIX" ];
+          # AF_INET only to reach fork bridges on ephemeral loopback ports
+          # (/s/<session> proxy + fork status); nothing off-host.
+          RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" ];
+          IPAddressDeny = "any";
+          IPAddressAllow = "localhost";
         };
       };
 
