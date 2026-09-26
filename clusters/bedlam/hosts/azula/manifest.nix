@@ -1751,6 +1751,9 @@ rec {
           FAMILIAR_APNS_TOPIC = "network.gisi.familiar";
           # Fleet agents are driven with `herdr --machine NODE` over ssh.
           FAMILIAR_FLEET_HERDR = "${herdrFleet}/bin/herdr";
+          # Enrollment manifest from the gateway registry; its nodes become
+          # saved Herdr machine profiles automatically.
+          FAMILIAR_FLEET_MACHINES = "${kestrelDir}/state/fleet/herdr-machines.json";
         };
         path = [ pkgs.openssh ];
         serviceConfig = {
