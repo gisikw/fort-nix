@@ -1184,7 +1184,7 @@ rec {
           # Debug-level nginx errors can include request headers. Pin this
           # credential-bearing vhost at warn even if global verbosity changes.
           error_log /var/log/nginx/familiar-ui-error.log warn;
-          more_set_headers "Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+          more_set_headers "Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; frame-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
           more_set_headers "Referrer-Policy: no-referrer";
         '';
         locations."= /__familiar/bridge.json" = {
