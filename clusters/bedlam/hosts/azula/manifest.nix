@@ -229,6 +229,17 @@ rec {
       familiarUiProfile = "/nix/var/nix/profiles/fort-tracked-familiar-ui/profile";
       familiarUiDescriptor = "/run/familiar-ui/bridge.json";
       familiarUiSocket = "/run/familiar-ui/broker.sock";
+      # Herdr client for driving fleet nodes; matches the nodes' pinned 0.9.1.
+      herdrFleet = pkgs.stdenvNoCC.mkDerivation {
+        pname = "herdr";
+        version = "0.9.1";
+        src = pkgs.fetchurl {
+          url = "https://github.com/herdrdev/herdr/releases/download/v0.9.1/herdr-linux-x86_64";
+          sha256 = "1dslbhymcl24sk93q1ddb3fa8b35iw23zm710vq1wrgbdg8zw0ia";
+        };
+        dontUnpack = true;
+        installPhase = ''install -Dm755 "$src" "$out/bin/herdr"'';
+      };
       # familiar.sh derives this from Kestrel's config directory as
       # $STATE_DIR/pi, then exports it as PI_CODING_AGENT_DIR.
       familiarPiAgentDir = "${kestrelDir}/state/pi";
@@ -588,6 +599,31 @@ rec {
       ];
       config.systemd.services.golemd.path = pkgs.lib.mkBefore [ privilegedWrapperRoot ];
       config.systemd.services."familiar-pi@".path = pkgs.lib.mkBefore [ privilegedWrapperRoot ];
+
+      # Familiar fleet. familiar-fleet nodes (Kev's laptops, later infra)
+      # enroll through the gateway's POST /fleet (behind familiar.gisi.network's
+      # identity boundary), hold a reverse tunnel into azula's sshd as the
+      # restricted `familiar` keys the registry generates, and are driven by
+      # familiar-services with `herdr --machine NODE`. State (registry,
+      # controller key, generated authorized_keys/ssh_config/known_hosts) lives
+      # in the instance's state/fleet; ~/.ssh/config includes its ssh_config.
+      config.systemd.services.familiar-instance.environment = {
+        FAMILIAR_FLEET_STATE_DIR = "${kestrelDir}/state/fleet";
+        FAMILIAR_FLEET_PORT_MIN = "22000";
+        FAMILIAR_FLEET_PORT_MAX = "22099";
+        FAMILIAR_FLEET_TUNNEL_HOST = "familiar.gisi.network";
+        FAMILIAR_FLEET_TUNNEL_SSH_PORT = "22";
+        FAMILIAR_FLEET_TUNNEL_USER = "familiar";
+        FAMILIAR_FLEET_CONTROLLER_PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPxzEbt1VQXkk+/GqxSzDbDJfBb+RDuKKDmgpm3NH8Kw familiar-fleet-controller";
+        FAMILIAR_FLEET_CONTROLLER_IDENTITY_FILE = "${kestrelDir}/state/fleet/controller_ed25519";
+        # azula's sshd host key, pinned by enrolling nodes.
+        FAMILIAR_FLEET_TUNNEL_HOST_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGBPrkcXC3s1orGYAijLRUAKJxLnivQpK48rwV5Tk6yU";
+        # Exact worker runtime handed to enrolling nodes; bump deliberately.
+        FAMILIAR_FLEET_RUNTIME_INSTALLABLE = "github:gisikw/familiar/55fa957f27bf05b5a814966c9ab6efa8f6e6e887#familiar-worker-runtime";
+        # NixOS has no /bin/false; the forced command must fail any session.
+        FAMILIAR_FLEET_FORCED_COMMAND = "${pkgs.coreutils}/bin/false";
+      };
+      config.services.openssh.authorizedKeysFiles = [ "${kestrelDir}/state/fleet/authorized_keys" ];
 
       # Guard the effective generated PATH, not merely the input `path` list.
       config.assertions =
@@ -1713,7 +1749,10 @@ rec {
           FAMILIAR_APNS_KEY_ID = "2L55URN78V";
           FAMILIAR_APNS_TEAM_ID = "X2SQWVN3SV";
           FAMILIAR_APNS_TOPIC = "network.gisi.familiar";
+          # Fleet agents are driven with `herdr --machine NODE` over ssh.
+          FAMILIAR_FLEET_HERDR = "${herdrFleet}/bin/herdr";
         };
+        path = [ pkgs.openssh ];
         serviceConfig = {
           User = "familiar";
           Group = "users";
@@ -1727,7 +1766,12 @@ rec {
           NoNewPrivileges = true;
           PrivateTmp = true;
           ProtectSystem = "strict";
-          ReadWritePaths = [ "/home/familiar/.local/state/familiar-ui" ];
+          ReadWritePaths = [
+            "/home/familiar/.local/state/familiar-ui"
+            # Fleet: Herdr's client keeps saved machine profiles and bridge state here.
+            "/home/familiar/.local/state/herdr"
+            "/home/familiar/.config/herdr"
+          ];
           # AF_INET/6 for APNs (api.push.apple.com, HTTPS + DNS); the socket
           # API stays Unix-only.
           RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
