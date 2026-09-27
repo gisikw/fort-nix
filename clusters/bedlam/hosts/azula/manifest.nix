@@ -1205,6 +1205,46 @@ rec {
           log_format decks_safe '${decksAccessLogFormat}';
         ''
       );
+      # tiamat-router operator console (/admin/): the reauth path that needs no
+      # agent. The router API itself stays bearer-only (see the overlay note:
+      # no identity SSO on it). Only the console's static, data-free assets sit
+      # behind identity (admin group) as defense in depth; the page then calls
+      # /tiamat/v1 with a router bearer the operator pastes, so these identity
+      # locations never see or forward router credentials.
+      config.services.nginx.virtualHosts."router.${domain}".locations = {
+        "^~ /admin/" = {
+          proxyPass = "http://127.0.0.1:8901";
+          extraConfig = ''
+            auth_request /_identity/validate;
+            error_page 401 = @identity_login;
+          '';
+        };
+        "= /_identity/validate" = {
+          extraConfig = ''
+            internal;
+            client_max_body_size 0;
+            proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+            proxy_set_header X-Original-URI $request_uri;
+            proxy_set_header X-Original-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Identity-Required-Groups "admin";
+            proxy_set_header Authorization "";
+          '';
+        };
+        "@identity_login".extraConfig = ''
+          return 302 https://$host/_identity/login?rd=$scheme://$host$request_uri;
+        '';
+        "/_identity/" = {
+          extraConfig = ''
+            proxy_pass http://unix:/run/identity-proxy/identity-proxy.sock;
+            proxy_set_header Host $host;
+            proxy_set_header X-Original-Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+          '';
+        };
+      };
       config.services.nginx.virtualHosts."familiar-ui.${domain}" = {
         # Use one server block for both listeners so the dedicated safe access
         # and warn-level error logs also cover cleartext redirect requests.
