@@ -22,6 +22,9 @@ rec {
       config = {
         port = "8901";
         configPath = "/var/lib/tiamat-router/bootstrap.json";
+        # Operator console listener (credential-free); see the nginx /admin/
+        # location and the setgid socket directory below.
+        operatorSocket = "/run/tiamat-router-admin/operator.sock";
       };
       expose = {
         subdomain = "router";
@@ -1206,17 +1209,26 @@ rec {
         ''
       );
       # tiamat-router operator console (/admin/): the reauth path that needs no
-      # agent. The router API itself stays bearer-only (see the overlay note:
-      # no identity SSO on it). Only the console's static, data-free assets sit
-      # behind identity (admin group) as defense in depth; the page then calls
-      # /tiamat/v1 with a router bearer the operator pastes, so these identity
-      # locations never see or forward router credentials.
+      # agent and no pasted token. The router's TCP API stays bearer-only (see
+      # the overlay note: no identity SSO on it). /admin/ goes to the router's
+      # separate operator socket, which trusts whoever can connect; only nginx
+      # can (setgid socket dir above), and nginx only after admin-group SSO.
+      # The browser never holds a router credential.
       config.services.nginx.virtualHosts."router.${domain}".locations = {
         "^~ /admin/" = {
-          proxyPass = "http://127.0.0.1:8901";
+          proxyPass = "http://unix:/run/tiamat-router-admin/operator.sock";
+          recommendedProxySettings = false;
           extraConfig = ''
             auth_request /_identity/validate;
             error_page 401 = @identity_login;
+            auth_request_set $identity_user $upstream_http_x_identity_user;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header Connection "";
+            proxy_set_header Authorization "";
+            proxy_set_header Cookie "";
+            proxy_set_header X-Identity-User $identity_user;
+            proxy_read_timeout 120s;
           '';
         };
         "= /_identity/validate" = {
@@ -1394,6 +1406,10 @@ rec {
       # checkout. Fort owns its location and permissions; the one-time cutover
       # populates the directory before starting familiar-instance.
       config.systemd.tmpfiles.rules = [
+        # tiamat-router's operator socket: setgid nginx, so the 0660 socket
+        # the router creates is reachable by nginx (behind operator SSO) and
+        # by nothing else. Connecting to it IS operator access.
+        "d /run/tiamat-router-admin 2750 tiamat-router nginx -"
         "d /var/lib/unfamiliar 0700 familiar users -"
         "d ${familiarHome}/.ssh 0700 familiar users -"
         "d ${familiarHome}/.config 0700 familiar users -"
