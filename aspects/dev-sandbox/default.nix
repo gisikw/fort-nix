@@ -591,35 +591,6 @@ in
     '';
   };
 
-  # Daily briefing (11:15 UTC = 6:15am Central during CDT, 5:15am during CST)
-  systemd.timers.daily-briefing = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 11:15:00";
-      Persistent = true;  # Run if missed while system was off
-    };
-  };
-
-  systemd.services.daily-briefing = {
-    description = "Generate daily briefing";
-    serviceConfig = {
-      Type = "oneshot";
-      User = user;
-      Group = "users";
-      WorkingDirectory = "${homeDir}/Projects/hoard";
-    };
-    environment = {
-      HOME = homeDir;
-      FORT_SSH_KEY = agentKeyPath;
-      FORT_ORIGIN = "dev-sandbox";
-    };
-    path = devTools ++ [ pkgs.bash ];
-    script = ''
-      export PATH="/run/overlays/bin:$PATH"
-      ${homeDir}/Projects/hoard/scripts/daily-briefing/run.sh
-    '';
-  };
-
   # Weekly ship digest podcast (Sunday 20:00 UTC = 3pm Central CDT / 2pm CST)
   # Generates weekly digest from daily briefings, then runs podcast pipeline.
   systemd.timers.ship-digest-podcast = {
