@@ -44,5 +44,23 @@ rec {
           AllowAgentForwarding no
           ForceCommand ${pkgs.coreutils}/bin/false
       '';
+
+      # Familiar fleet rendezvous. Off-mesh fleet nodes (the work laptop) hold
+      # a reverse tunnel into azula's sshd; this forwards raishan:2222 to it
+      # over the mesh, byte for byte, so nodes still pin azula's host key and
+      # authenticate with the registry-generated, forwarding-only keys. The
+      # hostname resolves to raishan on and off the mesh, so every node
+      # enrolled from now on takes the same path.
+      config.services.nginx.streamConfig = ''
+        server {
+          listen 2222;
+          listen [::]:2222;
+          proxy_pass azula.fort.gisi.network:22;
+          proxy_connect_timeout 10s;
+          # Tunnels idle between agent calls; ssh keepalives run well inside this.
+          proxy_timeout 24h;
+        }
+      '';
+      config.networking.firewall.allowedTCPPorts = [ 2222 ];
     };
 }

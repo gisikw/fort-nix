@@ -614,8 +614,10 @@ rec {
         FAMILIAR_FLEET_STATE_DIR = "${kestrelDir}/state/fleet";
         FAMILIAR_FLEET_PORT_MIN = "22000";
         FAMILIAR_FLEET_PORT_MAX = "22099";
-        FAMILIAR_FLEET_TUNNEL_HOST = "familiar.gisi.network";
-        FAMILIAR_FLEET_TUNNEL_SSH_PORT = "22";
+        # raishan forwards :2222 to azula's sshd over the mesh (see raishan's
+        # manifest), and the name resolves to raishan on and off the mesh.
+        FAMILIAR_FLEET_TUNNEL_HOST = "raishan.gisi.network";
+        FAMILIAR_FLEET_TUNNEL_SSH_PORT = "2222";
         FAMILIAR_FLEET_TUNNEL_USER = "familiar";
         FAMILIAR_FLEET_CONTROLLER_PUBLIC_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPxzEbt1VQXkk+/GqxSzDbDJfBb+RDuKKDmgpm3NH8Kw familiar-fleet-controller";
         FAMILIAR_FLEET_CONTROLLER_IDENTITY_FILE = "${kestrelDir}/state/fleet/controller_ed25519";
@@ -626,7 +628,12 @@ rec {
         # NixOS has no /bin/false; the forced command must fail any session.
         FAMILIAR_FLEET_FORCED_COMMAND = "${pkgs.coreutils}/bin/false";
       };
-      config.services.openssh.authorizedKeysFiles = [ "${kestrelDir}/state/fleet/authorized_keys" ];
+      # Only the familiar user's logins consult the fleet keys; sshd would
+      # otherwise check (and log about) the familiar-owned file for every user.
+      config.services.openssh.extraConfig = ''
+        Match User familiar
+          AuthorizedKeysFile %h/.ssh/authorized_keys /etc/ssh/authorized_keys.d/%u ${kestrelDir}/state/fleet/authorized_keys
+      '';
 
       # Guard the effective generated PATH, not merely the input `path` list.
       config.assertions =
