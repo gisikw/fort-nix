@@ -49,8 +49,8 @@ later with those semantics.
   disables proxy buffering, proxy caching, and gzip. Combined with the
   bridge's `X-Accel-Buffering: no`, this preserves incremental SSE. The read
   timeout is 600 seconds. Only this location raises the request ceiling, to
-  exactly `16842752` bytes (16 MiB + 64 KiB), matching familiar-ui's
-  authenticated JSON parser limit; it is bounded, not nginx's `0`/unlimited.
+  exactly `52494336` bytes (50 MiB + 64 KiB), matching familiar-ui's attachment upload ceiling (JSON actions stay capped at 16 MiB + 64 KiB in the backend);
+  it is bounded, not nginx's `0`/unlimited.
   The descriptor, static, and identity locations do not receive this override.
 - Request buffering is disabled only for `/v1/`. nginx performs
   `auth_request` in the access phase before the proxy content handler starts

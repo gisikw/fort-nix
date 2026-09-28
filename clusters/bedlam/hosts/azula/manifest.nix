@@ -251,10 +251,11 @@ rec {
       familiarUiExtensionDir = "${familiarPiAgentDir}/extensions/familiar-ui";
       familiarUiExtensionPath = "${familiarUiExtensionDir}/index.js";
       familiarUiProfileExtension = "${familiarUiProfile}/share/familiar-ui/packages/extension/dist/index.js";
-      # Exact familiar-ui authenticated JSON limit: 16 MiB + 64 KiB. Keep
+      # familiar-ui body ceiling: the 50 MiB attachment upload limit + 64 KiB
+      # (JSON actions stay capped at 16 MiB + 64 KiB by the backend). Keep
       # this location boundary in bytes so nginx and the backend cannot drift
       # through unit rounding.
-      familiarUiMaxBodySize = "16842752";
+      familiarUiMaxBodySize = "52494336";
       familiarUiAccessLogFormat = ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
       familiarUiDescriptorProxyConfig = ''
         auth_request /_identity/validate;
