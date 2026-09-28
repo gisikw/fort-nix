@@ -1877,6 +1877,45 @@ rec {
         };
       };
 
+      # Fork compaction: every inherited fork copies the whole primary session
+      # (~300MB) before its own entries. Once a fork is merged and fully
+      # indexed, rewrite its file to header + marker + own entries: the copied
+      # prefix already lives in the parent, and the index never stored it. The
+      # file stays the source of truth; unmerged/active/stale forks are never
+      # touched. Shares the index lock with the importer above.
+      config.systemd.services.familiar-fork-compact = {
+        description = "Compact merged Familiar fork session files";
+        unitConfig.ConditionPathExists = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services";
+        serviceConfig = {
+          Type = "oneshot";
+          User = "familiar";
+          Group = "users";
+          StateDirectory = "familiar-continuity";
+          ExecStart = "/nix/var/nix/profiles/fort-tracked-familiar-services/profile/bin/familiar-services continuity compact-forks --forks ${kestrelDir}/state/forks --db /var/lib/familiar-continuity/continuity.db --min-age 24h";
+          Nice = 10;
+          IOSchedulingClass = "idle";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          PrivateDevices = true;
+          ProtectSystem = "strict";
+          ProtectHome = "read-only";
+          ProtectKernelTunables = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          RestrictAddressFamilies = [ "AF_UNIX" ];
+          ReadWritePaths = [ "${kestrelDir}/state/forks" ];
+        };
+      };
+
+      config.systemd.timers.familiar-fork-compact = {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnCalendar = "*-*-* 04:30:00";
+          RandomizedDelaySec = "15min";
+          Persistent = true;
+        };
+      };
+
       # golemd is runtime-deployed: fort.tracked builds gisikw/golem's flake
       # on-host and flips a profile; nix evaluation cadence stays decoupled
       # from app deployment cadence. See common/fort/tracked.nix.
