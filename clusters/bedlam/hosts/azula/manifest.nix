@@ -1211,6 +1211,15 @@ rec {
       config.services.nginx.commonHttpConfig = pkgs.lib.mkAfter (
         ''
           log_format familiar_ui_safe '${familiarUiAccessLogFormat}';
+          # familiar-ui static cache policy: Vite's hashed /assets/ never
+          # change under a name, so the phone never has to revalidate them
+          # through the relay and the identity wall. Everything else
+          # (index.html, manifest) always revalidates, so a deploy is
+          # picked up on the next load instead of iOS's heuristic cache.
+          map $uri $familiar_ui_static_cache_control {
+            ~^/assets/ "public, max-age=31536000, immutable";
+            default "no-cache";
+          }
         ''
         + pkgs.lib.optionalString decksHtpasswdPresent ''
           log_format decks_safe '${decksAccessLogFormat}';
@@ -1282,6 +1291,16 @@ rec {
           error_log /var/log/nginx/familiar-ui-error.log warn;
           more_set_headers "Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; frame-src 'self' blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
           more_set_headers "Referrer-Policy: no-referrer";
+        '';
+        # Static shell only (/v1 keeps gzip off for SSE). The bundle is
+        # ~420 KB JS + ~95 KB CSS uncompressed; the phone often reaches azula
+        # through a DERP relay, where bytes are the expensive part.
+        locations."/".extraConfig = ''
+          gzip on;
+          gzip_vary on;
+          gzip_comp_level 6;
+          gzip_types text/css application/javascript application/json application/manifest+json image/svg+xml;
+          more_set_headers "Cache-Control: $familiar_ui_static_cache_control";
         '';
         locations."= /__familiar/bridge.json" = {
           proxyPass = "http://unix:${familiarUiSocket}";
