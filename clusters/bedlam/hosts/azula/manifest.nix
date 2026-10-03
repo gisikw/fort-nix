@@ -256,7 +256,7 @@ rec {
       # this location boundary in bytes so nginx and the backend cannot drift
       # through unit rounding.
       familiarUiMaxBodySize = "52494336";
-      familiarUiAccessLogFormat = ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+      familiarUiAccessLogFormat = ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent rt=$request_time uc=$upstream_connect_time uh=$upstream_header_time'';
       familiarUiDescriptorProxyConfig = ''
         auth_request /_identity/validate;
         error_page 401 = @identity_login;
@@ -741,7 +741,7 @@ rec {
           {
             assertion =
               familiarUiAccessLogFormat
-              == ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent'';
+              == ''$time_iso8601 $remote_addr "$request_method $uri" $status $body_bytes_sent rt=$request_time uc=$upstream_connect_time uh=$upstream_header_time'';
             message = "familiar-ui: dedicated access log format must remain credential/query safe";
           }
           {
