@@ -118,15 +118,6 @@ creation_rules:
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
           - age1h3zgexmpakalacdwswdfyu0wh6krhdsvez270m9a9wluckt75uqsknzc7j # frankenstein
-  - path_regex: apps/tts/kes-voice\.pt\.sops$
-    key_groups:
-      - age:
-          # Principals (secrets role)
-          - age14vkevz3ww600n9qnhsap3y5hkgy7tnnpuzg5uzdpd5ejkkuwy9mqvn2grg # admin
-          - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
-          - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
-          # Device keys (consuming hosts)
-          - age1h3zgexmpakalacdwswdfyu0wh6krhdsvez270m9a9wluckt75uqsknzc7j # frankenstein
   - path_regex: aspects/backup-client/restic-password\.sops$
     key_groups:
       - age:

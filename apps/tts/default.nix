@@ -44,15 +44,6 @@ in
     path = "/var/lib/kokoro-tts/voices/af_exo.pt";
   };
 
-  # Kes's own male voice — designed by Kes (Qwen3 VoiceDesign → unkork),
-  # Oct 2 2026. Design journal: /var/lib/kestrel/notes/2026-10-02-my-voice.md
-  sops.secrets.kes-kokoro-voice = {
-    sopsFile = ./kes-voice.pt.sops;
-    format = "binary";
-    mode = "0444";
-    path = "/var/lib/kokoro-tts/voices/am_kes.pt";
-  };
-
   virtualisation.oci-containers.containers.kokoro-tts = {
     image = "ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4";
     ports = [ "127.0.0.1:${toString backendPort}:${toString containerPort}" ];
@@ -61,7 +52,6 @@ in
     };
     volumes = [
       "/var/lib/kokoro-tts/voices/af_exo.pt:/app/api/src/voices/v1_0/af_exo.pt:ro"
-      "/var/lib/kokoro-tts/voices/am_kes.pt:/app/api/src/voices/v1_0/am_kes.pt:ro"
       "${./voices/bm_wyvern_herald.pt}:/app/api/src/voices/v1_0/bm_wyvern_herald.pt:ro"
       "${./voices/bm_wyvern_butler.pt}:/app/api/src/voices/v1_0/bm_wyvern_butler.pt:ro"
       "${./voices/am_wyvern_conductor.pt}:/app/api/src/voices/v1_0/am_wyvern_conductor.pt:ro"
