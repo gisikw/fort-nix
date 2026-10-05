@@ -8,7 +8,8 @@ rec {
   # sillytavern. All four were declared only here (verified: no other host
   # manifest, role or aspect references them), so dropping them from this list
   # removes the units and vhosts and nothing else. Their app modules are kept
-  # in apps/ so a redeploy is a one-line revert, and NO data was touched —
+  # in apps/ so a redeploy is a one-line revert (except sillytavern, whose
+  # module was deleted outright 2026-10-05), and NO data was touched —
   # /var/lib/{comfyui,open-webui,qmd,sillytavern} and the container volumes
   # stay on disk until someone deliberately reclaims them.
   #

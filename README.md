@@ -143,7 +143,6 @@ For risky changes, push to a `<hostname>-test` branch. CI validates that host's 
 | radarr | Movie collection manager |
 | radicale | CalDAV/CardDAV server |
 | readarr | Book collection manager |
-| sillytavern | LLM chat frontend |
 | silverbullet | Markdown-based personal knowledge management |
 | sonarr | TV show collection manager |
 | stt | Speech-to-text HTTP service (NVIDIA Parakeet TDT + CUDA) |
