@@ -112,6 +112,7 @@ let
       "files.catbox.moe"
       "raw.githubusercontent.com"
       "char-archive.evulid.cc"
+      "botbooru.com"
     ];
     requestOverrides = [ ];
     extensions = {
