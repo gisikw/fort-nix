@@ -175,6 +175,7 @@ creation_rules:
           - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
+          - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
   - path_regex: aspects/dev-sandbox/oauth-client-secret\.sops$
     key_groups:
@@ -184,6 +185,7 @@ creation_rules:
           - age13c897rs6c296uj8nuj84xcgmhwghmcc6ufzps02z64zq8vgtld0qdh3e4d # ci
           - age1c2ydw7l2l5yzsjd77wdf6cd58ya6qseg582femk8yclkndnjqpcq22gl7m # dev-sandbox
           # Device keys (consuming hosts)
+          - age1exj5zphmpftcym5j0zg4y7v0e0an48stfpqnl6mvm2yvpvm45amq34lc97 # q
           - age19hhg26ufnj93a5n06l5878hx89tj5wm68285xrm9upg4pjjqn3zsxtcalt # ratched
   - path_regex: aspects/dev-sandbox/ssh-key\.sops$
     key_groups:

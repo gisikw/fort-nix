@@ -13,6 +13,7 @@ rec {
     "readarr"
     "qbittorrent"
     "media-egress"
+    "mail"
   ];
 
   aspects = [
