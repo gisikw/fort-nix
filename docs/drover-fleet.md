@@ -1,5 +1,9 @@
 # Drover fleet operations
 
+> **Retired 2026-10-07.** Removed from azula, ratched and obrien manifests: nothing used it
+> (familiar-fleet drives Herdr directly) and the crash-looping node unit was failing every
+> ratched switch. The aspect is kept for a revert.
+
 ## Shape and trust boundary
 
 Azula is the single Drover coordinator and also a worker. Ratched and O’Brien

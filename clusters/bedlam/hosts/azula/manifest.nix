@@ -41,12 +41,8 @@ rec {
     "observable"
     "agent-debug"
     "couchdb"
-    {
-      name = "drover";
-      coordinator = true;
-      expectedPort = 24000;
-      tiamatTokenFile = ../../../../aspects/dev-sandbox/tiamat-router-token.sops;
-    }
+    # Drover retired 2026-10-07 (familiar-fleet drives Herdr directly).
+    # aspects/drover and docs/drover-fleet.md are kept for a revert.
   ];
 
   module =
@@ -535,14 +531,6 @@ rec {
     in
     {
       config.fort.host = { inherit roles apps aspects; };
-
-      # Drover MVP rendezvous validation: independent OpenSSH and TLS/control
-      # listeners. Node SSH and reverse routes stay loopback-only; no route
-      # range is opened. Service lifecycle remains manually managed for now.
-      config.networking.firewall.allowedTCPPorts = [
-        9840
-        9841
-      ];
 
       # Hard-hang mitigation (2026-09-04). Three whole-host lock-ups in one
       # evening, each showing ~27 GB free, load < 1, temps < 60 °C on the

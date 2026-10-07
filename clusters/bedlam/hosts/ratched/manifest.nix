@@ -217,11 +217,7 @@ rec {
       ];
     }
     "gitops"
-    {
-      name = "drover";
-      expectedPort = 24001;
-      tiamatTokenFile = ../../../../aspects/dev-sandbox/tiamat-router-token.sops;
-    }
+    # Drover retired 2026-10-07; see azula's manifest.
   ];
 
   module =

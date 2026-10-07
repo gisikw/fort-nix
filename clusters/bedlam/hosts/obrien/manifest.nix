@@ -14,12 +14,7 @@ rec {
   aspects = [
     "observable"
     "ci-runner"
-    {
-      name = "drover";
-      coordinatorMeshAddress = "100.101.0.19";
-      expectedPort = 24002;
-      tiamatTokenFile = ./golemd-tiamat-router-token.sops;
-    }
+    # Drover retired 2026-10-07; see azula's manifest.
   ];
 
   module =
