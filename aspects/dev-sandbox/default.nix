@@ -415,7 +415,7 @@ in
       # opt-in at calendar.google.com/calendar/syncselect before CalDAV exposes them.
       # Deliberately excludes the Holidays cal (noise).
       collections = [["kgisi", "kgisi@alpinesg.com", "kgisi@alpinesg.com"], ["asg-pto", "alpinesg.com_c638t8p1ss11ggl758bfg7dnh4@group.calendar.google.com", "asg-pto"]]
-      metadata = ["color"]
+      metadata = ["color", "displayname"]
       conflict_resolution = "a wins"
 
       [storage google_calendar_remote]
@@ -434,7 +434,7 @@ in
       a = "radicale_remote"
       b = "radicale_local"
       collections = ["from a", "from b"]
-      metadata = ["color"]
+      metadata = ["color", "displayname"]
 
       [storage radicale_remote]
       type = "caldav"
