@@ -151,7 +151,7 @@ For risky changes, push to a `<hostname>-test` branch. CI validates that host's 
 | termix | Terminal-based collaboration tool |
 | tts | Text-to-speech (Kokoro) |
 | upload-gateway | Web UI for uploading files to hosts |
-| vdirsyncer-auth | OAuth adapter for calendar sync |
+| vdirsyncer-auth | calroom (Go): connect any number of Google calendar accounts for ratched's vdirsyncer |
 | vikunja | Task and project management |
 | whisper | Speech-to-text transcription |
 | zot | OCI container registry |

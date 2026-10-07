@@ -168,6 +168,14 @@ let
     # Matrix
     matrix-conduit
   ];
+
+  # Calendar sync, shared by the vdirsyncer-sync timer and calroom's
+  # "Sync now" (apps/vdirsyncer-auth). See cal-sync.sh.
+  calSync = pkgs.writeShellApplication {
+    name = "cal-sync";
+    runtimeInputs = with pkgs; [ vdirsyncer khal jq coreutils gnused util-linux ];
+    text = builtins.readFile ./cal-sync.sh;
+  };
 in
 {
   # Import home-manager NixOS module when home-config is available
@@ -200,7 +208,7 @@ in
   };
 
   # Install dev tools system-wide
-  environment.systemPackages = devTools;
+  environment.systemPackages = devTools ++ [ calSync ];
 
   # Knockout -> Questbook realm mapping for the QQL shim (KO_QQL_MAPPING points
   # here). Shipped fort-nix-managed so both the interactive dev shell and the
@@ -285,6 +293,9 @@ in
     "d ${homeDir}/.config/khal 0700 ${user} users -"
     "d ${homeDir}/.local/share/vdirsyncer 0700 ${user} users -"
     "d ${homeDir}/.local/share/vdirsyncer/radicale 0700 ${user} users -"
+    "d ${homeDir}/.local/share/vdirsyncer/radicale-family 0700 ${user} users -"
+    "d ${homeDir}/.local/share/vdirsyncer/google 0700 ${user} users -"
+    "d /var/lib/vdirsyncer/tokens 0700 ${user} users -"
   ];
 
   # Request RW git token from forge via control plane
@@ -393,7 +404,7 @@ in
       mkdir -p ${homeDir}/.config/khal
       mkdir -p ${homeDir}/.local/share/vdirsyncer/status
 
-      cat > ${homeDir}/.config/vdirsyncer/config << EOF
+      cat > ${homeDir}/.config/vdirsyncer/config.base << EOF
       [general]
       status_path = "${homeDir}/.local/share/vdirsyncer/status/"
 
@@ -435,10 +446,35 @@ in
       type = "filesystem"
       path = "${homeDir}/.local/share/vdirsyncer/radicale/"
       fileext = ".ics"
+
+      # Radicale CalDAV (shared family calendars, kevin has rw on family/)
+      [pair radicale_family]
+      a = "radicale_family_remote"
+      b = "radicale_family_local"
+      collections = ["from a"]
+      metadata = ["color", "displayname"]
+
+      [storage radicale_family_remote]
+      type = "caldav"
+      url = "https://calendar.${domain}/family/"
+      username = "kevin"
+      password = "$RADICALE_PASSWORD"
+
+      [storage radicale_family_local]
+      type = "filesystem"
+      path = "${homeDir}/.local/share/vdirsyncer/radicale-family/"
+      fileext = ".ics"
       EOF
 
-      chown ${user}:users ${homeDir}/.config/vdirsyncer/config
-      chmod 600 ${homeDir}/.config/vdirsyncer/config
+      # cal-sync appends one Google pair per calroom token and needs the
+      # client credentials to do it.
+      cat > ${homeDir}/.config/vdirsyncer/google-client.env << EOF
+      CLIENT_ID="$CLIENT_ID"
+      CLIENT_SECRET="$CLIENT_SECRET"
+      EOF
+
+      chown ${user}:users ${homeDir}/.config/vdirsyncer/config.base ${homeDir}/.config/vdirsyncer/google-client.env
+      chmod 600 ${homeDir}/.config/vdirsyncer/config.base ${homeDir}/.config/vdirsyncer/google-client.env
 
       # Generate khal config
       cat > ${homeDir}/.config/khal/config << EOF
@@ -452,6 +488,14 @@ in
       path = ${homeDir}/.local/share/vdirsyncer/radicale/*
       type = discover
       color = dark green
+
+      [[family]]
+      path = ${homeDir}/.local/share/vdirsyncer/radicale-family/*
+      type = discover
+
+      [[accounts]]
+      path = ${homeDir}/.local/share/vdirsyncer/google/*/*
+      type = discover
 
       [locale]
       local_timezone = America/Chicago
@@ -477,40 +521,10 @@ in
     '';
   };
 
-  # Bootstrap: run vdirsyncer discover if calendars not yet set up
-  systemd.services.vdirsyncer-bootstrap = {
-    description = "Initial vdirsyncer calendar discovery";
-    after = [ "vdirsyncer-config.service" "network-online.target" ];
-    requires = [ "vdirsyncer-config.service" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = user;
-      Group = "users";
-    };
-    path = with pkgs; [ vdirsyncer ];
-    script = ''
-      # Skip if already discovered (status dir has content)
-      if [ -d "${homeDir}/.local/share/vdirsyncer/status" ] && [ "$(ls -A ${homeDir}/.local/share/vdirsyncer/status 2>/dev/null)" ]; then
-        echo "Calendars already discovered, skipping"
-        exit 0
-      fi
-
-      # Skip if no token yet
-      if [ ! -f /var/lib/vdirsyncer/token ]; then
-        echo "No OAuth token yet, skipping discovery"
-        exit 0
-      fi
-
-      echo "Running initial calendar discovery..."
-      vdirsyncer discover
-      echo "Discovery complete"
-    '';
-  };
-
-  # Periodic calendar sync (every 15 minutes)
+  # Calendar sync (every 15 minutes). cal-sync composes the vdirsyncer config
+  # (base + one read-only pair per Google account connected through calroom),
+  # discovers new pairs, syncs pair by pair, and writes agenda.json for Kes.
+  # It replaced the old vdirsyncer-bootstrap oneshot: discovery is per pair now.
   systemd.timers.vdirsyncer-sync = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
@@ -521,24 +535,19 @@ in
 
   systemd.services.vdirsyncer-sync = {
     description = "Sync calendars with Google and Radicale";
+    after = [ "vdirsyncer-config.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
     serviceConfig = {
       Type = "oneshot";
       User = user;
       Group = "users";
+      TimeoutStartSec = "20min";
     };
-    path = with pkgs; [ vdirsyncer coreutils ];
-    script = ''
-      # Skip if no token yet
-      if [ ! -f /var/lib/vdirsyncer/token ]; then
-        echo "No OAuth token, skipping sync"
-        exit 0
-      fi
-
-      vdirsyncer sync
-
-      # Touch marker file for freshness tracking
-      touch ${homeDir}/.local/share/vdirsyncer/.last_sync
-    '';
+    environment = {
+      VD_HOME = homeDir;
+      VD_DATA = "/var/lib/vdirsyncer";
+    };
+    script = "exec ${calSync}/bin/cal-sync";
   };
 
   # Hoard sync: pull sources, commit, push → triggers QMD re-index on lordhenry

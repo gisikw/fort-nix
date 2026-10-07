@@ -5,13 +5,16 @@ let
   subdomain = "vdirsyncer-auth";
   port = 8088;
   dataDir = "/var/lib/vdirsyncer";
+  homeDir = "/home/dev";
+  share = "${homeDir}/.local/share/vdirsyncer";
 
-  pythonEnv = pkgs.python3.withPackages (ps: [ ps.requests ]);
-
-  oauthHelper = pkgs.writeScriptBin "vdirsyncer-oauth-helper" ''
-    #!${pythonEnv}/bin/python3
-    ${builtins.readFile ./oauth-helper.py}
-  '';
+  # calroom (Go, pkgs/calroom) replaced the single-account Python helper:
+  # same URL and /callback (so the redirect URI registered on the OAuth
+  # client still matches), any number of Google accounts, one token each
+  # under tokens/. cal-sync (aspects/dev-sandbox) turns each token into a
+  # read-only vdirsyncer pair. The original work-calendar token stays at
+  # ${dataDir}/token.
+  calroom = import ../../pkgs/calroom { inherit pkgs; };
 in
 {
   # Single user for both auth helper and sync timer eliminates the two-writer
@@ -20,6 +23,7 @@ in
   # with mode 0600, zeroing the ACL mask regardless of directory defaults.
   systemd.tmpfiles.rules = [
     "d ${dataDir} 0700 dev users"
+    "d ${dataDir}/tokens 0700 dev users"
   ];
 
   sops.secrets.oauth-client-id = {
@@ -39,37 +43,49 @@ in
   };
 
   systemd.services.vdirsyncer-auth = {
-    description = "vdirsyncer OAuth Helper";
+    description = "calroom: Google calendar accounts for vdirsyncer";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
+
+    environment = {
+      OAUTH_CLIENT_ID_FILE = config.sops.secrets.oauth-client-id.path;
+      OAUTH_CLIENT_SECRET_FILE = config.sops.secrets.oauth-client-secret.path;
+      ORIGIN = "https://${subdomain}.${domain}";
+      PORT = toString port;
+      DATA_DIR = dataDir;
+      LEGACY_EMAIL = "kgisi@alpinesg.com";
+      GOOGLE_DATA_DIR = "${share}/google";
+      STATUS_DIR = "${share}/status";
+      LAST_SYNC_FILE = "${share}/.last_sync";
+      AGENDA_FILE = "${share}/agenda.json";
+      # "Sync now" runs the same script as the timer (flock-serialized).
+      SYNC_CMD = "/run/current-system/sw/bin/cal-sync";
+      VD_HOME = homeDir;
+      VD_DATA = dataDir;
+      LOCAL_CALENDARS = "Radicale: kevin (personal; the one Kes may write to);Radicale: family (shared)";
+    };
 
     serviceConfig = {
       Type = "simple";
       User = "dev";
       Group = "users";
       WorkingDirectory = dataDir;
+      ExecStart = "${calroom}/bin/calroom";
       Restart = "always";
       RestartSec = 5;
 
-      RuntimeDirectory = "vdirsyncer-auth";
-      RuntimeDirectoryMode = "0700";
-
-      # Hardening
       NoNewPrivileges = true;
       PrivateTmp = true;
       ProtectSystem = "strict";
-      ProtectHome = true;
-      ReadWritePaths = [ dataDir ];
+      # cal-sync writes dev's vdirsyncer/khal state when "Sync now" runs it.
+      ReadWritePaths = [
+        dataDir
+        "${homeDir}/.config/vdirsyncer"
+        share
+        "${homeDir}/.local/share/khal"
+        "${homeDir}/.cache"
+      ];
     };
-
-    script = ''
-      export OAUTH_CLIENT_ID=$(cat ${config.sops.secrets.oauth-client-id.path} | tr -d '\n')
-      export OAUTH_CLIENT_SECRET=$(cat ${config.sops.secrets.oauth-client-secret.path} | tr -d '\n')
-      export OAUTH_REDIRECT_URI="https://${subdomain}.${domain}/callback"
-      export TOKEN_FILE="${dataDir}/token"
-      export PORT="${toString port}"
-      exec ${oauthHelper}/bin/vdirsyncer-oauth-helper
-    '';
   };
 
   fort.cluster.services = [

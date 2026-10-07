@@ -1897,6 +1897,48 @@ rec {
         };
       };
 
+      # Calendar agenda for Kes and familiar-ui. ratched's cal-sync merges
+      # every calendar (Google accounts via calroom, Radicale kevin + family)
+      # into agenda.json; this copies it into Kestrel's state directory, where
+      # the bridge serves it as /v1/calendar and Kes reads it directly. Pull
+      # over the established dev SSH identity rather than exposing the agenda
+      # over HTTP.
+      config.systemd.services.familiar-calendar-pull = {
+        description = "Pull the merged calendar agenda from ratched";
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        path = with pkgs; [ openssh coreutils ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "familiar";
+          Group = "users";
+          TimeoutStartSec = "2min";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+        };
+        environment.HOME = familiarHome;
+        script = ''
+          state=${kestrelDir}/state
+          tmp=$(mktemp "$state/.calendar.json.XXXXXX")
+          trap 'rm -f "$tmp"' EXIT
+          ssh -o BatchMode=yes -o ConnectTimeout=15 dev@ratched \
+            cat .local/share/vdirsyncer/agenda.json >"$tmp"
+          [ -s "$tmp" ] || { echo "empty agenda from ratched" >&2; exit 1; }
+          chmod 0600 "$tmp"
+          mv "$tmp" "$state/calendar.json"
+          trap - EXIT
+        '';
+      };
+
+      config.systemd.timers.familiar-calendar-pull = {
+        wantedBy = [ "timers.target" ];
+        timerConfig = {
+          OnBootSec = "3min";
+          OnUnitActiveSec = "10min";
+          Persistent = true;
+        };
+      };
+
       # Fork compaction: every inherited fork copies the whole primary session
       # (~300MB) before its own entries. Once a fork is merged and fully
       # indexed, rewrite its file to header + marker + own entries: the copied
