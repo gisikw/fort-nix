@@ -1921,8 +1921,9 @@ rec {
       config.systemd.timers.familiar-calendar-pull = {
         wantedBy = [ "timers.target" ];
         timerConfig = {
-          OnBootSec = "3min";
-          OnUnitActiveSec = "10min";
+          # Wall-clock schedule: a monotonic OnUnitActiveSec never fires when the
+          # timer is added to an already-booted host (OnBootSec long past).
+          OnCalendar = "*:2/10";
           Persistent = true;
         };
       };
