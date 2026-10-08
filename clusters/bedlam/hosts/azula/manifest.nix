@@ -41,6 +41,32 @@ rec {
     "observable"
     "agent-debug"
     "couchdb"
+    # Backups (2026-10-07). Scoped, not the default whole-/var/lib sweep:
+    # golem/clones (~107G) and tiamat-router/capture (~130G) are regenerable,
+    # and familiar-continuity/continuity.db is a derived mirror of the session
+    # files backed up here. Everything Kes is (identity, notes, skills incl.
+    # skills/ash, live session, fork records) lives under /var/lib/kestrel; the
+    # restic repo is encrypted. Live SQLite gets a consistent .backup snapshot.
+    {
+      name = "backup-client";
+      paths = [
+        "/var/lib/kestrel"
+        "/var/lib/familiar-services"
+        "/var/lib/tiamat-router/bootstrap.json"
+        "/var/lib/tiamat-router/credential.key"
+      ];
+      extraExcludes = [
+        "/var/lib/kestrel/tmp-playwright"
+      ];
+      sqliteSnapshots = [
+        "/var/lib/familiar-services/scheduler.sqlite"
+        "/var/lib/familiar-services/fleet.sqlite"
+        "/var/lib/kestrel/state/agents/agents.sqlite3"
+        "/var/lib/kestrel/state/background/workstreams.sqlite"
+        "/var/lib/tiamat-router/tiamat.db"
+        "/var/lib/golem/golem.db"
+      ];
+    }
     # Drover retired 2026-10-07 (familiar-fleet drives Herdr directly).
     # aspects/drover and docs/drover-fleet.md are kept for a revert.
   ];
