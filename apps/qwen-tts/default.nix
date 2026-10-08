@@ -15,7 +15,7 @@ let
   # torch.compile on codebook predictor + TF32 + cuDNN benchmark = ~25-35% speedup.
   # Flash Attention 2 via CUDA devel image for ~15% additional speedup.
   configFile = pkgs.writeText "qwen-tts-config.yaml" ''
-    default_model: 1.7B-CustomVoice
+    default_model: 1.7B-Base
     models:
       0.6B-CustomVoice:
         hf_id: Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
@@ -23,11 +23,12 @@ let
       1.7B-CustomVoice:
         hf_id: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
         type: customvoice
-      0.6B-Base:
-        hf_id: Qwen/Qwen3-TTS-12Hz-0.6B-Base
-        type: base
+      # First base entry is the one clone: requests load (optimized backend).
       1.7B-Base:
         hf_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+        type: base
+      0.6B-Base:
+        hf_id: Qwen/Qwen3-TTS-12Hz-0.6B-Base
         type: base
     optimization:
       attention: sdpa
@@ -75,7 +76,11 @@ in
       # Warmup disabled — llama-server owns the GPU at steady state; the
       # CustomVoice model loads on first request, VoiceDesign lazy-loads on
       # its own port. Stop llama-server before generating (VRAM).
-      TTS_WARMUP_ON_START = "false";
+      # GPU0 is qwen-vllm (23/24GB); the optimized backend hardcodes cuda:0,
+      # so expose only GPU1. Warm the default (1.7B-Base) so clone:Kes, the
+      # live Familiar voice, answers without a cold load.
+      CUDA_VISIBLE_DEVICES = "1";
+      TTS_WARMUP_ON_START = "true";
       ENABLE_VOICE_STUDIO = "true";
       VOICE_LIBRARY_DIR = "/voice-library";
     };
