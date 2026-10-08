@@ -484,9 +484,12 @@ in
       path = ${homeDir}/.local/share/vdirsyncer/calendars/*
       type = discover
 
-      [[radicale]]
-      path = ${homeDir}/.local/share/vdirsyncer/radicale/*
-      type = discover
+      # Kev's personal Radicale calendar, named explicitly. A discover entry
+      # takes its name from the server displayname ("Kevin"), which collides
+      # with a Google calendar and broke default_calendar (Oct 2026).
+      [[personal]]
+      path = ${homeDir}/.local/share/vdirsyncer/radicale/personal
+      type = calendar
       color = dark green
 
       [[family]]
