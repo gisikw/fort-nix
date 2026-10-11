@@ -286,6 +286,31 @@ rec {
         proxy_set_header Cookie "";
         proxy_set_header Authorization "";
       '';
+      # Doc assets (/v1/docs/asset/<cap>/<rel>): the HMAC'd, 12h, one-subtree
+      # capability in the path IS the credential, and the bridge mints it only
+      # to bearer holders. No identity wall here, deliberately: the Reader runs
+      # HTML docs as opaque-origin pages (scripts on, no allow-same-origin), and
+      # an opaque origin's requests never carry the Lax identity cookie. So:
+      # GET/HEAD only, no bearer or cookie forwarded, and the bridge's per-file
+      # CSP replaces the app's page CSP (which would forbid framing and scripts).
+      familiarUiDocAssetCsp = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+      familiarUiDocAssetProxyConfig = ''
+        limit_except GET {
+          deny all;
+        }
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_set_header Connection "";
+        proxy_set_header Host 127.0.0.1:${toString familiarUiPort};
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Authorization "";
+        proxy_set_header Cookie "";
+        proxy_read_timeout 600s;
+        more_set_headers "Content-Security-Policy: $familiar_ui_doc_csp";
+        more_clear_headers "X-Familiar-Doc-Csp";
+      '';
       # Fork sessions: the broker resolves /s/<session>/v1/* to that fork's
       # ephemeral loopback bridge (its own descriptor, own bearer). The broker
       # checks the public Host, so pass it; keep the /v1 streaming settings.
@@ -745,6 +770,24 @@ rec {
               && proxyHostValues descriptor.extraConfig == [ "$host" ]
               && proxyHostValues bridge.extraConfig == [ "127.0.0.1:${toString familiarUiPort}" ];
             message = "familiar-ui: custom proxy locations must render exactly one boundary-specific Host header without NixOS proxy defaults";
+          }
+          {
+            assertion =
+              let
+                asset = config.services.nginx.virtualHosts."familiar-ui.${domain}".locations."^~ /v1/docs/asset/";
+              in
+              !asset.recommendedProxySettings
+              && proxyHostValues asset.extraConfig == [ "127.0.0.1:${toString familiarUiPort}" ]
+              && builtins.all (directive: pkgs.lib.hasInfix directive asset.extraConfig) [
+                "limit_except GET {"
+                "deny all;"
+                ''proxy_set_header Authorization "";''
+                ''proxy_set_header Cookie "";''
+                ''more_set_headers "Content-Security-Policy: $familiar_ui_doc_csp";''
+                ''more_clear_headers "X-Familiar-Doc-Csp";''
+              ]
+              && clientMaxBodyValues asset.extraConfig == [ ];
+            message = "familiar-ui: the capability-only doc asset lane must stay read-only, credential-free and under the bridge's per-file CSP";
           }
           {
             assertion =
@@ -1234,6 +1277,13 @@ rec {
             ~^/assets/ "public, max-age=31536000, immutable";
             default "no-cache";
           }
+          # Doc assets carry their own CSP from the bridge (an opaque-origin,
+          # scripts-on page CSP for HTML docs; an inert one for everything
+          # else). An older bridge that sends none gets the inert one.
+          map $upstream_http_x_familiar_doc_csp $familiar_ui_doc_csp {
+            "" "${familiarUiDocAssetCsp}";
+            default $upstream_http_x_familiar_doc_csp;
+          }
         ''
         + pkgs.lib.optionalString decksHtpasswdPresent ''
           log_format decks_safe '${decksAccessLogFormat}';
@@ -1339,6 +1389,11 @@ rec {
           # never append NixOS's conflicting `Host $host` proxy default.
           recommendedProxySettings = false;
           extraConfig = familiarUiProxyConfig;
+        };
+        locations."^~ /v1/docs/asset/" = {
+          proxyPass = "http://127.0.0.1:${toString familiarUiPort}";
+          recommendedProxySettings = false;
+          extraConfig = familiarUiDocAssetProxyConfig;
         };
         # The /v1 Authorization header is the bridge bearer, not an identity
         # token. Replace the generic identity subrequest configuration so this
