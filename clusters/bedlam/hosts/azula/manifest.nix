@@ -250,6 +250,28 @@ rec {
       # same-origin broker; the bridge itself remains bound to 127.0.0.1.
       projectsPort = 8794;
       familiarUiPort = 8795;
+      # The Familiar gateway (familiar.${domain}, already identity-walled).
+      # familiar-ui reaches exactly two of its routes same-origin for Kes's
+      # voice in the top-bar player: the SSE firehose as an audio listener and
+      # the synthesized paragraph wavs. Nothing else on the gateway is exposed
+      # through this vhost.
+      familiarGatewayPort = 1692;
+      familiarUiVoiceProxyConfig = ''
+        auth_request /_identity/validate;
+        error_page 401 = @identity_login;
+        limit_except GET {
+          deny all;
+        }
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_set_header Connection "";
+        proxy_set_header Host 127.0.0.1:${toString familiarGatewayPort};
+        proxy_set_header Authorization "";
+        proxy_set_header Cookie "";
+        proxy_read_timeout 600s;
+      '';
       familiarUiOrigin = "https://familiar-ui.${domain}";
       familiarUiProfile = "/nix/var/nix/profiles/fort-tracked-familiar-ui/profile";
       familiarUiDescriptor = "/run/familiar-ui/bridge.json";
@@ -788,6 +810,28 @@ rec {
               ]
               && clientMaxBodyValues asset.extraConfig == [ ];
             message = "familiar-ui: the capability-only doc asset lane must stay read-only, credential-free and under the bridge's per-file CSP";
+          }
+          {
+            assertion =
+              let
+                locations = config.services.nginx.virtualHosts."familiar-ui.${domain}".locations;
+                lanes = [
+                  locations."= /voice/stream"
+                  locations."~ ^/voice/segments/[0-9]+/[0-9]+/audio$"
+                ];
+              in
+              builtins.all (lane:
+                !lane.recommendedProxySettings
+                && proxyHostValues lane.extraConfig == [ "127.0.0.1:${toString familiarGatewayPort}" ]
+                && clientMaxBodyValues lane.extraConfig == [ ]
+                && builtins.all (directive: pkgs.lib.hasInfix directive lane.extraConfig) [
+                  "auth_request /_identity/validate;"
+                  "limit_except GET {"
+                  ''proxy_set_header Authorization "";''
+                  ''proxy_set_header Cookie "";''
+                  " break;"
+                ]) lanes;
+            message = "familiar-ui: the voice lanes must stay identity-walled, GET-only, credential-free, and pinned to the gateway's two audio routes";
           }
           {
             assertion =
@@ -1394,6 +1438,23 @@ rec {
           proxyPass = "http://127.0.0.1:${toString familiarUiPort}";
           recommendedProxySettings = false;
           extraConfig = familiarUiDocAssetProxyConfig;
+        };
+        # Kes's voice for the top-bar player (familiar-ui src/player): the
+        # gateway's primary-session firehose as an audio listener (so it
+        # synthesizes paragraphs) and the paragraph wavs. Identity-walled.
+        locations."= /voice/stream" = {
+          proxyPass = "http://127.0.0.1:${toString familiarGatewayPort}";
+          recommendedProxySettings = false;
+          extraConfig = ''
+            rewrite ^ /stream?audio=1 break;
+          '' + familiarUiVoiceProxyConfig;
+        };
+        locations."~ ^/voice/segments/[0-9]+/[0-9]+/audio$" = {
+          proxyPass = "http://127.0.0.1:${toString familiarGatewayPort}";
+          recommendedProxySettings = false;
+          extraConfig = ''
+            rewrite ^/voice(/segments/[0-9]+/[0-9]+/audio)$ $1? break;
+          '' + familiarUiVoiceProxyConfig;
         };
         # The /v1 Authorization header is the bridge bearer, not an identity
         # token. Replace the generic identity subrequest configuration so this
