@@ -176,6 +176,14 @@ let
     runtimeInputs = with pkgs; [ vdirsyncer khal jq coreutils gnused util-linux ];
     text = builtins.readFile ./cal-sync.sh;
   };
+
+  # Kes's only write path to Google: OOO/busy blocks on Kev's ASG calendar
+  # (create, list, delete-own). See cal-write.sh.
+  calWrite = pkgs.writeShellApplication {
+    name = "cal-write";
+    runtimeInputs = with pkgs; [ curl jq coreutils ];
+    text = builtins.readFile ./cal-write.sh;
+  };
 in
 {
   # Import home-manager NixOS module when home-config is available
@@ -208,7 +216,7 @@ in
   };
 
   # Install dev tools system-wide
-  environment.systemPackages = devTools ++ [ calSync ];
+  environment.systemPackages = devTools ++ [ calSync calWrite ];
 
   # Knockout -> Questbook realm mapping for the QQL shim (KO_QQL_MAPPING points
   # here). Shipped fort-nix-managed so both the interactive dev shell and the
