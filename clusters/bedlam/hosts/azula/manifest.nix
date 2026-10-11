@@ -1879,6 +1879,8 @@ rec {
           FAMILIAR_UI_PORT = toString familiarUiPort;
           FAMILIAR_UI_BROKER_SOCKET = familiarUiSocket;
           FAMILIAR_STATE_DIR = "/var/lib/kestrel/state";
+          # Read-only use: lists merges still queued for the primary (Open list "settled" rows).
+          FAMILIAR_SERVICES_SOCKET = "/run/familiar-services/familiar.sock";
         };
         serviceConfig = {
           User = "familiar";
