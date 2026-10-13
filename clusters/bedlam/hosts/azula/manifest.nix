@@ -459,7 +459,10 @@ rec {
       # origin publishes. Each becomes one regex location below; every other
       # URI on the vhost is 404. Adding a deck means editing this list *and*
       # the pinning assertion, on purpose.
-      decksPublished = [ "asg/opco-ai-efficiency" ];
+      decksPublished = [
+        "asg/opco-ai-efficiency"
+        "asg/opco-ai-efficiency-cto"
+      ];
       decksSlugPattern = "[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*";
       # `(/|$)`: the bare prefix matches too, so try_files sees $uri/ as a
       # directory and nginx emits the canonical trailing-slash 301 -- after the
@@ -950,7 +953,10 @@ rec {
             assertion =
               decksName == "decks"
               && decksUser == "viewer"
-              && decksPublished == [ "asg/opco-ai-efficiency" ]
+              && decksPublished == [
+                "asg/opco-ai-efficiency"
+                "asg/opco-ai-efficiency-cto"
+              ]
               && builtins.all (deck: builtins.match decksSlugPattern deck != null) decksPublished
               && pkgs.lib.unique decksPublished == decksPublished;
             message = "decks: the published allow-list must be exactly the reviewed deck set, with safe slugs";
