@@ -256,6 +256,8 @@ rec {
       # same-origin broker; the bridge itself remains bound to 127.0.0.1.
       projectsPort = 8794;
       familiarUiPort = 8795;
+      # Connect v0 prototype: loopback port, identity-walled below.
+      connectV0Port = 8796;
       # The Familiar gateway (familiar.${domain}, already identity-walled).
       # familiar-ui reaches exactly two of its routes same-origin for Kes's
       # voice in the top-bar player: the SSE firehose as an audio listener and
@@ -2449,6 +2451,75 @@ rec {
       # this private-repository fetch at Familiar's gh credential and install a
       # per-process helper; the token is read at runtime and never enters the
       # Nix store. The projects runner does not inherit this environment.
+      # Connect v0: a private prototype repo that carries its own runtime
+      # (flake default = wrapped binary with its web root, samples and PDF
+      # tools). fort-nix only says where it listens and who may reach it.
+      config.fort.tracked.connect-v0 = {
+        repo = "gisikw/connect-v0";
+        branch = "main";
+        flakeAttr = "default";
+        autoUpdate = true;
+        pollInterval = "15m";
+        exec = "connect-v0";
+        # Private repository: fetch/build as familiar (gh credential below).
+        user = "familiar";
+        group = "users";
+        expose = {
+          subdomain = "connect-v0";
+          port = connectV0Port;
+          visibility = "public";
+          sso = {
+            mode = "identity";
+            groups = [
+              "admin"
+              "infra"
+            ];
+          };
+        };
+        unit = {
+          description = "Connect v0 prototype";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          environment = {
+            ASPNETCORE_URLS = "http://127.0.0.1:${toString connectV0Port}";
+            CONNECT_STATE_DIR = "/var/lib/connect-v0";
+            DOTNET_CLI_HOME = "/var/lib/connect-v0";
+          };
+          serviceConfig = {
+            DynamicUser = true;
+            StateDirectory = "connect-v0";
+            StateDirectoryMode = "0700";
+            WorkingDirectory = "/var/lib/connect-v0";
+            Restart = "on-failure";
+            RestartSec = "5s";
+            UMask = "0077";
+            ProtectHome = true;
+            ProtectSystem = "strict";
+            PrivateTmp = true;
+            PrivateDevices = true;
+            NoNewPrivileges = true;
+            CapabilityBoundingSet = "";
+            LockPersonality = true;
+            RestrictSUIDSGID = true;
+            ProtectKernelModules = true;
+            ProtectKernelTunables = true;
+            ProtectControlGroups = true;
+            # Outbound is needed: the mapping step calls the decider on the tailnet.
+            RestrictAddressFamilies = [
+              "AF_INET"
+              "AF_INET6"
+              "AF_UNIX"
+            ];
+          };
+        };
+      };
+      config.systemd.services.fort-tracked-connect-v0-fetch.environment = {
+        GH_CONFIG_DIR = "${familiarHome}/.config/gh";
+        GIT_CONFIG_COUNT = "1";
+        GIT_CONFIG_KEY_0 = "credential.https://github.com.helper";
+        GIT_CONFIG_VALUE_0 = "!${pkgs.gh}/bin/gh auth git-credential";
+      };
+
       config.systemd.services.fort-tracked-projects-fetch.environment = {
         GH_CONFIG_DIR = "${familiarHome}/.config/gh";
         GIT_CONFIG_COUNT = "1";
