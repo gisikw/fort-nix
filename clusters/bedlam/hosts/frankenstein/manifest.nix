@@ -41,6 +41,15 @@ rec {
       name = "stt";
       gpuDevice = 1;
     }
+    # Decision-model server (vLLM-SR d3-flash Q8_0 + mmproj, ~10 GiB) on GPU 1
+    # beside Parakeet. /v1/systemone only, tailnet-only, as decider.<domain>.
+    # Consumers: familiar L1 and the Connect mapping prototype. Ollama on this
+    # card had no inference requests in the 30 days before this was added
+    # (2026-10-15), so it gets the remaining headroom on demand.
+    {
+      name = "decider";
+      gpuDevice = 1;
+    }
     # Kokoro is CPU-only. qwen-tts already owns 8880 on this host, so its
     # private backend uses 8890 while the stable public wrapper remains on 8788.
     {
