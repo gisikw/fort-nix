@@ -2467,6 +2467,8 @@ rec {
         expose = {
           subdomain = "connect-v0";
           port = connectV0Port;
+          # Phone photos of reports (2-6 MB) go straight to the vision model.
+          maxBodySize = "25m";
           visibility = "public";
           sso = {
             mode = "identity";
