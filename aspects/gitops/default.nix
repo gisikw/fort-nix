@@ -111,6 +111,8 @@ let
         pkgs.nix
         pkgs.coreutils
         pkgs.util-linux
+        pkgs.gnugrep
+        pkgs.gnused
       ]
     }:/run/current-system/sw/bin:$PATH"
     FLAKE_PATH="$1"
@@ -118,8 +120,35 @@ let
 
     # Capture current generation for rollback if switch fails
     PREV_GEN=$(readlink -f /nix/var/nix/profiles/system)
+    SWITCH_LOG=$(mktemp)
+    trap 'rm -f "$SWITCH_LOG"' EXIT
 
-    if nixos-rebuild switch --flake "$FLAKE_PATH" 2>&1 | logger -t fort-gitops-switch; then
+    # switch-to-configuration exits 4 when any unit failed during activation.
+    # Podman containers with a HEALTHCHECK spawn a transient
+    # <container-id>-<hex>.service that runs as soon as the container starts.
+    # While a slow service (e.g. a model loading) is still starting, that check
+    # exits 1 and trips exit 4 even though activation itself completed. Treat
+    # the switch as successful when the new generation is active and the only
+    # failed units are those transient healthcheck runs.
+    only_healthcheck_failures() {
+      grep -q "returned non-zero exit status 4" "$SWITCH_LOG" || return 1
+      [ "$(readlink -f /nix/var/nix/profiles/system)" != "$PREV_GEN" ] || return 1
+      local units
+      units=$(sed -n 's/.*warning: the following units failed: //p' "$SWITCH_LOG" \
+        | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v '^$' || true)
+      [ -n "$units" ] || return 1
+      ! printf '%s\n' "$units" | grep -qvE '^[0-9a-f]{64}-[0-9a-f]+\.service$'
+    }
+
+    SWITCH_OK=0
+    if nixos-rebuild switch --flake "$FLAKE_PATH" 2>&1 | tee "$SWITCH_LOG" | logger -t fort-gitops-switch; then
+      SWITCH_OK=1
+    elif only_healthcheck_failures; then
+      logger -t fort-gitops-switch "Only podman healthcheck transient units failed (container still starting); treating switch as successful"
+      SWITCH_OK=1
+    fi
+
+    if [ "$SWITCH_OK" = 1 ]; then
       logger -t fort-gitops-switch "Switch complete"
       rm -f "${stateDir}/switch-failures" "${stateDir}/last-failure-time" "${stateDir}/failing-commit"
       ${postDeployScript} || logger -t fort-gitops-switch "Post-deploy hook failed (non-fatal)"
