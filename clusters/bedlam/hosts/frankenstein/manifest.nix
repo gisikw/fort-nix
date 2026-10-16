@@ -22,9 +22,8 @@ rec {
       # profile and halves the request slots.
       ctx = "long";
       spec = "dflash2";
-      # Text only: the router never sends images, and dropping the vision tower
-      # gives its weights back to the KV pool.
-      vision = false;
+      # Vision on (Oct 15 2026): local scan OCR for Connect. Costs VRAM.
+      vision = true;
     }
     {
       name = "ollama";
