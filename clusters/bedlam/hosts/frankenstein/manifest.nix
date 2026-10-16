@@ -22,8 +22,9 @@ rec {
       # profile and halves the request slots.
       ctx = "long";
       spec = "dflash2";
-      # Vision on (Oct 15 2026): Connect needs local scan OCR. Costs some KV pool.
-      vision = true;
+      # Text only: the router never sends images, and dropping the vision tower
+      # gives its weights back to the KV pool.
+      vision = false;
     }
     {
       name = "ollama";
