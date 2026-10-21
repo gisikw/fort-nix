@@ -109,7 +109,12 @@ rec {
     family-hub = {
       package = "infra/family-hub";
       config.port = "4300";
-      # Drives the living-room dimmer through zigbee2mqtt on minos directly,
+      # The living-room dimmer fell off Zigbee (2026-10-20) and would not
+      # rejoin; the hub now drives it over its local Wi-Fi RPC instead. This
+      # address must stay pinned by a DHCP reservation on the router
+      # (MAC AC:EB:E6:E8:0F:60). Unset it to fall back to zigbee2mqtt below.
+      config.shellyAddr = "192.168.67.38";
+      # Fallback path: drives the living-room dimmer through zigbee2mqtt on minos directly,
       # rather than via Home Assistant. Shared credential: the broker (minos)
       # and this client (ratched) read the same encrypted file.
       secrets = {
