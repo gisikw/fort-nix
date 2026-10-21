@@ -38,6 +38,8 @@ in
         system.stateVersion = 6;
         system.primaryUser = "admin";
         networking.hostName = hostManifest.hostName;
+        # Nix-side CA bundle only; Keychain trust follows macOS updates.
+        security.pki.caCertificateBlacklist = import ../distrusted-roots.nix;
         sops.age.sshKeyPaths = [
           "/etc/ssh/ssh_host_ed25519_key"
         ];
