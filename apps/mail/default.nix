@@ -217,6 +217,40 @@ in
     };
   };
 
+  # PHP2Shell (CVE-2026-109618 / CVE-2026-109619, Oct 21 2026): unauthenticated
+  # RCE in PHP 5.4 through 8.3.35; fixed in 8.3.36. Our nixpkgs pin ships
+  # 8.3.30, so bump php83 on this host until the pin catches up. The
+  # roundcube module builds its php-fpm pool and setup script from
+  # pkgs.php83, so the overlay covers both. Drop this once
+  # pkgs.php83.version >= 8.3.36 (the overlay already becomes a no-op then).
+  nixpkgs.overlays = [
+    (final: prev: {
+      php83 =
+        if lib.versionAtLeast prev.php83.version "8.3.36" then
+          prev.php83
+        else
+          (prev.php83.overrideAttrs (_: _: {
+            version = "8.3.36";
+            src = final.fetchurl {
+              url = "https://www.php.net/distributions/php-8.3.36.tar.bz2";
+              # matches php.net's published sha256 46f4b45e…cd5f
+              hash = "sha256-RvS0XjaI7SsYGQFae1MsFbUcwFW907E/0A3f7r7tzV8=";
+            };
+          })).override {
+            # 8.3.36 adds three POST-body OOM tests to ext/filter that need the
+            # CGI SAPI; nixpkgs builds extensions standalone, so they fail in
+            # the sandbox. Skip just those three (the rest of the suite runs).
+            packageOverrides = _: p: {
+              extensions = p.extensions // {
+                filter = p.extensions.filter.overrideAttrs (o: {
+                  preCheck = (o.preCheck or "") + "\nrm -f tests/oom_filter_default_encoded.phpt tests/oom_filter_input.phpt tests/oom_filter_input_array.phpt\n";
+                });
+              };
+            };
+          };
+    })
+  ];
+
   # ---- Roundcube (PHP; sandboxed by the firewall rules and php-fpm user) ----
   services.roundcube = {
     enable = true;
