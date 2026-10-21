@@ -64,6 +64,13 @@ in
         zramSwap.memoryPercent = 25;
 
         users.users.root.openssh.authorizedKeys.keys = rootAuthorizedKeys;
+
+        # Distrust roots tied to the Oct 2026 intermediate CA compromise.
+        # Names must match labels in nixpkgs' cacert bundle exactly (verified).
+        security.pki.caCertificateBlacklist = [
+          "Comodo AAA Services root"
+          "emSign ECC Root CA - G3"
+        ];
       }
       # Gapped ESP. /boot is only ever written during switch-to-configuration;
       # the rest of the time an idle mounted FAT partition is just exposure to
